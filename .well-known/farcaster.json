@@ -2,18 +2,18 @@
   "miniapp": {
     "version": "1",
     "name": "TokenizedBlock",
-    "homeUrl": "https://philpof102-svg.github.io/TokenizedBlock/",
-    "iconUrl": "https://philpof102-svg.github.io/TokenizedBlock/icon.png",
-    "splashImageUrl": "https://philpof102-svg.github.io/TokenizedBlock/splash.png",
+    "homeUrl": "https://tokenized-block.github.io/",
+    "iconUrl": "https://tokenized-block.github.io/icon.png",
+    "splashImageUrl": "https://tokenized-block.github.io/splash.png",
     "splashBackgroundColor": "#000000",
     "subtitle": "Build a block, mint it on Base",
     "description": "Build a block — name, symbol, supply, colour, how finely it divides — and it becomes a B-20 native token on Base. No admin, no minter, supply equals cap: nobody can ever mint more or change what it says.",
     "primaryCategory": "developer-tools",
     "tags": ["base", "token", "b20", "onchain", "creator"],
-    "heroImageUrl": "https://philpof102-svg.github.io/TokenizedBlock/embed.png",
+    "heroImageUrl": "https://tokenized-block.github.io/embed.png",
     "ogTitle": "TokenizedBlock",
     "ogDescription": "Build a block. It becomes a B-20 token on Base — with no admin and no minter.",
-    "ogImageUrl": "https://philpof102-svg.github.io/TokenizedBlock/embed.png",
+    "ogImageUrl": "https://tokenized-block.github.io/embed.png",
     "tagline": "Your block, tokenized on Base",
     "requiredChains": ["eip155:8453"]
   }

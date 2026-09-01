@@ -46,10 +46,16 @@ console.log('  OK  le nom cible est libre');
 console.log('\n2. reecriture des URL absolues');
 const fichiers = ['index.html', '.well-known/farcaster.json', 'README.md', 'MINI-APP.md'];
 let total = 0;
+/* ⛔ DEUX FORMES, PAS UNE. Le domaine apparait avec son chemin (`…github.io/TokenizedBlock`) mais
+ * AUSSI nu, dans une phrase de prose (« points at `philpof102-svg.github.io` »). Ne remplacer que
+ * la forme longue laissait une reference morte que le controle final a attrapee — il a REFUSE de
+ * transferer, ce pour quoi il existe. */
+const ANCIEN_NU = 'philpof102-svg.github.io';
+const NOUVEAU_NU = org.toLowerCase() + '.github.io';
 for (const f of fichiers) {
   if (!existsSync(f)) { console.log('  (absent) ' + f); continue; }
   const avant = readFileSync(f, 'utf8');
-  const apres = avant.split(ANCIEN).join(NOUVEAU);
+  const apres = avant.split(ANCIEN).join(NOUVEAU).split(ANCIEN_NU).join(NOUVEAU_NU);
   const n = (avant.length - apres.length) / (ANCIEN.length - NOUVEAU.length) || 0;
   if (apres !== avant) { writeFileSync(f, apres); total += 1; }
   console.log('  ' + (apres !== avant ? 'reecrit  ' : 'inchange ') + f);

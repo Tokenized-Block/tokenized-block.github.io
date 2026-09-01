@@ -36,7 +36,7 @@ absent, and that is honest.
 ## ⛔ The domain must be settled FIRST
 
 The account association signs a **domain**. Every URL in the manifest and in the meta tags is
-absolute, and points at `philpof102-svg.github.io`.
+absolute, and points at `tokenized-block.github.io`.
 
 If the app moves — to an organisation, or to a custom domain — **all of them change, and the
 association becomes invalid**. Signing before the move means signing twice.
