@@ -85,3 +85,44 @@ export async function adresseAttendue(rpc, appelant, calldata) {
 }
 
 export { octets };
+
+/* ⛔ NOMMER LE REFUS DE LA CHAINE, au lieu de rendre « execution reverted ».
+ * Les selecteurs sont DERIVES des signatures, jamais recopies : `TokenAlreadyExists` prend un
+ * `address` en parametre, et j avais d abord derive la version SANS parametre — qui ne correspond
+ * a rien. Une signature approximative produit un selecteur parfaitement valide et faux. */
+const REFUS = {};
+for (const [sig, texte] of [
+  ['TokenAlreadyExists(address)', 'That salt is already used by this account. Change the salt — it fixes the address.'],
+  ['InvalidDecimals()', 'Decimals must be between 6 and 18.'],
+  ['MissingRequiredField()', 'A required text field is empty.'],
+  ['UnsupportedVersion()', 'The factory does not recognise this parameter version.'],
+  ['AbiDecodeFailed()', 'The factory refused the encoding of the parameters.'],
+  ['InvalidVariant()', 'Unknown token variant.'],
+  ['NonPayable()', 'This call must carry no ETH.'],
+]) REFUS['0x' + selecteur(sig)] = texte;
+
+/**
+ * Explique un refus on-chain. Rend `null` si la donnee ne correspond a aucune erreur connue —
+ * ⛔ on ne devine pas : mieux vaut montrer le selecteur brut que nommer la mauvaise cause.
+ */
+export function expliquerRefus(donnee) {
+  if (typeof donnee !== 'string' || donnee.length < 10) return null;
+  return REFUS[donnee.slice(0, 10)] || null;
+}
+
+/**
+ * Adresse attendue, SANS lever : rend `{ adresse, refus, brut }`.
+ * ⛔ La version qui levait faisait remonter l exception jusqu au `catch` du bouton, lequel
+ *    affichait « Not signed: execution reverted » — c est-a-dire qu il ACCUSAIT L UTILISATEUR
+ *    d avoir refuse alors que c est la CHAINE qui refusait. Deux causes opposees, un seul message.
+ */
+export async function adresseOuRefus(appelBrut, appelant, calldata) {
+  const r = await appelBrut({ from: appelant, to: '0xb20f000000000000000000000000000000000000', data: calldata });
+  if (r && r.error) {
+    const d = r.error.data ? String(r.error.data) : '';
+    return { adresse: null, refus: expliquerRefus(d) || (r.error.message || 'refused'), brut: d.slice(0, 10) || null };
+  }
+  const res = r && r.result;
+  if (!res || res === '0x') return { adresse: null, refus: 'the factory returned nothing', brut: null };
+  return { adresse: '0x' + res.slice(-40), refus: null, brut: null };
+}

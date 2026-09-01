@@ -237,7 +237,7 @@ animation:trace .3s .18s ease-out forwards}
 </main>
 
 <script type="module">
-import { encodeCreateB20, paramsAsset, encodeUpdateSupplyCap, encodeUpdateContractURI, encodeBatchMint, adresseAttendue } from './encodeur.js';
+import { encodeCreateB20, paramsAsset, encodeUpdateSupplyCap, encodeUpdateContractURI, encodeBatchMint, adresseOuRefus } from './encodeur.js';
 import { classerUri, sourceImage, metadonnees, PASSERELLE_PAR_DEFAUT } from './lecteur.js';
 import { cleDePool, etatPool, encodeInitialize, encodeApprove, encodePermit2Approve, encodeMintPosition,
   MAX_UINT256, MAX_UINT160, MAX_UINT48, MAX_UINT128, PRIX_1_POUR_1, TICK_BAS, TICK_HAUT,
@@ -265,6 +265,19 @@ async function rpc(m, p) {
   if (j.error) throw new Error(j.error.message);
   return j.result;
 }
+/* ⛔ Appel RPC BRUT : rend la reponse JSON-RPC telle quelle, erreur comprise, au lieu de lever.
+ * `rpc()` leve — pratique pour les lectures, desastreux pour un refus de la chaine qu on veut
+ * NOMMER : l exception remontait jusqu au catch d un bouton, qui affichait « Not signed », c est
+ * a dire qu il accusait l utilisateur d avoir decline. Une seule definition, au niveau du module,
+ * parce qu une copie locale dans une fonction laissait les autres appelants sans rien. */
+async function appelBrut(tx) {
+  const r = await fetch(RESEAUX[chaine].rpc, { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: ++n, method: 'eth_call', params: [tx, 'latest'] }) });
+  return r.json();
+}
+/* ⛔ « J ai refuse » et « ca a plante » sont deux faits opposes. Les wallets rendent le code
+ * EIP-1193 4001 pour un refus explicite ; sans lui on ne PRESUME pas, on dit « failed ». */
+const refusUtilisateur = (e) => e && (e.code === 4001 || /user (rejected|denied)|reject(ed)? the request/i.test(String(e.message || e)));
 const pad = (a) => a.replace(/^0x/, '').toLowerCase().padStart(64, '0');
 const chaineDe = (h) => { if (!h || h === '0x') return null;
   const b = h.slice(2), len = parseInt(b.slice(64, 128), 16); let s = '';
@@ -383,7 +396,12 @@ async function rafraichir() {
   /* ⛔ L adresse n est PAS calculee ici : elle est DEMANDEE au precompile. Une adresse que je
    * calculerais moi-meme pourrait differer de celle que la chaine attribuera. */
   let adr = null, cause = null;
-  if (compte) { try { adr = await adresseAttendue(rpc, compte, data); } catch (e) { cause = e.message; } }
+  /* ⛔ On DEMANDE au precompile, et on NOMME son refus. « execution reverted » ne dit rien a
+   * personne ; « that salt is already used » dit quoi faire. */
+  if (compte) {
+    const r = await adresseOuRefus(appelBrut, compte, data);
+    adr = r.adresse; cause = r.refus ? (r.refus + (r.brut ? '  [' + r.brut + ']' : '')) : null;
+  }
 
   $('#fiche').innerHTML =
       ligne('network', RESEAUX[chaine].nom + ' (' + chaine + ')')
@@ -638,11 +656,8 @@ async function etatSwap() {
   if (autorise && compte) {
     const bloc0 = await rpc('eth_getBlockByNumber', ['latest', false]);
     const deadline = BigInt(bloc0.timestamp) + 600n;
-    const appelBrut = async (tx) => {
-      const r = await fetch(RESEAUX[chaine].rpc, { method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params: [tx, 'latest'] }) });
-      return r.json();
-    };
+    /* ⛔ La copie locale d appelBrut est retiree : deux definitions de la meme chose finissent par
+     * diverger, et celle-ci masquait la globale sans rien apporter. */
     ({ forme, causes } = await formeAcceptee({ appelBrut, ur, de: compte, cle, zeroForOne, montant, deadline }));
     vue += ligne('2. swap', forme === null ? pastille('BOTH SHAPES REJECTED', 'bad')
       : pastille('READY · ' + (forme === AVEC_MINHOP ? 'with minHopPriceX36' : 'legacy shape'), 'ok'));
@@ -761,7 +776,7 @@ $('#swapAgir').onclick = async () => {
           r.status === '0x1' ? 'ok' : 'bad'); }
     }
     dire('Sent but no receipt yet. Press « Quote it ».\n' + hash, 'warn');
-  } catch (e) { dire('Not signed: ' + (e.message || e), 'bad'); }
+  } catch (e) { dire(refusUtilisateur(e) ? 'You declined the transaction.' : 'Failed: ' + (e.message || e), 'bad'); }
 };
 
 $('#poolAgir').onclick = async () => {
@@ -796,7 +811,7 @@ $('#poolAgir').onclick = async () => {
       }
     }
     dire('Sent but no receipt yet. Press « Check the 6 steps ».\n' + hash, 'warn');
-  } catch (e) { dire('Not signed: ' + (e.message || e), 'bad'); }
+  } catch (e) { dire(refusUtilisateur(e) ? 'You declined the transaction.' : 'Failed: ' + (e.message || e), 'bad'); }
 };
 
 $('#agir').onclick = async () => {
@@ -813,8 +828,12 @@ $('#agir').onclick = async () => {
     if (id !== chaine) return dire('Still on chain ' + id + '. Switch network in your wallet.', 'bad');
 
     await rafraichir();
-    const adr = await adresseAttendue(rpc, compte, dernier.data);
-    if (!adr) return dire("The precompile refuses this block.\nThe salt may already be taken — change it.", 'bad');
+    const vu = await adresseOuRefus(appelBrut, compte, dernier.data);
+    const adr = vu.adresse;
+    /* ⛔ UN REFUS DE LA CHAINE N EST PAS UN REFUS DE L UTILISATEUR. La version precedente laissait
+     * l exception remonter jusqu au catch, qui affichait « Not signed: execution reverted » — elle
+     * ACCUSAIT l utilisateur d avoir decline alors qu il n avait rien vu. */
+    if (!adr) return dire('The chain refuses this block:\n' + vu.refus + (vu.brut ? '\n(' + vu.brut + ')' : ''), 'bad');
     if ((await rpc('eth_getCode', [adr, 'latest'])) !== '0x') return dire('This salt is already used: ' + adr + '\nChange the salt.', 'warn');
 
     dire("Your wallet will open.\nRe-read the destination and the start of `data` before accepting.", 'warn');
@@ -829,7 +848,7 @@ $('#agir').onclick = async () => {
       if ((await rpc('eth_getCode', [adr, 'latest'])) !== '0x') { await relireJeton(adr); afficherTx('ok', 'Your block lives at\n' + adr, hash); return dire('Created and VERIFIED on-chain.\n' + adr + '\n' + hash, 'ok'); }
     }
     dire("Sent, but the code has not appeared yet.\nThis is not a failure — press « Re-read the chain ».\n" + hash, 'warn');
-  } catch (e) { dire('Not signed: ' + (e.message || e), 'bad'); }
+  } catch (e) { dire(refusUtilisateur(e) ? 'You declined the transaction.' : 'Failed: ' + (e.message || e), 'bad'); }
 };
 
 await rafraichir();
