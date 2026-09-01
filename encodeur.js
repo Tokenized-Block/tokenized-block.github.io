@@ -120,7 +120,13 @@ export async function adresseOuRefus(appelBrut, appelant, calldata) {
   const r = await appelBrut({ from: appelant, to: '0xb20f000000000000000000000000000000000000', data: calldata });
   if (r && r.error) {
     const d = r.error.data ? String(r.error.data) : '';
-    return { adresse: null, refus: expliquerRefus(d) || (r.error.message || 'refused'), brut: d.slice(0, 10) || null };
+    /* ⛔ ON GARDE LES DONNEES ENTIERES, pas seulement le selecteur. `TokenAlreadyExists(address)`
+     * PORTE L ADRESSE du token existant : tronquer a 10 caracteres jetait precisement la reponse
+     * que l appelant cherchait. Un refus n est pas toujours une absence d information — parfois
+     * c est l information, servie par la voie de l erreur.
+     * ⚠️ `brut` reste inchange pour ne casser aucun appelant ; `donnees` est ajoute a cote. */
+    return { adresse: null, refus: expliquerRefus(d) || (r.error.message || 'refused'),
+      brut: d.slice(0, 10) || null, donnees: d || null };
   }
   const res = r && r.result;
   if (!res || res === '0x') return { adresse: null, refus: 'the factory returned nothing', brut: null };

@@ -190,6 +190,20 @@ animation:trace .3s .18s ease-out forwards}
 </div>
 
 <div class="card">
+  <h2>Your blocks</h2>
+  <label for="idxAdresse">Creator address — leave empty to list every recent block</label>
+  <input id="idxAdresse" placeholder="0x… (defaults to your connected wallet)" spellcheck="false" autocapitalize="off">
+  <label for="idxSel">Know the salt you used? Skip the scan entirely</label>
+  <input id="idxSel" placeholder="the salt, e.g. tblock-v1" spellcheck="false">
+  <button class="act sec" id="idxDeriver" style="margin-top:10px">Derive the address</button>
+  <div id="idxDerive"></div>
+  <label for="idxBlocs">Or scan — how far back (blocks)</label>
+  <input id="idxBlocs" value="20000" inputmode="numeric">
+  <button class="act sec" id="idxChercher" style="margin-top:10px">Find blocks</button>
+  <div id="idxVue"></div>
+</div>
+
+<div class="card">
   <h2>Read a block</h2>
   <label for="lecture">Block address</label>
   <input id="lecture" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
@@ -284,6 +298,7 @@ animation:trace .3s .18s ease-out forwards}
 <script type="module">
 import { encodeCreateB20, paramsAsset, encodeUpdateSupplyCap, encodeUpdateContractURI, encodeBatchMint, adresseOuRefus } from './encodeur.js';
 import { classerUri, sourceImage, metadonnees, PASSERELLE_PAR_DEFAUT } from './lecteur.js';
+import { listerCreations, creationsDe } from './index-blocks.js';
 import { cleDePool, etatPool, encodeInitialize, encodeApprove, encodePermit2Approve, encodeMintPosition,
   MAX_UINT256, MAX_UINT160, MAX_UINT48, MAX_UINT128, PRIX_1_POUR_1, TICK_BAS, TICK_HAUT,
   encodeSwapExactInSingle, encodeQuote, formeAcceptee, AVEC_MINHOP, selecteur as sel4 } from './pool.js';
@@ -552,6 +567,143 @@ async function lireBlock(adr) {
 }
 
 $('#lire').onclick = () => lireBlock($('#lecture').value.trim());
+
+/* ══ INDEX DES BLOCKS ══════════════════════════════════════════════════════════════════════════
+ * ⛔ SANS LUI, UN BLOCK CREE EST INVISIBLE : le lecteur exige de DEJA connaitre une adresse.
+ * ⛔ ET TOUTE LISTE EST BORNEE. On affiche TOUJOURS la fenetre reellement parcourue, les fenetres
+ *    qui ont echoue, et le nombre de transactions resolues. « Aucun block » et « je n ai pas
+ *    regarde assez loin » sont deux reponses differentes, et l ecran doit les distinguer.
+ * ⚠️ Mesure du 2026-09-02 : 4 813 creations en 60 000 blocs sur Sepolia, quasi toutes du spam
+ *    automatise (TokenSHUBQZ, TokenIRRQ…). La valeur de cet index n est donc PAS « tous les
+ *    blocks » — c est « MES blocks ». Le filtre par createur est la fonctionnalite. */
+/* ⚠️ PLAFOND MESURE, PAS CHOISI. En sequentiel : 6 resolutions/s -> 4 806 auraient pris 817 s,
+ * d ou un plafond de 400 qui EXCLUAIT le block de l utilisateur sur une fenetre de 60 000 blocs.
+ * A concurrence 16 : ~60/s. Le plafond passe a 3 000, soit ~50 s dans le pire cas. */
+const PLAFOND_RESOLUTIONS = 3000;
+/* ⚠️ CONCURRENCE 10, ET LE CHIFFRE VIENT D UNE MESURE COMPLETE. Mon premier banc annoncait
+ * 91 resolutions/s a concurrence 24 -- en comptant les ECHECS comme des succes. Taux reels sans
+ * reprise : 95 % a conc 4, 60 % a 8, 50 % a 12, 33 % a 16. Avec reprise : 100 % a conc 10, pour
+ * ~21/s UTILES. Un debit sans son taux de reussite n est pas un debit. */
+const CONCURRENCE = 10;
+let indexResultat = null;
+
+/* ⛔ LE CHEMIN INSTANTANE. L adresse derive de (variante, expediteur, sel) : si l utilisateur
+ * connait son sel, UN eth_call suffit et le balayage devient inutile. Le scan n existe que pour
+ * ceux qui ont oublie — il coute ~21 resolutions/s, soit 143 s pour 3 000, et laisse un reste
+ * non verifie sur une fenetre chargee.
+ * ⚠️ L adresse est DEMANDEE A LA FACTORY, jamais calculee ici : la derivation appartient au
+ *    precompile, et la reproduire serait la deviner. */
+$('#idxDeriver').onclick = async () => {
+  const box = $('#idxDerive');
+  const sel = $('#idxSel').value.trim();
+  const qui = ($('#idxAdresse').value.trim() || compte || '').trim();
+  if (!sel) { box.innerHTML = ligne('state', pastille('ENTER A SALT', 'warn')); return; }
+  if (!/^0x[0-9a-fA-F]{40}$/.test(qui)) {
+    box.innerHTML = ligne('state', pastille('NEED THE CREATOR ADDRESS', 'warn'))
+      + ligne('why', 'The address derives from the creator as well — connect your wallet, or paste the address above.');
+    return; }
+  const f = lire();
+  box.innerHTML = ligne('state', 'asking the factory…');
+  try {
+    const data = calldata({ ...f, sel }, qui);
+    /* ⛔ `adresseOuRefus` et non `adresseAttendue` : la premiere NOMME le refus de la chaine
+     * (« that salt is already used »), la seconde levait et faisait accuser l utilisateur.
+     * ⚠️ Mon premier jet appelait l ancienne, disparue du contrat — le bon helper existait
+     *    sous un NOUVEAU nom, et j ai pris l ancien. Sixieme occurrence de ce motif ici. */
+    const r = await adresseOuRefus(appelBrut, qui, data);
+    let adr = r.adresse;
+    /* ⛔ UN SEL DEJA UTILISE EST LE CAS QUI NOUS INTERESSE, pas un echec. La factory refuse avec
+     * `TokenAlreadyExists(address)` — et cette erreur PORTE L ADRESSE du block existant. Le refus
+     * contient donc exactement la reponse cherchee : on la decode au lieu de s arreter au
+     * selecteur. Un refus n est pas toujours une absence d information.
+     * ⚠️ Le selecteur est DERIVE, jamais recopie : une signature approximative produit un
+     *    selecteur parfaitement valide et faux. */
+    let dejaPris = false;
+    if (!adr && r.donnees && r.donnees.slice(0, 10) === '0x' + sel4('TokenAlreadyExists(address)')
+        && r.donnees.length >= 74) {
+      adr = '0x' + r.donnees.slice(34, 74);
+      dejaPris = true;
+    }
+    if (!adr) {
+      box.innerHTML = ligne('state', pastille('FACTORY REFUSED', 'bad'))
+        + ligne('why', enTexte(r.refus || 'The factory refused this call.') + (r.brut ? '  [' + r.brut + ']' : ''));
+      return; }
+    const code = await rpc('eth_getCode', [adr, 'latest']);
+    /* ⛔ « derivee » ne veut pas dire « existante ». Les deux etats sont distincts a l ecran :
+     * une adresse libre invite a creer, une adresse vivante invite a lire. */
+    box.innerHTML = ligne('address', '<a href="#" id="idxAllerA">' + adr + '</a>')
+      + ligne('state', code === '0x' ? pastille('NOT CREATED YET', 'warn') : pastille('LIVE', 'ok'))
+      + ligne('', code === '0x' ? 'This salt is free for that account — nothing lives there.'
+          : dejaPris ? 'Found it: this salt is already used by that account, and the block lives here.'
+                     : 'A block exists at this address.');
+    const a = box.querySelector('#idxAllerA');
+    if (a) a.onclick = (e) => { e.preventDefault();
+      $('#lecture').value = adr; $('#lire').click(); $('#lecture').scrollIntoView({ block: 'center' }); };
+  } catch (e) { box.innerHTML = ligne('state', pastille('FAILED', 'bad')) + ligne('why', enTexte(e.message)); }
+};
+$('#idxChercher').onclick = async () => {
+  const box = $('#idxVue');
+  const cible = ($('#idxAdresse').value.trim() || compte || '').trim();
+  const blocs = Math.max(1000, Math.min(120000, parseInt(($('#idxBlocs').value || '20000').replace(/\D/g, ''), 10) || 20000));
+  if (cible && !/^0x[0-9a-fA-F]{40}$/.test(cible)) { box.innerHTML = ligne('state', pastille('NOT AN ADDRESS', 'bad')); return; }
+
+  box.innerHTML = ligne('state', 'scanning the last ' + blocs + ' blocks…');
+  dire('Scanning ' + RESEAUX[chaine].nom + '…');
+  let r;
+  try { r = await listerCreations({ rpc, blocs, surProgres: (p) => {
+    box.innerHTML = ligne('state', 'scanned ' + p.parcouru + ' / ' + p.total + ' blocks · ' + p.trouvees + ' found');
+  } }); }
+  catch (e) { box.innerHTML = ligne('state', pastille('SCAN FAILED', 'bad')) + ligne('why', enTexte(e.message)); return; }
+
+  /* ⛔ La borne s affiche AVANT les resultats, pas en note de bas de page. */
+  let vue = ligne('window', 'blocks ' + r.fenetre.de + ' → ' + r.fenetre.a + '  (' + (r.fenetre.a - r.fenetre.de) + ')')
+    + ligne('found', r.creations.length + ' block' + (r.creations.length === 1 ? '' : 's') + ' created in that window');
+  if (r.fenetresRatees.length) {
+    vue += ligne('⛔ gaps', r.fenetresRatees.length + ' window(s) could not be read — this list is INCOMPLETE');
+    for (const f of r.fenetresRatees.slice(0, 3)) vue += ligne('', f.de + ' → ' + f.a + ' : ' + enTexte(f.cause));
+  }
+
+  let liste = r.creations;
+  if (cible) {
+    /* ⛔ Resoudre le createur coute UNE transaction par entree. On BORNE, et on le DIT — une
+     * liste tronquee en silence se lit comme complete. */
+    const aExaminer = liste.slice(0, PLAFOND_RESOLUTIONS);
+    const tronque = liste.length - aExaminer.length;
+    box.innerHTML = vue + ligne('state', 'resolving creators for ' + aExaminer.length + ' block(s)…');
+    const { gardees, nonResolues } = await creationsDe({ rpc, creations: aExaminer, adresse: cible,
+      concurrence: CONCURRENCE,
+      surProgres: (p) => { box.innerHTML = vue + ligne('state', 'resolving creators ' + p.faits + ' / ' + p.total + ' · ' + p.trouves + ' yours so far'); } });
+    liste = gardees;
+    vue += ligne('creator', enTexte(cible));
+    vue += ligne('checked', aExaminer.length + ' transaction(s)'
+      + (tronque > 0 ? '  ⛔ ' + tronque + ' NOT checked (cap ' + PLAFOND_RESOLUTIONS + ')' : ''));
+    /* ⚠️ Ni « a lui » ni « pas a lui » : INCONNU. Les taire ferait disparaitre des blocks. */
+    if (nonResolues.length) vue += ligne('⚠️ unknown', nonResolues.length + ' block(s) whose creator could not be read');
+    vue += ligne('yours', gardees.length + ' block' + (gardees.length === 1 ? '' : 's'));
+  }
+
+  if (liste.length === 0) {
+    vue += ligne('', cible ? 'No block from that address in the window above. That is not "none exist" — it is "none here".'
+      : 'No creation in that window.');
+  }
+  for (const c of liste.slice(0, 40)) {
+    vue += '<div class="row"><span class="k">' + (c.bloc ?? '—') + '</span><span class="v">'
+      + '<a href="#" data-adr="' + c.jeton + '" class="idxLien">' + enTexte(c.symbole ?? '—') + '</a>'
+      + '  ' + enTexte((c.nom ?? '').slice(0, 28)) + '<br><span style="opacity:.6">' + c.jeton + '</span></span></div>';
+  }
+  if (liste.length > 40) vue += ligne('', 'showing the 40 most recent of ' + liste.length);
+  box.innerHTML = vue;
+  indexResultat = r;
+
+  /* un clic remplit le lecteur : l index ne sert a rien s il ne mene pas au contenu */
+  for (const a of box.querySelectorAll('.idxLien')) a.onclick = (e) => {
+    e.preventDefault();
+    $('#lecture').value = a.dataset.adr;
+    $('#lire').click();
+    $('#lecture').scrollIntoView({ block: 'center' });
+  };
+  dire('Scan done on ' + RESEAUX[chaine].nom + '.', 'ok');
+};
 
 /* ══ LIQUIDITE ═════════════════════════════════════════════════════════════════════════════════
  * ⛔ SIX transactions, et l ordre compte. v4 REGLE PAR PERMIT2 : deux autorisations PAR JETON —
