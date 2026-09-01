@@ -145,6 +145,21 @@ animation:trace .3s .18s ease-out forwards}
   <label for="desc">Description (engraved in the metadata, permanent)</label>
   <textarea id="desc"></textarea>
   <label for="teinte">Block colour</label><input id="teinte" type="range" min="0" max="360" value="222">
+  <label for="accent">Accent colour — the letters and the shards</label>
+  <input id="accent" type="range" min="0" max="360" value="38">
+  <div class="duo">
+    <div><label for="division">Division — how finely the block splits</label>
+      <input id="division" type="range" min="1" max="5" value="3"></div>
+    <div><label for="eclats">Shards — pieces breaking away</label>
+      <input id="eclats" type="range" min="0" max="6" value="3"></div>
+  </div>
+  <label for="facette">Face style</label>
+  <select id="facette">
+    <option value="lettre">Letter — the symbol's initial</option>
+    <option value="anneau">Ring — a hollow circle</option>
+    <option value="barres">Bars — three stacked bars</option>
+    <option value="vide">Empty — glass only</option>
+  </select>
   <svg id="apercu" viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg"></svg>
 </div>
 
@@ -244,20 +259,80 @@ const chaineDe = (h) => { if (!h || h === '0x') return null;
   const b = h.slice(2), len = parseInt(b.slice(64, 128), 16); let s = '';
   for (let i = 0; i < len; i++) s += String.fromCharCode(parseInt(b.slice(128 + i*2, 130 + i*2), 16)); return s; };
 
-/* ── le logo, derive des champs : chaque block a le sien, et il tient dans la transaction ────── */
-function logoSvg(teinte, lettre) {
-  const h = Number(teinte);
+/* ⛔ UNE SEULE LECTURE DU FORMULAIRE, partagee par tous les appelants. Quand la signature de
+ * logoSvg a change, QUATRE appelants passaient encore l ancienne — le motif exact que ce depot
+ * documente partout : le helper correct existe, l appelant ne l appelle pas. Une fonction unique
+ * de lecture rend la divergence impossible : il n y a plus qu un endroit ou se tromper. */
+function paramsLogo(symbole) {
+  return { teinte: $('#teinte').value, accent: $('#accent').value, division: $('#division').value,
+    eclats: $('#eclats').value, facette: $('#facette').value,
+    lettre: symbole !== undefined ? symbole : $('#sym').value };
+}
+
+/* ── le logo, DERIVE des champs : chaque block a le sien, et il tient dans la transaction ──────
+ * ⛔ TOUT CE QUI EST CHOISI ICI EST DEFINITIF. Le logo part dans le contractURI, grave a la
+ *    naissance, sur un token sans admin : aucune de ces valeurs ne pourra jamais etre changee.
+ *    L interface doit donc les rendre VISIBLES avant la signature, pas les cacher derriere un
+ *    defaut qu on ne regarde pas.
+ * ⚠️ La division n est pas un ornement : elle DIT combien le bloc se partage. Un bloc a 1 est
+ *    entier, un bloc a 5 est un essaim. C est la seule metaphore du nom qui se voie. */
+function logoSvg(o) {
+  const h = Number(o.teinte), ha = Number(o.accent);
+  const n = Math.max(1, Math.min(5, Number(o.division) || 3));
+  const eclats = Math.max(0, Math.min(6, Number(o.eclats) ?? 3));
   const c = (s, l, a = 1) => `hsl(${h} ${s}% ${l}%${a < 1 ? ' / ' + a : ''})`;
-  const L = (lettre || 'T').toUpperCase().slice(0, 1);
-  const face = (m, f) => `<g transform="matrix(${m})"><text x="0" y="14" font-family="ui-sans-serif,sans-serif" font-size="46" font-weight="800" text-anchor="middle" fill="${f}">${L}</text></g>`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220"><rect width="200" height="220" fill="${c(80, 18)}"/>`
-    + `<path d="M100 30 170 70 100 110 30 70Z" fill="${c(75, 52, .62)}"/>`
-    + `<path d="M30 70 100 110 100 190 30 150Z" fill="${c(78, 42, .55)}"/>`
-    + `<path d="M170 70 100 110 100 190 170 150Z" fill="${c(80, 30, .6)}"/>`
-    + face('.866 .5 -.866 .5 100 70', '#f7a318') + face('.866 .5 0 1 65 130', '#e8890a') + face('.866 -.5 0 1 135 130', '#c97605')
+  const ca = (s, l) => `hsl(${ha} ${s}% ${l}%)`;
+  const L = (o.lettre || 'T').toUpperCase().slice(0, 1);
+
+  /* La grille suit la division : n = 1 ne trace rien, n = 5 decoupe finement. */
+  let grille = '';
+  for (let i = 1; i < n; i++) {
+    const t = i / n;
+    const p = (ax, ay, bx, by) => `${ax + (bx - ax) * t} ${ay + (by - ay) * t}`;
+    grille += `M${p(100, 30, 30, 70)} L${p(170, 70, 100, 110)}`
+      + `M${p(100, 30, 170, 70)} L${p(30, 70, 100, 110)}`
+      + `M${p(30, 70, 30, 150)} L${p(100, 110, 100, 190)}`
+      + `M${p(30, 70, 100, 110)} L${p(30, 150, 100, 190)}`
+      + `M${p(170, 70, 170, 150)} L${p(100, 110, 100, 190)}`
+      + `M${p(170, 70, 100, 110)} L${p(170, 150, 100, 190)}`;
+  }
+
+  /* ⛔ Le motif de face est un CHOIX, pas une lettre imposee : un symbole de plus d une lettre,
+   * ou aucun, doit rester representable. */
+  const motif = (m, f) => {
+    if (o.facette === 'vide') return '';
+    const d = { anneau: `<circle r="17" fill="none" stroke="${f}" stroke-width="9"/>`,
+      barres: `<g fill="${f}"><rect x="-19" y="-17" width="38" height="9" rx="2"/>`
+        + `<rect x="-19" y="-4" width="38" height="9" rx="2"/><rect x="-19" y="9" width="38" height="9" rx="2"/></g>`,
+    }[o.facette];
+    return `<g transform="matrix(${m})">`
+      + (d || `<text x="0" y="14" font-family="ui-sans-serif,sans-serif" font-size="46" font-weight="800" text-anchor="middle" fill="${f}">${L}</text>`)
+      + `</g>`;
+  };
+
+  /* Les eclats : le meme cube, plus petit, qui s eloigne. Zero est un etat valide — un bloc
+   * qu on ne veut pas voir se diviser. */
+  let frag = '';
+  for (let i = 0; i < eclats; i++) {
+    const s = 0.30 - i * 0.035, x = 158 + i * 11, y = 34 - i * 11;
+    frag += `<g transform="translate(${x} ${Math.max(4, y)}) scale(${Math.max(0.08, s)})" opacity="${(1 - i * 0.13).toFixed(2)}">`
+      + `<path d="M0-40 46-13 0 13-46-13Z" fill="${c(70, 62)}"/>`
+      + `<path d="M-46-13 0 13 0 66-46 40Z" fill="${c(75, 44)}"/>`
+      + `<path d="M46-13 0 13 0 66 46 40Z" fill="${c(78, 32)}"/>`
+      + `<path d="M0-40 46-13 46 40 0 66-46 40-46-13Z" fill="none" stroke="${ca(90, 72)}" stroke-width="5" stroke-linejoin="round"/></g>`;
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220"><rect width="200" height="220" fill="${c(80, 8)}"/>`
+    + `<path d="M100 30 170 70 100 110 30 70Z" fill="${c(75, 52, .72)}"/>`
+    + `<path d="M30 70 100 110 100 190 30 150Z" fill="${c(78, 42, .68)}"/>`
+    + `<path d="M170 70 100 110 100 190 170 150Z" fill="${c(80, 30, .7)}"/>`
+    + (grille ? `<path d="${grille}" fill="none" stroke="#cfe6ff" stroke-width="1" opacity=".32"/>` : '')
+    + motif('.866 .5 -.866 .5 100 70', ca(92, 56)) + motif('.866 .5 0 1 65 130', ca(90, 48)) + motif('.866 -.5 0 1 135 130', ca(88, 38))
+    + `<path d="M100 30 170 70 100 110 30 70Z" fill="#fff" opacity=".10"/>`
     + `<g fill="none" stroke="#eaf6ff" stroke-width="1.5" stroke-linejoin="round">`
     + `<path d="M100 30 170 70 170 150 100 190 30 150 30 70Z"/>`
-    + `<path d="M100 30 100 110 M100 110 30 70 M100 110 170 70 M100 110 100 190" stroke-width="1.3" opacity=".85"/></g></svg>`;
+    + `<path d="M100 110 30 70 M100 110 170 70 M100 110 100 190" stroke-width="1.3" opacity=".85"/></g>`
+    + frag + `</svg>`;
 }
 const b64 = (s) => btoa(String.fromCharCode(...new TextEncoder().encode(s)));
 
@@ -267,7 +342,7 @@ function lire() {
   const dec = Math.min(18, Math.max(6, parseInt($('#dec').value || '18', 10)));
   const unites = BigInt(($('#supply').value || '0').replace(/\D/g, '') || '0');
   const supply = unites * 10n ** BigInt(dec);
-  const svg = logoSvg($('#teinte').value, sym);
+  const svg = logoSvg(paramsLogo(sym));
   const meta = { name: nom, symbol: sym, description: $('#desc').value.trim()
       || `Block created with no administrator: no account holds DEFAULT_ADMIN_ROLE or MINT_ROLE, at any point, including at creation. The supply of ${unites} ${sym} is minted in the creation transaction itself and equals the cap. No further unit can ever exist.`,
     image: 'data:image/svg+xml;base64,' + b64(svg) };
@@ -286,8 +361,8 @@ function calldata(f, porteur) {
 
 async function rafraichir() {
   const f = lire();
-  $('#apercu').outerHTML = logoSvg($('#teinte').value, f.sym).replace('<svg ', '<svg id="apercu" ');
-  $('#marque').outerHTML = logoSvg($('#teinte').value, f.sym).replace('<svg ', '<svg id="marque" ');
+  $('#apercu').outerHTML = logoSvg(paramsLogo(f.sym)).replace('<svg ', '<svg id="apercu" ');
+  $('#marque').outerHTML = logoSvg(paramsLogo(f.sym)).replace('<svg ', '<svg id="marque" ');
   const porteur = compte || '0x0000000000000000000000000000000000000001';
   let data;
   try { data = calldata(f, porteur); }
@@ -343,7 +418,11 @@ async function relireJeton(adr) {
   } catch (e) { box.innerHTML = ligne('state', pastille('READ FAILED', 'dim')) + ligne('cause', e.message); }
 }
 
-for (const el of ['nom','sym','dec','supply','sel','desc','teinte']) $('#' + el).oninput = rafraichir;
+/* ⛔ TOUT champ qui entre dans le logo ou le calldata doit declencher un recalcul. En oublier un
+ * afficherait un apercu qui ne correspond PLUS aux octets a signer — et l ecart ne se verrait
+ * qu apres la transaction, quand plus rien n est modifiable. */
+const CHAMPS = ['nom','sym','dec','supply','sel','desc','teinte','accent','division','eclats','facette'];
+for (const el of CHAMPS) { const n = $('#' + el); n.oninput = rafraichir; n.onchange = rafraichir; }
 for (const id of [84532, 8453]) $('#t' + id).onclick = () => {
   chaine = id; $('#t84532').setAttribute('aria-selected', String(id === 84532));
   $('#t8453').setAttribute('aria-selected', String(id === 8453));
@@ -619,7 +698,7 @@ const PHASES = {
 };
 function afficherTx(phase, msg, hash) {
   const p = PHASES[phase]; if (!p) return;
-  ov.querySelector('#ovCorps').innerHTML = logoSvg($('#teinte').value, $('#sym').value).replace(/^<svg[^>]*>|<\/svg>$/g, '');
+  ov.querySelector('#ovCorps').innerHTML = logoSvg(paramsLogo()).replace(/^<svg[^>]*>|<\/svg>$/g, '');
   ov.querySelector('.ovFrag').innerHTML = '<circle cx="163" cy="30" r="9" fill="#7fb5ff"/><circle cx="180" cy="14" r="6" fill="#4d8cff" opacity=".75"/>';
   ov.querySelector('.ovMarque').setAttribute('d', p.marque);
   ov.querySelector('.ovTitre').textContent = p.titre;
