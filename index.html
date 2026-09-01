@@ -54,6 +54,11 @@ button.act:disabled{opacity:.4}
 background:var(--bg2);font-size:14px;white-space:pre-wrap;word-break:break-word}
 .ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
 .note{color:var(--dim);font-size:12px;margin:9px 2px 0;line-height:1.5}
+.expl{font-size:13.5px;line-height:1.62;margin:0 0 12px;color:#c7d6f0}
+.expl:last-child{margin-bottom:0}
+.expl b{color:var(--fg)}
+.expl code{font-family:ui-monospace,Consolas,monospace;font-size:12.5px;background:var(--bg2);
+padding:1px 5px;border-radius:5px;color:#9fd0ff}
 
 /* ══ GARDE-FOU MAINNET ══════════════════════════════════════════════════════════════════════
  * ⛔ Cette page est PUBLIQUE. Sur Sepolia une erreur coute du gaz de test ; sur mainnet elle
@@ -221,6 +226,46 @@ animation:trace .3s .18s ease-out forwards}
 <p class="note">⛔ This page holds no key. It <b>presents</b> the transaction; your wallet shows it and signs it.<br>
 ⛔ The block is born <b>with no admin and no minter</b>, and its supply equals its cap. Nobody — you included — will ever mint one more, or change its name, logo or description.<br>
 ⛔ Every state shown is <b>re-read from the chain</b>, never inferred from a transaction having succeeded.</p>
+
+<!-- ⛔ CETTE SECTION EST UNE PROMESSE PUBLIQUE. Chaque phrase doit correspondre a ce que le code
+     fait REELLEMENT, et rien d autre. Pas de « bientot », pas de feuille de route, pas de chiffre
+     qui n a pas ete mesure. Ce qui n existe pas est dit comme n existant pas. -->
+<div class="card" id="commentCaMarche">
+  <h2>How a Tokenized Block works</h2>
+
+  <p class="expl"><b>A block is bytes you own.</b> You choose a name, a symbol, a supply and a
+  description. The app turns that into a <b>B-20 token</b> — Base's native token standard, where the
+  token is a precompile rather than a deployed contract. Its address always starts with
+  <code>0xb200</code>, and its code is exactly one byte: <code>0xef</code>.</p>
+
+  <p class="expl"><b>It is born finished.</b> In the same single transaction, the block is created,
+  its supply cap is set, and the whole supply is minted to you. There is no window in between.
+  <b>No account holds <code>DEFAULT_ADMIN_ROLE</code> or <code>MINT_ROLE</code> — not you, not us,
+  not anyone.</b> That is not a promise we make; it is a consequence of the transaction you sign,
+  and you can check it yourself with <code>hasRole</code> on any block.</p>
+
+  <p class="expl"><b>What that costs you:</b> nothing about the block can ever change. Not its name,
+  not its logo, not its description. Minting one more unit is impossible because the supply already
+  equals the cap and no one holds the role. Immutability is the feature and the price.</p>
+
+  <p class="expl"><b>The salt fixes the address.</b> Your block's address is derived from the
+  standard, your wallet address, and the salt you choose. Two different wallets with the same salt
+  get two different blocks. The same wallet with the same salt gets the same address — so a salt
+  you have already used is already taken.</p>
+
+  <p class="expl"><b>Then it can be traded.</b> A block can be paired with another currency in a
+  Uniswap v4 pool, quoted, and swapped. The app builds every one of those transactions in your
+  browser and shows you the state it reads back from the chain between each step.</p>
+
+  <p class="expl"><b>This page never holds a key and never holds funds.</b> It encodes a
+  transaction and hands it to your wallet. Your wallet shows it to you, and you decide. Nothing is
+  charged: what you pay is the network's gas, to the network, and nothing else.</p>
+
+  <p class="expl note" style="margin-top:14px">⚠️ <b>What is not proven yet.</b> Everything above has
+  been exercised end to end on <b>Base Sepolia</b> — a test network. The encoders are compared byte
+  for byte against the reference toolchain, but nothing here has been used at scale by anyone other
+  than its author. Treat it as working code, not as a finished product.</p>
+</div>
 <div id="ov" hidden>
   <div class="ovBox">
     <svg class="ovCube" viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg">
