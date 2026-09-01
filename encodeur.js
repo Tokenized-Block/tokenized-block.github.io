@@ -1,0 +1,87 @@
+// encodeur.js — construit le calldata de createB20 DANS LE NAVIGATEUR.
+// ================================================================================================
+// ⛔ POURQUOI C EST DANGEREUX, ET COMMENT ON S EN PROTEGE.
+// L implementation native de B20 rejette une calldata non canonique avec `AbiDecodeFailed` —
+// APRES le gaz, et pas a la simulation si on encode soi-meme des DEUX cotes. Un encodeur qui
+// « a l air bon » ne se detecte donc pas tout seul.
+//
+// ⇒ LE SEUL CONTROLE QUI VAUT : reproduire OCTET POUR OCTET la calldata que `base-forge` a
+//   produite via B20FactoryLib pour un cas connu. C est ce que fait `test-encodeur.mjs`, et il
+//   compare a la sortie REELLE de la simulation mainnet, pas a une valeur que j aurais recopiee.
+//
+// ⛔ Aucun selecteur n est recite : tous sont DERIVES par keccak a l execution.
+import { keccak256 } from './keccak.js';
+
+const enc = new TextEncoder();
+const hex = (o) => [...o].map((b) => b.toString(16).padStart(2, '0')).join('');
+const octets = (h) => Uint8Array.from(h.replace(/^0x/, '').match(/../g).map((b) => parseInt(b, 16)));
+
+export function selecteur(sig) { return hex(keccak256(enc.encode(sig))).slice(0, 8); }
+export function motDeHash(s) { return hex(keccak256(enc.encode(s))); }
+
+const mot = (v) => v.toString(16).padStart(64, '0');
+const motAdresse = (a) => a.replace(/^0x/, '').toLowerCase().padStart(64, '0');
+
+/* Une valeur dynamique : longueur, puis contenu complete a un multiple de 32 octets.
+ * ⛔ Le bourrage n est pas cosmetique : sans lui les offsets suivants tombent au mauvais endroit,
+ *    et l erreur n indique jamais un probleme d alignement. */
+function dynamique(hexContenu) {
+  const n = hexContenu.length / 2;
+  const reste = (32 - (n % 32)) % 32;
+  return mot(n) + hexContenu + '00'.repeat(reste);
+}
+const chaineHex = (s) => hex(enc.encode(s));
+
+/** B20AssetCreateParams : abi.encode d une struct DYNAMIQUE — donc precedee de son offset. */
+export function paramsAsset({ nom, symbole, admin, decimales }) {
+  const n = chaineHex(nom), s = chaineHex(symbole);
+  const tete = mot(1n) + mot(0xa0n) + mot(0xe0n) + motAdresse(admin) + mot(BigInt(decimales));
+  /* offsets name/symbol relatifs au DEBUT DE LA STRUCT : 5 mots de tete = 0xa0, puis name occupe
+   * 1 mot de longueur + 1 mot de contenu (les deux tiennent en 32 o) => symbol a 0xe0. */
+  if (enc.encode(nom).length > 32 || enc.encode(symbole).length > 32) {
+    throw new Error('nom ou symbole > 32 octets : cet encodeur ne couvre pas ce cas');
+  }
+  return mot(0x20n) + tete + dynamique(n) + dynamique(s);
+}
+
+export function encodeUpdateSupplyCap(plafond) { return selecteur('updateSupplyCap(uint256)') + mot(plafond); }
+export function encodeUpdateContractURI(uri) {
+  return selecteur('updateContractURI(string)') + mot(0x20n) + dynamique(chaineHex(uri));
+}
+export function encodeBatchMint(destinataires, montants) {
+  /* batchMint(address[],uint256[]) : deux tableaux dynamiques, donc deux offsets en tete. */
+  const a = mot(BigInt(destinataires.length)) + destinataires.map(motAdresse).join('');
+  const b = mot(BigInt(montants.length)) + montants.map(mot).join('');
+  const offA = 0x40n, offB = offA + BigInt(a.length / 2);
+  return selecteur('batchMint(address[],uint256[])') + mot(offA) + mot(offB) + a + b;
+}
+
+/** createB20(uint8 variant, bytes32 salt, bytes params, bytes[] initCalls) */
+export function encodeCreateB20({ variant = 0, saltTexte, params, initCalls }) {
+  const salt = motDeHash(saltTexte);
+
+  /* bytes[] : longueur, puis un offset par element (relatifs au debut du TABLEAU), puis les
+   * elements sous forme dynamique. */
+  const corpsElements = initCalls.map((c) => dynamique(c));
+  let curseur = BigInt(32 * initCalls.length);
+  const offsets = [];
+  for (const e of corpsElements) { offsets.push(mot(curseur)); curseur += BigInt(e.length / 2); }
+  const tableau = mot(BigInt(initCalls.length)) + offsets.join('') + corpsElements.join('');
+
+  const blocParams = dynamique(params);
+  const offParams = 0x80n;                       // 4 mots de tete
+  const offInit = offParams + BigInt(blocParams.length / 2);
+
+  return '0x' + selecteur('createB20(uint8,bytes32,bytes,bytes[])')
+    + mot(BigInt(variant)) + salt + mot(offParams) + mot(offInit)
+    + blocParams + tableau;
+}
+
+/** L adresse deterministe n est PAS calculable ici : elle depend du precompile. On la LIT. */
+export async function adresseAttendue(rpc, appelant, calldata) {
+  const r = await rpc('eth_call', [{ from: appelant, to: '0xb20f000000000000000000000000000000000000', data: calldata }, 'latest']);
+  if (!r || r === '0x') return null;
+  return '0x' + r.slice(-40);
+}
+
+export { octets };

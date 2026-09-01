@@ -1,0 +1,20 @@
+{
+  "selecteurs": {
+    "name()": "0x06fdde03",
+    "symbol()": "0x95d89b41",
+    "decimals()": "0x313ce567",
+    "totalSupply()": "0x18160ddd",
+    "supplyCap()": "0x8f770ad0",
+    "contractURI()": "0xe8a3d485",
+    "hasRole(bytes32,address)": "0x91d14854",
+    "balanceOf(address)": "0x70a08231"
+  },
+  "roles": {
+    "DEFAULT_ADMIN_ROLE": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "MINT_ROLE": "0x154c00819833dac601ee5ddded6fda79d9d8b506b911b3dbd54cdb95fe6c3686",
+    "BURN_ROLE": "0xe97b137254058bd94f28d2f3eb79e2d34074ffb488d042e3bc958e0a57d2fa22",
+    "PAUSE_ROLE": "0x139c2898040ef16910dc9f44dc697df79363da767d8bc92f2e310312b816e46d",
+    "METADATA_ROLE": "0x6bd6b5318a46e5fff572d5e4258a20774aab40cc35ac7680654b9081fcc82f80",
+    "OPERATOR_ROLE": "0x97667070c54ef182b0f5858b034beac1b6f3089aa2d3188bb1e8929f4fa9b929"
+  }
+}
