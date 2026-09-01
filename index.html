@@ -43,6 +43,18 @@ button.act:disabled{opacity:.4}
 background:var(--bg2);font-size:14px;white-space:pre-wrap;word-break:break-word}
 .ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
 .note{color:var(--dim);font-size:12px;margin:9px 2px 0;line-height:1.5}
+
+/* ══ GARDE-FOU MAINNET ══════════════════════════════════════════════════════════════════════
+ * ⛔ Cette page est PUBLIQUE. Sur Sepolia une erreur coute du gaz de test ; sur mainnet elle
+ *    coute de l argent reel a quelqu un qui decouvre l outil. La difference entre les deux
+ *    reseaux ne doit pas tenir a un onglet qu on clique sans le lire. */
+#gardeMainnet{display:none;background:#3a2410;border:1px solid #7a4a12;border-radius:14px;
+padding:14px 15px;margin-bottom:12px}
+#gardeMainnet.on{display:block}
+#gardeMainnet .t{font-weight:800;color:var(--warn);font-size:14px;margin-bottom:6px}
+#gardeMainnet p{margin:0 0 10px;font-size:13px;color:#f0dcc0;line-height:1.5}
+#gardeMainnet label{display:flex;gap:10px;align-items:flex-start;color:var(--fg);font-size:13.5px;margin:0}
+#gardeMainnet input{width:20px;height:20px;flex:0 0 auto;margin-top:1px;accent-color:var(--or)}
 #apercu{display:block;width:96px;height:106px;margin:2px auto 0;border-radius:10px}
 
 /* ══ RETOUR VISUEL DE TRANSACTION ═══════════════════════════════════════════════════════════
@@ -110,6 +122,14 @@ animation:trace .3s .18s ease-out forwards}
 <div class="tabs">
   <button id="t84532" aria-selected="true">Base Sepolia</button>
   <button id="t8453" aria-selected="false">Base mainnet</button>
+</div>
+
+<div id="gardeMainnet">
+  <div class="t">⚠ Base mainnet — real money</div>
+  <p>Every action below will spend <b>real ETH</b>, and what you create is <b>permanent</b>: no
+  admin, no minter, no way to change the name, the logo or the description afterwards. Nobody can
+  undo it — not you, not us.</p>
+  <label><input type="checkbox" id="gardeCase"> I understand this is mainnet and I accept the cost.</label>
 </div>
 
 <div class="card">
@@ -291,6 +311,7 @@ async function rafraichir() {
         : cause ? pastille('NOT COMPUTED: ' + cause, 'warn')
         : pastille('connect — it derives from YOUR address', 'dim'));
   if (adr) await relireJeton(adr);
+  gardeMainnet();
 }
 
 async function relireJeton(adr) {
@@ -326,6 +347,8 @@ for (const el of ['nom','sym','dec','supply','sel','desc','teinte']) $('#' + el)
 for (const id of [84532, 8453]) $('#t' + id).onclick = () => {
   chaine = id; $('#t84532').setAttribute('aria-selected', String(id === 84532));
   $('#t8453').setAttribute('aria-selected', String(id === 8453));
+  /* ⛔ le consentement ne survit PAS a un changement de reseau */
+  $('#gardeCase').checked = false;
   dire('Network: ' + RESEAUX[id].nom + '.'); rafraichir();
 };
 $('#relire').onclick = rafraichir;
@@ -449,6 +472,7 @@ async function construirePlan() {
   b.textContent = empeche ? empeche : 'Run: ' + suivante.nom;
   if (empeche && !compte) vue += ligne('next', pastille('CONNECT YOUR WALLET', 'warn'));
   box.innerHTML = vue;
+  gardeMainnet();
   return { etapes, suivante, cle, v, liq, b20 };
 }
 
@@ -546,6 +570,7 @@ async function etatSwap() {
   b.disabled = empeche !== null;
   b.textContent = empeche ? empeche : (autorise ? 'Run: 2. swap' : 'Run: 1. approve Permit2 → Router');
   box.innerHTML = vue;
+  gardeMainnet();
   return { b20, cle, zeroForOne, montant, ur, autorise, forme, sortie };
 }
 
@@ -555,6 +580,36 @@ async function etatSwap() {
  *    diffusee n est pas une transaction reussie, et l interface ne doit pas les confondre.
  * ⚠️ La couleur et le TEXTE portent l information a eux seuls -- le mouvement n ajoute que du
  *    confort. Sous prefers-reduced-motion tout s arrete et rien n est perdu. */
+/* ══ GARDE-FOU MAINNET ══════════════════════════════════════════════════════════════════════
+ * ⛔ UNE SEULE PORTE POUR LES TROIS BOUTONS. Trois verifications separees auraient trois facons
+ *    de diverger : il suffirait qu un bouton ajoute plus tard oublie la sienne. Ici la garde
+ *    s applique en dernier, apres que chaque section a decide de son propre etat.
+ * ⛔ ET LA CASE SE DECOCHE A CHAQUE CHANGEMENT DE RESEAU. Une case cochee sur mainnet, puis un
+ *    retour sur Sepolia, puis un retour sur mainnet, ne doit PAS retrouver un consentement
+ *    donne pour une autre session d attention. */
+const MAINNET = 8453;
+function gardeMainnet() {
+  const surMainnet = chaine === MAINNET;
+  $('#gardeMainnet').classList.toggle('on', surMainnet);
+  /* ⚠️ Hors mainnet la garde REND LA MAIN explicitement : sans cette ligne, un aller-retour
+   * laisserait le bouton desactive sur Sepolia, ou rien ne le justifie. */
+  if (!surMainnet) { $('#agir').disabled = false; return; }
+  /* ⛔ LA GARDE REFUSE, ELLE NE REECRIT PAS. Une premiere version remplacait le TEXTE du
+   * bouton -- et ne le restaurait jamais une fois la case cochee : le bouton restait bloque sur
+   * « Tick the mainnet box above first » pour toujours. Une garde qui MUTE l etat de ce qu elle
+   * protege finit par le corrompre. Elle pose `disabled`, rien de plus ; chaque section garde la
+   * responsabilite de son propre libelle, et la banniere orange dit pourquoi. */
+  const ok = $('#gardeCase').checked;
+  /* ⛔ « #agir » n a AUCUN autre proprietaire de son etat desactive : la garde doit donc le poser
+   * ET le lever. Ne poser que le refus laissait le bouton mort meme apres consentement — une
+   * garde qui prend la main sans jamais la rendre est une panne, pas une protection. */
+  $('#agir').disabled = !ok;
+  /* Les deux autres sont recalcules par leur propre section a chaque lecture : on ne fait que
+   * FORCER le refus, jamais l autorisation. */
+  if (!ok) for (const id of ['#poolAgir', '#swapAgir']) { const b = $(id); if (b) b.disabled = true; }
+}
+$('#gardeCase').onchange = () => { gardeMainnet(); if (chaine === MAINNET) { rafraichir(); } };
+
 const ov = $('#ov');
 const PHASES = {
   wallet:  { titre: 'Check your wallet',  marque: '' },
