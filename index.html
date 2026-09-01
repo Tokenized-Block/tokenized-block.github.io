@@ -3,7 +3,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<title>Tokenized Block</title>
+<title>TokenizedBlock</title>
+<!-- ══ MINI APP BASE / FARCASTER ═══════════════════════════════════════════════════════════════
+     ⛔ Le nom de la balise et la forme du JSON sont LUS dans la spec, pas recites :
+        `fc:miniapp` est l actuel, `fc:frame` reste pour la compatibilite ascendante, et
+        `button.action.type` doit valoir exactement `launch_miniapp`.
+     ⚠️ Les URL sont ABSOLUES et pointent le domaine servi. Un chemin relatif casserait l apercu :
+        l apercu est construit par un serveur tiers qui n a aucun contexte de page. -->
+<meta property="og:title" content="TokenizedBlock">
+<meta property="og:description" content="Build a block. It becomes a B-20 token on Base — with no admin and no minter.">
+<meta property="og:image" content="https://philpof102-svg.github.io/TokenizedBlock/embed.png">
+<meta name="fc:miniapp" content='{"version":"1","imageUrl":"https://philpof102-svg.github.io/TokenizedBlock/embed.png","button":{"title":"Build a block","action":{"type":"launch_miniapp","url":"https://philpof102-svg.github.io/TokenizedBlock/","name":"TokenizedBlock","splashImageUrl":"https://philpof102-svg.github.io/TokenizedBlock/splash.png","splashBackgroundColor":"#000000"}}}'>
+<meta name="fc:frame" content='{"version":"1","imageUrl":"https://philpof102-svg.github.io/TokenizedBlock/embed.png","button":{"title":"Build a block","action":{"type":"launch_miniapp","url":"https://philpof102-svg.github.io/TokenizedBlock/","name":"TokenizedBlock","splashImageUrl":"https://philpof102-svg.github.io/TokenizedBlock/splash.png","splashBackgroundColor":"#000000"}}}'>
 <style>
 :root{--bg:#050d24;--bg2:#0a1633;--card:#0f1d3d;--line:#1e2f57;--fg:#e9f0ff;--dim:#8ba0c9;
 --or:#f7a318;--ok:#22c55e;--warn:#f5a317;--bad:#ef4444;--blue:#2f6ef0}
