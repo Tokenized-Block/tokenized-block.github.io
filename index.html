@@ -357,9 +357,32 @@ const ligne = (k, v) => `<div class="row"><span class="k">${k}</span><span class
 const pastille = (t, c) => `<span class="pill p-${c}">${t}</span>`;
 
 const abi = await (await fetch('./abi.json')).json();
+/**
+ * ⛔ PLUSIEURS NOEUDS PAR RESEAU, ET C EST UNE MESURE QUI L IMPOSE.
+ *    `mainnet.base.org` coupe des la 5e a 10e requete d une rafale. Construire le plan avec un
+ *    wallet connecte en fait plus que ca : soldes, autorisations, decimales, supply, slot0, code.
+ *    Resultat en conditions reelles le 2026-09-04 : « your WETH NOT MEASURED », et depuis que la
+ *    garde de solde echoue FERMEE — comme elle doit — l utilisateur est bloque net.
+ *
+ * ⛔ LA PISTE EVIDENTE ETAIT MAUVAISE, ET C EST LA MESURE QUI L A DIT. J allais grouper les
+ *    lectures en un LOT JSON-RPC : les trois noeuds l acceptent et l apparient correctement
+ *    (`sonde-batch.mjs`). Mais `sonde-debit-lot.mjs` a mesure ce que ca COUTE : un lot de 10 est
+ *    refuse IMMEDIATEMENT — 0 lecture passee, contre 5 en appels separes. Le noeud facture les
+ *    sous-requetes, et grouper est PIRE que ne rien faire. Une reecriture entiere evitee par une
+ *    sonde de trente lignes. « Accepte » n est pas « economise ».
+ *
+ * ⇒ On garde les appels separes et on CHANGE DE NOEUD quand l un coupe. Les deux secours ont ete
+ *   verifies : ils repondent aux memes lectures et honorent meme les surcharges d etat.
+ * ⚠️ L ordre compte : le noeud officiel d abord, les autres en secours. Un secours promu par
+ *    defaut deplacerait la confiance vers un tiers sans qu on l ait decide.
+ */
 const RESEAUX = {
-  84532: { nom: 'Base Sepolia', rpc: 'https://sepolia.base.org', hex: '0x14a34', scan: 'https://sepolia.basescan.org' },
-  8453:  { nom: 'Base mainnet', rpc: 'https://mainnet.base.org',  hex: '0x2105', scan: 'https://basescan.org' },
+  84532: { nom: 'Base Sepolia', hex: '0x14a34', scan: 'https://sepolia.basescan.org',
+           rpc: 'https://sepolia.base.org',
+           secours: ['https://base-sepolia-rpc.publicnode.com'] },
+  8453:  { nom: 'Base mainnet', hex: '0x2105', scan: 'https://basescan.org',
+           rpc: 'https://mainnet.base.org',
+           secours: ['https://base.drpc.org', 'https://1rpc.io/base'] },
 };
 const FACTORY = '0xb20f000000000000000000000000000000000000';
 let chaine = 84532, compte = null, dernier = null;
@@ -381,14 +404,29 @@ let n = 0;
  */
 async function rpc(m, p, essais = 4, attente = 350) {
   let derniere = null;
+  /* ⛔ ON TOURNE SUR LES NOEUDS, dans l ordre declare. Reessayer quatre fois le MEME noeud qui
+   * vient de couper attend simplement que sa fenetre se rouvre ; changer de noeud repond tout de
+   * suite. Le noeud officiel reste le premier essai a chaque appel : le secours depanne, il ne
+   * prend pas la place. */
+  const noeuds = [RESEAUX[chaine].rpc, ...(RESEAUX[chaine].secours || [])];
   for (let k = 0; k < essais; k++) {
+    const url = noeuds[k % noeuds.length];
     let j;
     try {
-      const r = await fetch(RESEAUX[chaine].rpc, { method: 'POST', headers: { 'content-type': 'application/json' },
+      const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ jsonrpc: '2.0', id: ++n, method: m, params: p }) });
       j = await r.json();
     } catch (e) {
-      derniere = e; if (k < essais - 1) { await new Promise((r) => setTimeout(r, attente * 2 ** k)); continue; }
+      derniere = e;
+      /* ⛔ ON N ATTEND PAS POUR CHANGER DE NOEUD. Le backoff sert a laisser une fenetre de debit
+       * se rouvrir ; le noeud suivant n a pas de fenetre fermee. Attendre avant de l interroger
+       * ne fait que ralentir la page sans rien acheter — et une page lente devant un wallet
+       * ouvert, c est un utilisateur qui clique deux fois. On ne temporise que si le prochain
+       * essai retombe sur le MEME noeud. */
+      if (k < essais - 1) {
+        if (noeuds[(k + 1) % noeuds.length] === url) await new Promise((r) => setTimeout(r, attente * 2 ** k));
+        continue;
+      }
       throw e;
     }
     if (!j.error) return j.result;
@@ -396,7 +434,11 @@ async function rpc(m, p, essais = 4, attente = 350) {
     const msg = String(j.error.message || '');
     if (/revert|invalid|not found|unauthor|unsupported/i.test(msg)) throw new Error(msg);
     derniere = new Error(msg);
-    if (k < essais - 1) await new Promise((r) => setTimeout(r, attente * 2 ** k));
+    /* ⛔ MEME REGLE QUE POUR LE TRANSPORT : on ne temporise que si le prochain essai retombe sur
+     * le meme noeud. Une limite de debit est PROPRE A UN NOEUD ; un autre repond tout de suite. */
+    if (k < essais - 1 && noeuds[(k + 1) % noeuds.length] === url) {
+      await new Promise((r) => setTimeout(r, attente * 2 ** k));
+    }
   }
   throw derniere;
 }
