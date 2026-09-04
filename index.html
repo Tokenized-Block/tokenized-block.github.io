@@ -339,7 +339,7 @@ import { encodeCreateB20, paramsAsset, encodeUpdateSupplyCap, encodeUpdateContra
 /* ⛔ Le formatage des montants vit dans son module POUR ETRE TESTE : la conversion wei -> ETH
  * fait de la division et du remplissage sur des BigInt, et elle arrondit VERS LE HAUT — un cout
  * affiche ne doit jamais etre inferieur au cout reel. 8 tests dans `test-montants.mjs`. */
-import { formaterEth, estArrondi, formaterGas, entierStrict } from './montants.js';
+import { formaterEth, estArrondi, formaterGas, entierStrict, decimalesStrictes } from './montants.js';
 import { classerUri, sourceImage, metadonnees, enAttribut, PASSERELLE_PAR_DEFAUT } from './lecteur.js';
 import { listerCreations, creationsDe } from './index-blocks.js';
 import { cleDePool, etatPool, encodeInitialize, encodeApprove, encodePermit2Approve, encodeMintPosition,
@@ -524,7 +524,12 @@ const b64 = (s) => btoa(String.fromCharCode(...new TextEncoder().encode(s)));
 function lire() {
   const nom = $('#nom').value.trim() || 'Block';
   const sym = ($('#sym').value.trim() || 'BLOCK').toUpperCase();
-  const dec = Math.min(18, Math.max(6, parseInt($('#dec').value || '18', 10)));
+  /* ⛔ PLUS DE ROGNAGE MUET, ET PLUS DE NaN QUI TRAVERSE LES BORNES. Voir `decimalesStrictes` :
+   * `Math.max(6, NaN)` et `Math.min(18, NaN)` rendent tous deux NaN, et `BigInt(NaN)` leve. Si
+   * ca ne cassait pas, c est uniquement parce que ce champ est `type="number"` — une garde qui ne
+   * tient qu a un attribut HTML disparait au premier refactor, sans un bruit. */
+  const eDec = decimalesStrictes($('#dec').value);
+  const dec = eDec.etat === 'OK' || eDec.etat === 'BORNE' ? eDec.valeur : 18;
   /* ⛔ LA SUPPLY EST GRAVEE A LA CREATION, et jamais rejouable : le block naît sans admin, donc
    * personne ne pourra jamais en emettre un de plus ni en detruire un. « 1.5 » lu comme 15
    * creerait un jeton a 10 fois la supply voulue, definitivement. Voir `entierStrict`. */
@@ -539,7 +544,10 @@ function lire() {
   /* ⛔ LE REFUS VOYAGE AVEC LE RESULTAT. Le laisser ici en silence rendrait une supply de 0 sans
    * que rien a l ecran ne dise pourquoi — un zero muet sur le chiffre le plus definitif de la page. */
   return { nom, sym, dec, unites, supply, sel: $('#sel').value.trim() || 'block-v1', svg, uri,
-    refusSupply: eSup.etat === 'REFUSE' ? eSup : null };
+    refusSupply: eSup.etat === 'REFUSE' ? eSup : null,
+    /* ⛔ Un repli et un rognage voyagent aussi : les taire ferait passer une valeur choisie par
+     * le code pour une valeur choisie par l utilisateur — sur un chiffre grave a la creation. */
+    noteDec: eDec.etat === 'REFUSE' || eDec.etat === 'BORNE' ? eDec : null };
 }
 
 function calldata(f, porteur) {
@@ -595,6 +603,13 @@ async function rafraichir() {
             + '<br>The supply is minted once, at creation, and this block has no admin — nobody can '
             + 'ever mint one more or destroy one. Getting it wrong is permanent.</span>')
         : ligne('supply', f.supply.toString() + ' (' + f.unites + ' × 10^' + f.dec + ')'))
+    + (f.noteDec
+        ? ligne('decimals', pastille(f.noteDec.etat === 'BORNE'
+              ? 'CLAMPED TO ' + f.dec : 'NOT A WHOLE NUMBER — USING ' + f.dec, 'warn')
+            + '<br><span class="dim">You typed <b>' + enTexte(f.noteDec.tape) + '</b> — '
+            + enTexte(f.noteDec.pourquoi)
+            + '<br>Decimals decide what "one token" means, and creation engraves them.</span>')
+        : '')
     + ligne('cap', pastille('EQUALS THE SUPPLY', 'ok'))
     + ligne('admin', pastille('NONE', 'ok'))
     /* ⛔ SI LE SEL EST DEJA PRIS, MONTRER LE BLOCK — il est a l utilisateur, il l a cree.

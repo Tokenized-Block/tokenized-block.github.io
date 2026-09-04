@@ -89,6 +89,49 @@ export function formaterGas(gaz) {
  * ⚠️ TROIS ETATS, JAMAIS DEUX : une valeur, « rien de tape », ou « ce n est pas un entier » — ce
  *    dernier PORTANT ce qui a ete tape, pour que le message puisse le montrer.
  */
+/**
+ * Lit les DECIMALES d un jeton — bornees, et sans jamais rogner en silence.
+ * ================================================================================================
+ * ⛔ TROIS DEFAUTS MESURES LE 2026-09-04 sur `Math.min(18, Math.max(6, parseInt(v, 10)))` :
+ *      « 1e1 » -> parseInt rend 1, borne a 6.  L utilisateur voulait 10 : il obtient 6.
+ *      « 8.9 » -> 8, tronque sans un mot.
+ *      « -3 » -> 6 et « 99 » -> 18, rognes sans un mot.
+ *    Les decimales sont GRAVEES a la creation : elles decident de ce que « 1 jeton » veut dire,
+ *    pour toujours. Une valeur rognee en silence est une valeur choisie a la place de l utilisateur.
+ *
+ * ⛔ ET LA PROTECTION CONTRE NaN ETAIT ACCIDENTELLE. `parseInt('abc')` rend NaN, et NaN TRAVERSE
+ *    `Math.max` comme `Math.min` — les deux bornes le laissent passer — apres quoi `BigInt(NaN)`
+ *    LEVE. Si ca ne cassait pas, c est seulement parce que le champ est `type="number"` : le
+ *    navigateur y rend `''` pour une saisie non numerique, et le repli `|| '18'` sauvait la mise.
+ *    Une garde qui ne tient qu a un attribut HTML n est pas une garde ; passer le champ en
+ *    `type="text"` la supprimerait sans que rien ne le signale. Ici, NaN est refuse explicitement.
+ *
+ * ⚠️ QUATRE ETATS. OK / VIDE / REFUSE (pas un entier) / BORNE (entier valide, hors des limites) —
+ *    ce dernier rend la valeur bornee ET dit ce qui a ete tape, pour que l ecran puisse l avouer
+ *    au lieu de faire comme si l utilisateur l avait voulue.
+ */
+export function decimalesStrictes(texte, min = 6, max = 18) {
+  const t = String(texte ?? '').trim();
+  if (t === '') return { etat: 'VIDE' };
+  /* ⛔ On exige la forme d un entier decimal AVANT toute conversion. `parseInt` lit « 1e1 » comme
+   * 1 et « 8.9 » comme 8 : il s arrete au premier caractere qu il ne comprend pas au lieu de
+   * refuser. Ce qu il jette, il ne le signale pas. */
+  if (!/^-?\d+$/.test(t)) {
+    return { etat: 'REFUSE', tape: t,
+      pourquoi: 'Decimals must be a whole number — "' + t + '" is not one'
+        + (/^-?\d*\.\d+$|e/i.test(t) ? ' (values like "1e1" or "8.9" get silently cut).' : '.') };
+  }
+  const n = Number(t);
+  /* ⛔ Ceinture ET bretelles : si une entree passait le motif tout en donnant NaN, on refuse
+   * plutot que de laisser NaN franchir les bornes. Un NaN qui atteint `BigInt` leve. */
+  if (!Number.isInteger(n)) return { etat: 'REFUSE', tape: t, pourquoi: 'Not a whole number.' };
+  if (n < min || n > max) {
+    return { etat: 'BORNE', tape: t, valeur: n < min ? min : max, min, max,
+      pourquoi: 'Decimals must be between ' + min + ' and ' + max + '.' };
+  }
+  return { etat: 'OK', valeur: n };
+}
+
 export function entierStrict(texte) {
   const t = String(texte ?? '').trim();
   if (t === '') return { etat: 'VIDE' };
