@@ -260,7 +260,18 @@ animation:trace .3s .18s ease-out forwards}
 
   <p class="expl"><b>What that costs you:</b> nothing about the block can ever change. Not its name,
   not its logo, not its description. Minting one more unit is impossible because the supply already
-  equals the cap and no one holds the role. Immutability is the feature and the price.</p>
+  equals the cap and no one holds the role.
+  <!-- ⛔ CE QUI MANQUAIT, ET C EST LA MOITIE DU PRIX. Le paragraphe listait tout ce qu on ne peut
+       pas AJOUTER, et rien sur ce qu on ne peut pas DETRUIRE. Mesure du 2026-09-03 sur Base
+       Sepolia, appel depuis le detenteur lui-meme : `burn(1)` rend
+       AccessControlUnauthorizedAccount, parce que `burn` exige BURN_ROLE et qu aucun compte ne le
+       detient. Un lecteur pouvait raisonnablement croire qu il brulerait ses propres tokens.
+       ⚠️ Et `transfer` vers une adresse morte n est PAS un burn : le solde devient inatteignable,
+       `totalSupply` ne bouge pas. Ecrire « burn » pour ce geste serait un chiffre faux. -->
+  And you cannot destroy them either: <code>burn</code> needs <code>BURN_ROLE</code>, which nobody
+  holds — so the supply can never go down. Sending units to a dead address takes them out of
+  circulation, but <code>totalSupply</code> does not move.
+  Immutability is the feature and the price, in both directions.</p>
 
   <p class="expl"><b>The salt fixes the address.</b> Your block's address is derived from the
   standard, your wallet address, and the salt you choose. Two different wallets with the same salt
@@ -296,7 +307,11 @@ animation:trace .3s .18s ease-out forwards}
 </main>
 
 <script type="module">
-import { encodeCreateB20, paramsAsset, encodeUpdateSupplyCap, encodeUpdateContractURI, encodeBatchMint, adresseOuRefus } from './encodeur.js';
+import { encodeCreateB20, paramsAsset, encodeUpdateSupplyCap, encodeUpdateContractURI, encodeBatchMint, adresseOuRefus, expliquerRefus } from './encodeur.js';
+/* ⛔ Le formatage des montants vit dans son module POUR ETRE TESTE : la conversion wei -> ETH
+ * fait de la division et du remplissage sur des BigInt, et elle arrondit VERS LE HAUT — un cout
+ * affiche ne doit jamais etre inferieur au cout reel. 8 tests dans `test-montants.mjs`. */
+import { formaterEth, estArrondi, formaterGas } from './montants.js';
 import { classerUri, sourceImage, metadonnees, PASSERELLE_PAR_DEFAUT } from './lecteur.js';
 import { listerCreations, creationsDe } from './index-blocks.js';
 import { cleDePool, etatPool, encodeInitialize, encodeApprove, encodePermit2Approve, encodeMintPosition,
@@ -463,11 +478,20 @@ async function rafraichir() {
     adr = r.adresse; cause = r.refus ? (r.refus + (r.brut ? '  [' + r.brut + ']' : '')) : null;
   }
 
+  /* ⛔ CE QUE CA COUTE, AVANT QUE LE WALLET S OUVRE. La page promettait « what you pay is the
+   * network's gas » et n affichait AUCUN chiffre : l utilisateur decouvrait le montant dans son
+   * wallet, trop tard pour changer d avis. Et le chiffre n est pas anodin — mesure le 2026-09-03
+   * sur Base mainnet : ces metadonnees EN LIGNE coutent 6 141 082 gas contre 304 763 pour une URI
+   * `ipfs://`, soit 20,1x. Promettre la transparence sur un cout qu on n affiche pas est le
+   * contraire de la transparence. */
+  const cout = await estimerCout(data, compte);
+
   $('#fiche').innerHTML =
       ligne('network', RESEAUX[chaine].nom + ' (' + chaine + ')')
     + ligne('to', FACTORY)
     + ligne('value', '0')
     + ligne('data', data.slice(0, 24) + '… (' + (data.length / 2 - 1) + ' bytes)')
+    + ligne('gas', cout.texte)
     + ligne('supply', f.supply.toString() + ' (' + f.unites + ' × 10^' + f.dec + ')')
     + ligne('cap', pastille('EQUALS THE SUPPLY', 'ok'))
     + ligne('admin', pastille('NONE', 'ok'))
@@ -476,6 +500,74 @@ async function rafraichir() {
         : pastille('connect — it derives from YOUR address', 'dim'));
   if (adr) await relireJeton(adr);
   gardeMainnet();
+}
+
+/**
+ * Estime le cout REEL de la creation, et le DIT — ou dit qu il n a pas pu.
+ *
+ * ⛔ TROIS ETATS, JAMAIS DEUX. « mesure », « impossible a mesurer », et « pas encore connectable ».
+ *    Un tiret ou un zero a la place d une estimation ratee se lit comme « gratuit ».
+ * ⛔ AUCUNE CONVERSION EN DOLLARS : il n y a pas d oracle de prix ici, et inventer un taux
+ *    serait un chiffre non mesure dans une interface qui en promet le contraire.
+ * ⚠️ `eth_estimateGas` EXECUTE la creation dans l etat courant : il echoue si le sel est deja
+ *    pris. C est une information utile, pas une panne — on montre sa cause.
+ */
+async function estimerCout(data, de) {
+  /* ⛔ LE CONSENTEMENT MAINNET ETAIT CIRCULAIRE. La case dit « I understand this is mainnet and I
+   *    accept the cost », et il faut la cocher AVANT de pouvoir se connecter — or le cout n etait
+   *    calcule qu APRES connexion. On demandait donc d accepter un cout qu il etait impossible de
+   *    voir. Mesure du 2026-09-03 sur Base mainnet : l estimation rend 304 763 gas pour le
+   *    signeur reel ET pour `address(0)`, et le meme chiffre pour deux sels differents — le gas
+   *    ne depend pas de l expediteur. On estime donc AVANT connexion depuis l adresse nulle.
+   * ⚠️ Une adresse a SOLDE NUL est refusee par le noeud (`Invalid params`) ; `address(0)`, elle,
+   *    porte l ETH brule et passe. Ce detail n est pas devinable, il a ete mesure.
+   * ⛔ ET LE CHIFFRE AVANT CONNEXION EST INDICATIF, il le DIT : il ne peut pas savoir si le sel de
+   *    CET utilisateur est deja pris — dans ce cas il obtiendra un refus, pas un prix. */
+  const anonyme = !de;
+  if (anonyme) de = '0x0000000000000000000000000000000000000000';
+  /* ⛔ ON NOMME LE REFUS, comme la ligne « address » juste en dessous. Ma premiere version rendait
+   * « execution reverted » pendant que la ligne voisine disait « That salt is already used by this
+   * account » — MEME cause, deux qualites de message, parce que je n appelais pas `expliquerRefus`
+   * qui existait deja. Huitieme fois que le bon helper existe et que l appelant l ignore ; la
+   * regle 5 ne peut pas l attraper, puisque la fonction EXISTE — elle n est simplement pas
+   * appelee. Trouve en exercant la branche MESUREE dans un vrai navigateur, pas en relisant. */
+  const brut = await fetch(RESEAUX[chaine].rpc, { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_estimateGas', params: [{ from: de, to: FACTORY, data }] }) })
+    .then((r) => r.json()).catch((e) => ({ error: { message: e.message } }));
+  let gaz = null, cause = null;
+  if (brut && brut.error) {
+    const d = brut.error.data ? String(brut.error.data) : '';
+    cause = expliquerRefus(d) || brut.error.message || 'refused';
+  } else if (brut && brut.result) {
+    try { gaz = BigInt(brut.result); } catch (e) { cause = 'unreadable estimate: ' + brut.result; }
+  } else cause = 'no answer from the node';
+  if (gaz === null) return { texte: pastille('NOT MEASURED', 'warn') + ' ' + (cause || '') };
+  let prix = null;
+  try { prix = BigInt(await rpc('eth_gasPrice', [])); } catch { /* prix inconnu : on le dira */ }
+  const unites = formaterGas(gaz);
+  if (prix === null) return { texte: unites + ' gas  ' + pastille('price NOT MEASURED', 'warn') };
+  const wei = gaz * prix;
+  /* ⛔ `≈` seulement si l affichage a REELLEMENT arrondi. Ecrire « ≈ » sur une valeur exacte, ou
+   * « = » sur une valeur arrondie, sont deux petits mensonges evitables. */
+  const eth = formaterEth(wei);
+  const signe = estArrondi(wei) ? '≈' : '=';
+  /* ⚠️ LE SEUIL DIT POURQUOI, PAS COMBIEN. Au-dela, le gas est domine par les metadonnees ecrites
+   * DANS le token — l utilisateur merite de savoir ce qu il achete avec ce gas.
+   * ⛔ LA PREMIERE VERSION DE CETTE NOTE DISAIT « ~20x an ipfs:// URI ». Exact en gas, et
+   *    trompeur : sur Base, au prix mesure le 2026-09-03 (0,006 gwei), l ecart entier entre les
+   *    deux formes vaut 0,000035 ETH — une fraction de centime. Annoncer un facteur sans son
+   *    montant laisse conclure a un cout prohibitif qui n existe pas. On dit donc ce que le gas
+   *    ACHETE, et le montant reel est deja affiche juste au-dessus.
+   * ⛔ Et on n ecrit PAS que les explorateurs n afficheront pas un `data:` : ce n est pas mesure. */
+  const gros = gaz > 1000000n
+    ? '<br><span class="dim">most of this gas writes the metadata <em>inside</em> the token: '
+      + 'permanent, and it needs no gateway to stay readable.</span>'
+    : '';
+  /* ⛔ « pour un expediteur type » n est pas une precaution de style : sans connexion on ne peut
+   * pas savoir si le sel de cet utilisateur est libre, donc le prix affiche vaut pour le cas ou
+   * il l est. Taire cette borne ferait passer une estimation pour une facture. */
+  const borne = anonyme ? ' <span class="dim">(before connecting — for a typical sender)</span>' : '';
+  return { gaz, prix, texte: unites + ' gas × ' + formaterGas(prix) + ' wei ' + signe + ' <b>' + eth + ' ETH</b>' + borne + gros };
 }
 
 async function relireJeton(adr) {
