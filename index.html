@@ -1211,8 +1211,10 @@ async function construirePlan() {
    * ⚠️ Les decimales sont LUES sur la chaine, jamais supposees : un jeton nomme USDC ailleurs
    * pourrait en avoir 18, et coder « 6 » en dur transformerait une aide en mensonge. */
   /* `decQ` est declare plus haut, avec le calcul du prix qui en depend. */
-  const humain = (n) => decQ === null ? null
-    : (Number(n) / 10 ** decQ).toLocaleString('en-US', { maximumFractionDigits: 6 });
+  /* ⛔ `humain()` A ETE RETIRE AVEC SON SEUL APPELANT. Il convertissait `L` en « montant de
+   * devise », ce qui n a de sens qu au prix 1 — c est ce qui affichait « you are asking for
+   * 0.037188 WETH » pour une position qui n en exige que 0,001176. Le garder « au cas ou »
+   * laisserait l outil de la faute a portee du prochain appelant. */
 
   /* ⛔ CE QUE LE PRIX INITIAL SIGNIFIE, AVANT L ETAPE 1 — ET C EST IRREVERSIBLE.
    * L ancienne constante `PRIX_1_POUR_1` (2^96) est un ratio d UNITES DE BASE, pas de jetons :
@@ -1279,9 +1281,15 @@ async function construirePlan() {
         ? pastille('NEEDS A PRICE FIRST', 'warn')
         : besoinB.toString() + ' block  <span class="dim">+</span>  ' + besoinQ.toString() + ' ' + v.quoteNom
           + (prixReel !== null ? '  <span class="dim">(at the pool\'s actual price)</span>' : ''))
-    + ligne('you are asking for', decQ === null
-        ? pastille('DECIMALS NOT MEASURED', 'warn')
-        : humain(liq) + ' ' + v.quoteNom + '  <span class="dim">(' + decQ + ' decimals on this chain)</span>')
+    /* ⛔⛔ CETTE LIGNE MENTAIT. Elle affichait `L / 10^decimales` suivi du nom de la devise —
+     *    « you are asking for 0.037188 WETH » — alors que la position n en exige que 0,001176.
+     *    `L` EST UN PARAMETRE DE COURBE, PAS UN MONTANT : les deux ne coincident qu au prix 1,
+     *    et cette ligne est nee a l epoque ou le prix etait fige a 1. Ici l ecart est de 32x, et
+     *    il portait le nom de la devise, ce qui le rendait parfaitement credible.
+     * ⇒ On montre `L` pour ce qu il est, et on renvoie au chiffre qui compte : la ligne
+     *   « this position needs », juste au-dessus, qui est le montant reellement engage. */
+    + ligne('liquidity parameter L', liq.toString()
+        + '  <span class="dim">— not an amount. What you actually deposit is the line above.</span>')
     + ligne('currency0', cle.currency0)
     + ligne('currency1', cle.currency1)
     /* ⛔ « — » NE DIT PAS POURQUOI. Un tiret se lit comme « zero » ou comme « ca a rate » ; ici
@@ -1296,7 +1304,17 @@ async function construirePlan() {
    * faire » sont deux etats opposes ; les confondre transforme une impossibilite en invitation.
    * Trouve en exercant la section sur mainnet avec un jeton qui n y existe pas. */
   for (const s of etapes) {
-    const impossible = s.data === null || s.data === undefined;
+    /* ⛔⛔ L ETAPE 6 N A PAS DE CALLDATA AU MOMENT DU PLAN, ET C EST VOULU. Le mint se construit
+     *    a la signature, avec un `deadline` pris sur le bloc courant — le figer ici produirait un
+     *    delai deja passe. Mais le test « pas de data ⇒ impossible » la declarait CANNOT BUILD en
+     *    PERMANENCE, meme quand tout allait bien, et renvoyait « see above » vers rien. Une alarme
+     *    qui sonne toujours n avertit plus : elle apprend a etre ignoree, et c est elle qu on
+     *    ignorera le jour ou l etape sera vraiment inconstructible.
+     * ⇒ Une etape differee (`mint: true`) est jugee sur ce dont elle DEPEND, pas sur un champ
+     *   qu on a choisi de ne pas remplir. */
+    const impossible = s.mint
+      ? (besoinB === null || besoinQ === null || sqrtPrix === null)
+      : (s.data === null || s.data === undefined);
     vue += ligne(s.nom, s.ok === true ? pastille('DONE', 'ok')
       : impossible ? pastille('CANNOT BUILD — see above', 'bad')
       : s.ok === null ? pastille('NOT MEASURED', 'dim') : pastille('TO DO', 'warn'));
@@ -1304,9 +1322,23 @@ async function construirePlan() {
   /* ⛔ La garde de solde nomme la VRAIE cause : un premier essai avait rendu TRANSFER_FROM_FAILED,
    * ce qui IMITE PARFAITEMENT « un B20 ne peut pas etre poole ». C etait le montant. */
   const manque = (besoinB !== null && sB !== null && sB < besoinB) || (besoinQ !== null && sQ !== null && sQ < besoinQ);
+  /* ⛔⛔ ET « NON MESURE » NE VAUT PAS « ASSEZ ». La garde ci-dessus exige `sB !== null` : quand
+   *    une lecture de solde echoue — le RPC public coupe des la 11e requete d une rafale — elle
+   *    conclut « pas de manque » et le bouton reste ACTIF. Elle echoue donc OUVERTE, exactement
+   *    la ou elle doit echouer fermee. Observe en conditions reelles le 2026-09-04 : « your block
+   *    NOT MEASURED / your WETH NOT MEASURED » avec le bouton pret a signer.
+   * ⇒ On distingue « je sais qu il manque » de « je ne sais pas ». Les deux empechent de signer,
+   *   mais ils ne disent pas la meme chose et n appellent pas le meme geste : corriger le montant,
+   *   ou simplement relire. */
+  const soldeInconnu = compte && (sB === null || sQ === null) && (besoinB !== null || besoinQ !== null);
   /* ⛔ « la liquidite demandee » etait le mauvais repere : ce qui manque se compare a ce que la
    * POSITION exige, pas au nombre tape dans le champ. Les deux ne coincident qu au prix 1. */
   if (manque) vue += ligne('⛔', 'Balance below what this position needs. That is the AMOUNT, not the block.');
+  /* ⛔ Dire l inconnu AUSSI dans la vue, pas seulement sur le bouton : l utilisateur lit la liste
+   * avant de regarder le bouton, et un « NOT MEASURED » sans consequence affichee se lit comme un
+   * detail cosmetique. */
+  else if (soldeInconnu) vue += ligne('⛔', 'Your balances could not be read, so nothing can confirm '
+    + 'you hold enough. That is NOT the same as having enough — read again before signing.');
   /* ⛔ DIRE LE PLAFOND, PAS SEULEMENT « pas assez ». Un refus qui ne donne pas le chiffre
    * atteignable oblige l utilisateur a chercher par tatonnement — et chaque essai est un aller
    * simple vers le meme mur. */
@@ -1332,6 +1364,9 @@ async function construirePlan() {
   } else if (!suivante) empeche = 'Every step is done';
   else if (!compte) empeche = 'Connect your wallet first (button below)';
   else if (manque) empeche = 'Not enough balance for that liquidity';
+  /* ⛔ FERMER SUR L INCONNU. Signer sans savoir si le solde suffit, c est decouvrir le refus
+   * apres avoir paye. Le message dit le geste : relire, pas corriger. */
+  else if (soldeInconnu) empeche = 'Your balances could not be read — click "Read the six steps" again';
   /* ⛔ PREFLIGHT : ON DEMANDE A LA CHAINE AVANT D OUVRIR LE WALLET.
    * Mesure du 2026-09-04 : `eth_call` sur `initialize` d une pool FRAICHE (Base mainnet) rend
    * `0x65316` sans rien ecrire — la chaine accepte nos octets avant toute signature. Un refus,
