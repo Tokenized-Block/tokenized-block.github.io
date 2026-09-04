@@ -952,7 +952,16 @@ async function construirePlan() {
   const proprietaire = compte || '0x0000000000000000000000000000000000000001';
   const e = await etatPool({ appel, cle, jetons: [b20, v.quote], proprietaire, posm: v.posm, permit2: PERMIT2, stateView: v.stateView });
 
-  const solde = async (t) => { try { return BigInt(await appel(t, abi.selecteurs['balanceOf(address)'] + pad(proprietaire))); } catch { return null; } };
+  /* ⛔ ON NE LIT LE SOLDE DE PERSONNE D AUTRE. L adresse de substitution `0x…0001` existe pour
+   * DERIVER une adresse quand aucun wallet n est la — pas pour REPONDRE a la place de
+   * l utilisateur. Mesure du 2026-09-04 : elle detient 0,327 WETH sur mainnet, et l app les
+   * affichait sous le mot « your ». Pire que cosmetique : la garde « as-tu assez ? » etait
+   * evaluee contre les avoirs d un inconnu, et pouvait donc dire OUI a quelqu un qui n a rien.
+   * ⇒ Sans connexion, on rend `null` — « non mesure », qui s affiche et ne se confond pas. */
+  const solde = async (t) => {
+    if (!compte) return null;
+    try { return BigInt(await appel(t, abi.selecteurs['balanceOf(address)'] + pad(compte))); } catch { return null; }
+  };
   const sB = await solde(b20), sQ = await solde(v.quote);
   const pB = e.permissions[b20.toLowerCase()], pQ = e.permissions[v.quote.toLowerCase()];
   const fait = (x) => typeof x === 'bigint' ? x > 0n : null;
@@ -1048,8 +1057,12 @@ async function construirePlan() {
         : humain(liq) + ' ' + v.quoteNom + '  <span class="dim">(' + decQ + ' decimals on this chain)</span>')
     + ligne('currency0', cle.currency0)
     + ligne('currency1', cle.currency1)
-    + ligne('your block', sB === null ? '—' : sB.toString() + (sB < liq ? '  ⛔ < liquidity' : ''))
-    + ligne('your ' + v.quoteNom, sQ === null ? '—' : sQ.toString() + (sQ < liq ? '  ⛔ < liquidity' : ''));
+    /* ⛔ « — » NE DIT PAS POURQUOI. Un tiret se lit comme « zero » ou comme « ca a rate » ; ici
+     * c est « personne n est connecte », ce qui appelle un geste precis. Trois etats, pas deux. */
+    + ligne('your block', !compte ? pastille('CONNECT TO SEE YOURS', 'dim')
+        : sB === null ? pastille('NOT MEASURED', 'warn') : sB.toString() + (sB < liq ? '  ⛔ < liquidity' : ''))
+    + ligne('your ' + v.quoteNom, !compte ? pastille('CONNECT TO SEE YOURS', 'dim')
+        : sQ === null ? pastille('NOT MEASURED', 'warn') : sQ.toString() + (sQ < liq ? '  ⛔ < liquidity' : ''));
   /* ⛔ UNE ETAPE SANS CALLDATA N EST PAS « A FAIRE ». Quand le prix n a pas pu etre calcule,
    * l etape 1 porte `data: null` — et elle s affichait quand meme « TO DO », donc offerte au
    * clic avec un calldata nul. « Je ne peux pas construire cette etape » et « il reste a la
@@ -1140,10 +1153,15 @@ async function etatSwap() {
   /* ⛔ SELECTEUR DERIVE, pas lu dans une table. La table abi.json ne contient que ce que j y ai
    * mis un jour ; une signature absente rend `undefined`, l appel part malforme, et le revert se
    * lit comme un probleme de chaine. Le deriveur, lui, ne peut pas manquer une cle. */
+  /* ⛔ MEME REGLE QUE DANS LA SECTION LIQUIDITE : sans connexion on ne lit le solde de PERSONNE.
+   * L adresse de substitution sert a deriver, pas a repondre a la place de l utilisateur. */
   let solde = null, causeSolde = null;
-  try { solde = BigInt(await appel(b20, sel4('balanceOf(address)') + pad(proprietaire))); }
-  catch (e) { causeSolde = e.message; }
-  vue += ligne('your block', solde === null ? pastille('NOT MEASURED', 'dim') + ' ' + enTexte(causeSolde || '')
+  if (compte) {
+    try { solde = BigInt(await appel(b20, sel4('balanceOf(address)') + pad(compte))); }
+    catch (e) { causeSolde = e.message; }
+  }
+  vue += ligne('your block', !compte ? pastille('CONNECT TO SEE YOURS', 'dim')
+    : solde === null ? pastille('NOT MEASURED', 'warn') + ' ' + enTexte(causeSolde || '')
     : solde.toString() + (solde < montant ? '  ⛔ < amount' : ''));
 
   /* ⚠️ C EST ICI QUE LE DEFAUT AVAIT MORDU : `allowance(address,address,address)` n etait PAS
