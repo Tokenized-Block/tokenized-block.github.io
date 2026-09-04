@@ -97,6 +97,23 @@ export function poolId(cle) {
 /** ⛔ Lit l etat REEL avant d agir : une etape deja faite ne doit pas etre refaite, et une etape
  *  manquante ne doit pas etre sautee. `appel` est injecte pour rester testable hors reseau. */
 /**
+ * Transforme une reponse JSON-RPC en valeur, ou en exception MARQUEE.
+ * ⛔ UNE SEULE DEFINITION, parce que la page ET la sonde mainnet en ont besoin. En ecrire une
+ *    copie dans chacune ferait diverger le jugement « refus » / « panne » entre ce qui est
+ *    montre a l utilisateur et ce qui est mesure — le jumeau qui diverge, deja vu ici.
+ * ⚠️ `code === 3` est le code d erreur d execution mesure sur `mainnet.base.org` le 2026-09-04
+ *    (`execution reverted: ...`, dans une reponse HTTP 200). La limite de debit rend -32016 dans
+ *    un HTTP 429. Le code discrimine donc les deux, et il est lisible sans le statut HTTP — que
+ *    l `appelBrut` de la page ne remonte pas.
+ */
+export function valeurOuRefus(j) {
+  if (!j || !j.error) return j ? j.result : j;
+  const e = new Error(j.error.message + (j.error.data ? ' (' + j.error.data + ')' : ''));
+  if (j.error.code === 3) e.refusChaine = true;
+  throw e;
+}
+
+/**
  * ESSAIE une etape par `eth_call` AVANT d ouvrir le wallet.
  * ================================================================================================
  * ⛔ POURQUOI. Mesure du 2026-09-04 sur Base mainnet : un `eth_call` sur `initialize` d une pool
@@ -136,7 +153,20 @@ export async function essaiEtape({ appelBrut, de, etape }) {
     const r = await appelBrut(tx);
     return { etat: 'ACCEPTE', retour: r };
   } catch (e) {
-    return { etat: 'REFUSE', pourquoi: e && e.message ? e.message : String(e) };
+    const cause = e && e.message ? e.message : String(e);
+    /* ⛔⛔ UNE PANNE DE TRANSPORT N EST PAS UN REFUS DE LA CHAINE, et les confondre FERME LE
+     *    BOUTON sur un hoquet reseau. Trouve en exercant la sonde mainnet : deux etapes
+     *    parfaitement valides ont ete rapportees « REFUSE — over rate limit ». Le premier jet de
+     *    ce helper traitait toute exception comme un refus.
+     * MESURE du 2026-09-04 sur `mainnet.base.org`, la forme EXACTE des deux :
+     *    refus chaine  -> HTTP 200, {code: 3, message: 'execution reverted: ...'}
+     *    limite debit  -> HTTP 429, {code: -32016, message: 'over rate limit'}
+     *    Un refus de la chaine arrive donc dans une reponse HTTP REUSSIE. C est a l adaptateur,
+     *    qui voit le statut et le code, de le dire — pas a nous de le deviner d apres un texte.
+     * ⛔ ET LE DEFAUT EST FAIL-SAFE. Sans marque, on rend NON_MESURE : une erreur inconnue ne
+     *    ferme pas le bouton a tort, et n ouvre rien non plus. Elle avoue qu on ne sait pas. */
+    if (e && e.refusChaine === true) return { etat: 'REFUSE', pourquoi: cause };
+    return { etat: 'NON_MESURE', pourquoi: 'could not ask the chain — ' + cause };
   }
 }
 

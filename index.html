@@ -348,7 +348,7 @@ import { cleDePool, etatPool, encodeInitialize, encodeApprove, encodePermit2Appr
    * option encore valide. Le prix se DERIVE, il ne se choisit plus dans une liste. */
   MAX_UINT256, MAX_UINT160, MAX_UINT48, MAX_UINT128, TICK_BAS, TICK_HAUT, sqrtPriceDepuisPrix, montantsPourLiquidite,
   encodeSwapExactInSingle, encodeQuote, formeAcceptee, AVEC_MINHOP, selecteur as sel4,
-  essaiEtape } from './pool.js';
+  essaiEtape, valeurOuRefus } from './pool.js';
 
 const $ = (s) => document.querySelector(s);
 const etat = $('#etat');
@@ -1222,11 +1222,9 @@ async function construirePlan() {
    * ⚠️ SEULEMENT L ETAPE SUIVANTE. Essayer les six enchainerait des reverts LEGITIMES (l etape 6
    *    depend d approbations que l etape 4 n a pas posees) et afficherait un defaut la ou il n y
    *    en a pas. Un seul appel reseau, borne. */
-  const leve = async (tx) => {
-    const j = await appelBrut(tx);
-    if (j.error) throw new Error(j.error.message + (j.error.data ? ' (' + j.error.data + ')' : ''));
-    return j.result;
-  };
+  /* ⛔ LA CLASSIFICATION VIT DANS `pool.js`, PAS ICI. Une copie locale ferait diverger ce que
+   * l app MONTRE de ce que la sonde mainnet MESURE. */
+  const leve = async (tx) => valeurOuRefus(await appelBrut(tx));
   /* ⛔ NE PAS SURCHARGER `null` POUR DIRE « ne mesure pas ». Premiere version : je passais
    * `etape: null` quand le plan etait deja bloque — et le helper repondait « no step left to
    * try », alors qu il restait SIX etapes. Message vrai sur le mauvais fait : l utilisateur
