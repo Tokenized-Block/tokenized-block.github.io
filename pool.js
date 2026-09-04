@@ -103,7 +103,8 @@ export async function etatPool({ appel, cle, jetons, proprietaire, posm, permit2
   const slot0 = await lire(stateView, '0x' + selecteur('getSlot0(bytes32)') + poolId(cle).slice(2));
   /* ⛔ sqrtPriceX96 == 0 signifie « pool non initialisee ». Une LECTURE ECHOUEE ne signifie PAS
    * cela — elle veut dire qu on ne sait pas, et les deux appellent des gestes differents. */
-  const initialisee = slot0 && slot0.err ? null : BigInt('0x' + String(slot0).slice(2, 66)) !== 0n;
+  const sqrtPrix = slot0 && slot0.err ? null : BigInt('0x' + String(slot0).slice(2, 66));
+  const initialisee = sqrtPrix === null ? null : sqrtPrix !== 0n;
 
   const permissions = {};
   for (const j of jetons) {
@@ -118,7 +119,13 @@ export async function etatPool({ appel, cle, jetons, proprietaire, posm, permit2
       expiration: p && p.err ? null : BigInt('0x' + String(p).slice(66, 130)),
     };
   }
-  return { initialisee, permissions };
+  /* ⛔ ON REND LE PRIX REEL, PAS SEULEMENT « initialisee ». Il etait LU puis JETE : on n en
+   * gardait qu un booleen. Or si la pool a ete initialisee par QUELQU UN D AUTRE, le mint se
+   * fera a SON prix, pas a celui qu on affiche — et avec `max0/max1 = MAX_UINT128` il n existait
+   * aucune borne. Mesure du 2026-09-04 : a un prix 10x deplace, le mint prend 3,16 fois plus de
+   * devise que prevu. L information etait la ; la perdre suffisait a rendre la garde impossible.
+   * ⚠️ `null` = non mesure. `0n` = non initialisee. Les deux ne se confondent pas. */
+  return { initialisee, sqrtPrix, permissions };
 }
 
 /* ══ SWAP ══════════════════════════════════════════════════════════════════════════════════════

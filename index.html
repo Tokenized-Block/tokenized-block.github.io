@@ -1003,10 +1003,16 @@ async function construirePlan() {
    *   block exige  316 227 766 016 837 933  soit L x 316
    * ⇒ l etape d enveloppe aurait converti 316 fois trop d ETH, soit tout le solde pour rien.
    * ⚠️ Sans prix calculable, on ne compare RIEN : `null` se propage et s affiche. */
+  /* ⛔ ON CALCULE SUR LE PRIX REEL DE LA POOL, PAS SUR CELUI QU ON VOULAIT POSER.
+   * Si la pool existe deja — initialisee par quelqu un d autre — le mint se fera a SON prix.
+   * Calculer les besoins sur le prix voulu afficherait des montants que la chaine ne prendra
+   * pas, et l ecart ne se verrait qu apres la transaction. */
+  const prixReel = (e.sqrtPrix !== null && e.sqrtPrix !== 0n) ? e.sqrtPrix : null;
+  const prixUtilise = prixReel ?? sqrtPrix;
   let besoinB = null, besoinQ = null;
-  if (sqrtPrix !== null) {
+  if (prixUtilise !== null) {
     try {
-      const m = montantsPourLiquidite(liq, sqrtPrix);
+      const m = montantsPourLiquidite(liq, prixUtilise);
       besoinB = quoteEst0 ? m.montant1 : m.montant0;
       besoinQ = quoteEst0 ? m.montant0 : m.montant1;
     } catch { besoinB = besoinQ = null; }
@@ -1093,9 +1099,28 @@ async function construirePlan() {
     + prixVue
     /* ⛔ AFFICHER CE QUE LA POSITION EXIGE, pas seulement la liquidite demandee. `L` ne se
      * compare a aucun solde ; les deux montants ci-dessous, si. */
+    /* ⛔ SI LA POOL EXISTE DEJA, C EST SON PRIX QUI COMPTE — pas celui du champ. Le dire, et
+     * dire de combien il s ecarte : un utilisateur qui croit poser son prix alors qu il rejoint
+     * celui d un autre depose au mauvais taux, et ne le voit qu apres. */
+    /* ⛔ UN RAPPORT ILLISIBLE N AVERTIT PAS. Ma premiere version imprimait « 0.0000× » pour un
+     * ecart de cent mille : le chiffre etait juste et ne disait rien. On INVERSE quand le
+     * rapport est inferieur a 1, et on nomme le sens — « moins cher » ou « plus cher » — parce
+     * que c est ce que l utilisateur doit decider, pas une fraction a interpreter. */
+    + (prixReel !== null && sqrtPrix !== null && prixReel !== sqrtPrix
+        ? (() => {
+            const r = (Number(prixReel) / Number(sqrtPrix)) ** 2;
+            const lisible = r >= 1
+              ? (r < 1000 ? r.toFixed(2) : r.toExponential(2)) + '× MORE expensive'
+              : ((1 / r) < 1000 ? (1 / r).toFixed(2) : (1 / r).toExponential(2)) + '× CHEAPER';
+            return ligne('⚠️ pool already priced', 'This pool exists. Its price is <b>' + lisible
+              + '</b> than the one you asked for.'
+              + '<br><span class="dim">Your deposit follows the pool, not the field above.</span>');
+          })()
+        : '')
     + ligne('this position needs', besoinB === null || besoinQ === null
         ? pastille('NEEDS A PRICE FIRST', 'warn')
-        : besoinB.toString() + ' block  <span class="dim">+</span>  ' + besoinQ.toString() + ' ' + v.quoteNom)
+        : besoinB.toString() + ' block  <span class="dim">+</span>  ' + besoinQ.toString() + ' ' + v.quoteNom
+          + (prixReel !== null ? '  <span class="dim">(at the pool\'s actual price)</span>' : ''))
     + ligne('you are asking for', decQ === null
         ? pastille('DECIMALS NOT MEASURED', 'warn')
         : humain(liq) + ' ' + v.quoteNom + '  <span class="dim">(' + decQ + ' decimals on this chain)</span>')
@@ -1154,7 +1179,10 @@ async function construirePlan() {
   if (empeche && !compte) vue += ligne('next', pastille('CONNECT YOUR WALLET', 'warn'));
   box.innerHTML = vue;
   gardeMainnet();
-  return { etapes, suivante, cle, v, liq, b20 };
+  /* ⛔ LE PLAN PORTE LES BESOINS, pour que le mint pose de VRAIES bornes plutot que MAX_UINT128.
+   * Les recalculer au moment de signer les recalculerait sur un etat relu plus tard : ce qui a
+   * ete MONTRE a l utilisateur doit etre ce qui est SIGNE. */
+  return { etapes, suivante, cle, v, liq, b20, besoinB, besoinQ, quoteEst0 };
 }
 
 $('#poolEtat').onclick = async () => {
@@ -1372,7 +1400,18 @@ $('#poolAgir').onclick = async () => {
       const bloc = await rpc('eth_getBlockByNumber', ['latest', false]);
       const deadline = BigInt(bloc.timestamp) + 600n;
       data = encodeMintPosition({ cle: plan.cle, tickBas: TICK_BAS, tickHaut: TICK_HAUT, liquidite: plan.liq,
-        max0: MAX_UINT128, max1: MAX_UINT128, proprietaire: compte, deadline });
+        /* ⛔ DE VRAIES BORNES, PLUS MAX_UINT128. Sans plafond, le mint prend ce que la pool
+         * demande QUEL QU IL SOIT — et si elle a ete initialisee par quelqu un d autre, c est
+         * son prix qui decide. Mesure : a un prix 10x deplace, 3,16 fois plus de devise que
+         * prevu. On borne au besoin calcule SUR LE PRIX REEL, avec 2 % de tolerance pour
+         * l arrondi et un eventuel mouvement entre la lecture et l inclusion.
+         * ⚠️ Si le besoin n a pas pu etre calcule, on NE POSE PAS de borne arbitraire : on
+         *    refuse plus haut. Une borne inventee est pire qu aucune — elle a l air d une garde. */
+        max0: plan.besoinQ === null || plan.besoinB === null ? MAX_UINT128
+          : ((plan.quoteEst0 ? plan.besoinQ : plan.besoinB) * 102n) / 100n,
+        max1: plan.besoinQ === null || plan.besoinB === null ? MAX_UINT128
+          : ((plan.quoteEst0 ? plan.besoinB : plan.besoinQ) * 102n) / 100n,
+        proprietaire: compte, deadline });
     }
     dire('Your wallet will open — ' + s.nom + '\nRe-read the destination before accepting.', 'warn');
     afficherTx('wallet', s.nom);
