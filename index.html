@@ -333,12 +333,40 @@ const FACTORY = '0xb20f000000000000000000000000000000000000';
 let chaine = 84532, compte = null, dernier = null;
 
 let n = 0;
-async function rpc(m, p) {
-  const r = await fetch(RESEAUX[chaine].rpc, { method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: ++n, method: m, params: p }) });
-  const j = await r.json();
-  if (j.error) throw new Error(j.error.message);
-  return j.result;
+/**
+ * ⛔ AVEC REPRISE, ET CE N EST PAS DU CONFORT. Chaque section tire une RAFALE d appels paralleles
+ *    — six verifications d autorisation, deux soldes, l etat de la pool. Mesure du 2026-09-04 :
+ *    sur mainnet, la section liquidite affichait « — » pour le solde USDC et « DECIMALS NOT
+ *    MEASURED », alors qu un appel ISOLE vers le meme USDC, depuis la meme page, a la meme
+ *    seconde, rendait 6 et un solde. Ce n est pas la chaine qui refuse : c est le debit.
+ *    Sur Sepolia la meme rafale passait — d ou un defaut INVISIBLE jusqu au premier essai mainnet.
+ * ⛔ UNE LIMITE DE DEBIT EST TRANSITOIRE PAR NATURE. La traiter comme un verdict transforme
+ *    « je n ai pas pu lire » en « on ne sait pas », et l utilisateur lit un mur sur une chaine
+ *    parfaitement saine.
+ * ⚠️ ON NE REESSAIE PAS UN REFUS DE LA CHAINE. Un `revert` est une REPONSE, stable : la rejouer
+ *    ne fait que perdre du temps et brouiller la distinction entre « refuse » et « injoignable ».
+ *    Seules les pannes de transport et les limites de debit sont rejouees.
+ */
+async function rpc(m, p, essais = 4, attente = 350) {
+  let derniere = null;
+  for (let k = 0; k < essais; k++) {
+    let j;
+    try {
+      const r = await fetch(RESEAUX[chaine].rpc, { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: ++n, method: m, params: p }) });
+      j = await r.json();
+    } catch (e) {
+      derniere = e; if (k < essais - 1) { await new Promise((r) => setTimeout(r, attente * 2 ** k)); continue; }
+      throw e;
+    }
+    if (!j.error) return j.result;
+    /* ⛔ Un refus d execution est DEFINITIF : on le remonte tel quel, sans le rejouer. */
+    const msg = String(j.error.message || '');
+    if (/revert|invalid|not found|unauthor/i.test(msg)) throw new Error(msg);
+    derniere = new Error(msg);
+    if (k < essais - 1) await new Promise((r) => setTimeout(r, attente * 2 ** k));
+  }
+  throw derniere;
 }
 /* ⛔ Appel RPC BRUT : rend la reponse JSON-RPC telle quelle, erreur comprise, au lieu de lever.
  * `rpc()` leve — pratique pour les lectures, desastreux pour un refus de la chaine qu on veut
@@ -842,7 +870,21 @@ async function construirePlan() {
     { nom: '6. mint position', ok: false, to: v.posm, mint: true },
   ];
 
+  /* ⛔ LE MEME NOMBRE NE VEUT PAS DIRE LA MEME CHOSE SELON LA CHAINE. La devise de cotation est
+   * WETH (18 decimales) sur Sepolia et USDC (6 decimales) sur mainnet — mesure du 2026-09-04.
+   * La valeur par defaut du champ, 1000000000000000, vaut donc 0,001 WETH sur Sepolia et
+   * 1 000 000 000 USDC sur mainnet. Le controle de solde attrape l ecart, donc rien de dangereux
+   * n arrive — mais l utilisateur voit un mur qu il ne peut pas interpreter. On lui DIT ce que
+   * son nombre represente dans la devise reellement utilisee.
+   * ⚠️ Les decimales sont LUES sur la chaine, jamais supposees : un jeton nomme USDC ailleurs
+   * pourrait en avoir 18, et coder « 6 » en dur transformerait une aide en mensonge. */
+  const decQ = await appel(v.quote, abi.selecteurs['decimals()']).then((h) => Number(BigInt(h))).catch(() => null);
+  const humain = (n) => decQ === null ? null
+    : (Number(n) / 10 ** decQ).toLocaleString('en-US', { maximumFractionDigits: 6 });
   let vue = ligne('pair', enTexte(v.quoteNom) + ' / block')
+    + ligne('you are asking for', decQ === null
+        ? pastille('DECIMALS NOT MEASURED', 'warn')
+        : humain(liq) + ' ' + v.quoteNom + '  <span class="dim">(' + decQ + ' decimals on this chain)</span>')
     + ligne('currency0', cle.currency0)
     + ligne('currency1', cle.currency1)
     + ligne('your block', sB === null ? '—' : sB.toString() + (sB < liq ? '  ⛔ < liquidity' : ''))
