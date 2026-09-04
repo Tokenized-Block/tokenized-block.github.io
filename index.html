@@ -341,7 +341,7 @@ import { cleDePool, etatPool, encodeInitialize, encodeApprove, encodePermit2Appr
   /* ⛔ `PRIX_1_POUR_1` N EST PLUS IMPORTE. Le garder disponible, meme inutilise, c est laisser a
    * portee de main la constante qui prixe une pool a 1e12 — un import mort se relit comme une
    * option encore valide. Le prix se DERIVE, il ne se choisit plus dans une liste. */
-  MAX_UINT256, MAX_UINT160, MAX_UINT48, MAX_UINT128, TICK_BAS, TICK_HAUT, sqrtPriceDepuisPrix,
+  MAX_UINT256, MAX_UINT160, MAX_UINT48, MAX_UINT128, TICK_BAS, TICK_HAUT, sqrtPriceDepuisPrix, montantsPourLiquidite,
   encodeSwapExactInSingle, encodeQuote, formeAcceptee, AVEC_MINHOP, selecteur as sel4 } from './pool.js';
 
 const $ = (s) => document.querySelector(s);
@@ -994,6 +994,24 @@ async function construirePlan() {
    * est une etape qu on apprend a ignorer.
    * ⚠️ `deposit()` est PAYABLE — c est le seul endroit de l app ou une transaction porte de la
    *    valeur, et le montant est exactement ce qui manque. */
+  /* ⛔ CE QUE LA POSITION EXIGE VRAIMENT — ET CE N EST PAS `L`.
+   * `liq` est une LIQUIDITE, pas un montant de jetons. A un prix de 1, les deux montants valent
+   * ≈ L : c est pourquoi la garde « solde < liq » semblait juste sur Sepolia, ou la paire etait
+   * a 1:1. Elle etait correcte PAR ACCIDENT.
+   * Mesure du 2026-09-04, au prix 1 block = 1e-5 WETH, pour L = 1e15 :
+   *   WETH exige   3 162 277 660 168        soit L x 0,0032
+   *   block exige  316 227 766 016 837 933  soit L x 316
+   * ⇒ l etape d enveloppe aurait converti 316 fois trop d ETH, soit tout le solde pour rien.
+   * ⚠️ Sans prix calculable, on ne compare RIEN : `null` se propage et s affiche. */
+  let besoinB = null, besoinQ = null;
+  if (sqrtPrix !== null) {
+    try {
+      const m = montantsPourLiquidite(liq, sqrtPrix);
+      besoinB = quoteEst0 ? m.montant1 : m.montant0;
+      besoinQ = quoteEst0 ? m.montant0 : m.montant1;
+    } catch { besoinB = besoinQ = null; }
+  }
+
   /* ⛔ ENVELOPPER NE DOIT PAS VIDER DE QUOI FINIR. Mesure du 2026-09-04, compte reel sur mainnet :
    * solde 998 159 919 663 404 wei, liquidite demandee par defaut 1 000 000 000 000 000 wei.
    * L etape 0 aurait voulu envelopper PLUS QUE TOUT LE SOLDE (2 140 080 336 596 wei de trop) — et
@@ -1013,7 +1031,7 @@ async function construirePlan() {
       plafondEnveloppe = dispo > 0n ? dispo : 0n;
     } catch { plafondEnveloppe = null; }
   }
-  const manqueBrut = (sQ !== null && sQ < liq) ? liq - sQ : 0n;
+  const manqueBrut = (sQ !== null && besoinQ !== null && sQ < besoinQ) ? besoinQ - sQ : 0n;
   const manqueDevise = (plafondEnveloppe !== null && manqueBrut > plafondEnveloppe)
     ? plafondEnveloppe : manqueBrut;
   const etapes = [
@@ -1073,6 +1091,11 @@ async function construirePlan() {
         valeurVoulue === 0n ? 'warn' : 'bad'));
   let vue = ligne('pair', enTexte(v.quoteNom) + ' / block')
     + prixVue
+    /* ⛔ AFFICHER CE QUE LA POSITION EXIGE, pas seulement la liquidite demandee. `L` ne se
+     * compare a aucun solde ; les deux montants ci-dessous, si. */
+    + ligne('this position needs', besoinB === null || besoinQ === null
+        ? pastille('NEEDS A PRICE FIRST', 'warn')
+        : besoinB.toString() + ' block  <span class="dim">+</span>  ' + besoinQ.toString() + ' ' + v.quoteNom)
     + ligne('you are asking for', decQ === null
         ? pastille('DECIMALS NOT MEASURED', 'warn')
         : humain(liq) + ' ' + v.quoteNom + '  <span class="dim">(' + decQ + ' decimals on this chain)</span>')
@@ -1081,9 +1104,9 @@ async function construirePlan() {
     /* ⛔ « — » NE DIT PAS POURQUOI. Un tiret se lit comme « zero » ou comme « ca a rate » ; ici
      * c est « personne n est connecte », ce qui appelle un geste precis. Trois etats, pas deux. */
     + ligne('your block', !compte ? pastille('CONNECT TO SEE YOURS', 'dim')
-        : sB === null ? pastille('NOT MEASURED', 'warn') : sB.toString() + (sB < liq ? '  ⛔ < liquidity' : ''))
+        : sB === null ? pastille('NOT MEASURED', 'warn') : sB.toString() + (besoinB !== null && sB < besoinB ? '  ⛔ < needed' : ''))
     + ligne('your ' + v.quoteNom, !compte ? pastille('CONNECT TO SEE YOURS', 'dim')
-        : sQ === null ? pastille('NOT MEASURED', 'warn') : sQ.toString() + (sQ < liq ? '  ⛔ < liquidity' : ''));
+        : sQ === null ? pastille('NOT MEASURED', 'warn') : sQ.toString() + (besoinQ !== null && sQ < besoinQ ? '  ⛔ < needed' : ''));
   /* ⛔ UNE ETAPE SANS CALLDATA N EST PAS « A FAIRE ». Quand le prix n a pas pu etre calcule,
    * l etape 1 porte `data: null` — et elle s affichait quand meme « TO DO », donc offerte au
    * clic avec un calldata nul. « Je ne peux pas construire cette etape » et « il reste a la
@@ -1097,8 +1120,10 @@ async function construirePlan() {
   }
   /* ⛔ La garde de solde nomme la VRAIE cause : un premier essai avait rendu TRANSFER_FROM_FAILED,
    * ce qui IMITE PARFAITEMENT « un B20 ne peut pas etre poole ». C etait le montant. */
-  const manque = (sB !== null && sB < liq) || (sQ !== null && sQ < liq);
-  if (manque) vue += ligne('⛔', 'Balance below the liquidity you asked for. That is the AMOUNT, not the block.');
+  const manque = (besoinB !== null && sB !== null && sB < besoinB) || (besoinQ !== null && sQ !== null && sQ < besoinQ);
+  /* ⛔ « la liquidite demandee » etait le mauvais repere : ce qui manque se compare a ce que la
+   * POSITION exige, pas au nombre tape dans le champ. Les deux ne coincident qu au prix 1. */
+  if (manque) vue += ligne('⛔', 'Balance below what this position needs. That is the AMOUNT, not the block.');
   /* ⛔ DIRE LE PLAFOND, PAS SEULEMENT « pas assez ». Un refus qui ne donne pas le chiffre
    * atteignable oblige l utilisateur a chercher par tatonnement — et chaque essai est un aller
    * simple vers le meme mur. */

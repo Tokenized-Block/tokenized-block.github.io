@@ -229,3 +229,37 @@ export function sqrtPriceDepuisPrix({ prixNum, prixDen, decDevise, decBlock, dev
   /* sqrt(num/den) * 2^96 = sqrt(num * 2^192 / den) — tout en entiers. */
   return isqrt((num << 192n) / den);
 }
+
+/** sqrtPriceX96 aux bornes de la pleine etendue. ⛔ Valeurs du protocole, pas calculees ici :
+ *  TickMath.MIN_SQRT_PRICE et MAX_SQRT_PRICE. Les recalculer introduirait un arrondi la ou
+ *  Uniswap utilise des constantes exactes. */
+export const SQRT_MIN = 4295128739n;
+export const SQRT_MAX = 1461446703485210103287273052203988822378723970342n;
+
+/**
+ * Les MONTANTS DE JETONS qu une position pleine etendue exige, pour une liquidite L donnee.
+ *
+ * ⛔ `L` N EST PAS UN MONTANT DE JETONS, ET LES CONFONDRE COUTE TOUT LE SOLDE.
+ *    L app comparait le solde de l utilisateur a `L` directement. A un prix de 1, `amount0` et
+ *    `amount1` valent tous deux ≈ L — c est pourquoi la garde semblait juste sur Sepolia, ou la
+ *    paire etait a 1:1. Elle etait correcte PAR ACCIDENT.
+ *    Mesure du 2026-09-04, au prix 1 block = 1e-5 WETH, pour L = 1e15 :
+ *      WETH exige   3 162 277 660 168        soit L x 0,0032
+ *      block exige  316 227 766 016 837 933  soit L x 316
+ *    L etape d enveloppe aurait donc converti 316 fois trop d ETH — tout le solde, pour rien.
+ *
+ * ⚠️ Formule standard, position couvrant [Pa, Pb] avec le prix courant DEDANS :
+ *      amount0 = L * (√Pb − √P) / (√P · √Pb)      amount1 = L * (√P − √Pa)
+ *    en virgule fixe X96. Hors de l intervalle elle ne vaut plus — ici l intervalle est la
+ *    pleine etendue, donc le prix y est toujours.
+ */
+export function montantsPourLiquidite(L, sqrtP, sqrtMin = SQRT_MIN, sqrtMax = SQRT_MAX) {
+  const l = BigInt(L), p = BigInt(sqrtP);
+  if (l < 0n) throw new Error('liquidite negative');
+  if (p <= sqrtMin || p >= sqrtMax) throw new Error('prix hors des bornes de la pleine etendue');
+  const Q96 = 2n ** 96n;
+  return {
+    montant0: (l * Q96 * (sqrtMax - p)) / (p * sqrtMax),
+    montant1: (l * (p - sqrtMin)) / Q96,
+  };
+}
