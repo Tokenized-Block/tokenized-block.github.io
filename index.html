@@ -1013,7 +1013,27 @@ async function construirePlan() {
   }
 
   const cle = cleDePool(v.quote, b20);
-  const appel = (to, data) => rpc('eth_call', [{ to, data }, 'latest']);
+  /* ⛔ UN SEUL APPEL PAR LECTURE DISTINCTE, LE TEMPS D UN PLAN. Mesure du 2026-09-04 : construire
+   * le plan declenche 9 requetes dont 3 DOUBLONS (33 %) — `etatPool` boucle sur les deux jetons
+   * et relit `decimals`/`allowance` deja lus. Ce n est pas de la vitesse : le RPC public de Base
+   * repond 429 des la 11e requete d une rafale (mesure : 10 x 200, puis 429), et chaque doublon
+   * rapproche le mur. Le cache vit UNE construction de plan et meurt avec elle — un cache qui
+   * survit servirait un etat perime au moment de signer, ce qui est pire que lent. */
+  const memo = new Map();
+  const appel = (to, data) => {
+    const c = String(to).toLowerCase() + '|' + data;
+    if (!memo.has(c)) memo.set(c, rpc('eth_call', [{ to, data }, 'latest']));
+    return memo.get(c);
+  };
+  /* ⛔⛔ ET ON GARDE LA CAUSE. `.catch(() => null)` avalait la raison : une limite de debit
+   *    devenait « not measured », c est-a-dire un mur sans porte. Cas reel du 2026-09-04 — sur
+   *    mainnet, `your block` s affichait (lu tot) et le prix restait « CANNOT PRICE » (lu tard,
+   *    apres le 429). Rien a l ecran ne disait « reessaie », parce que rien ne disait pourquoi.
+   *    C est le motif le plus repete de ce depot : un retour neutre qui avale un echec. */
+  const lire = async (to, sel, transformer) => {
+    try { return { v: transformer(await appel(to, sel)) }; }
+    catch (e) { return { v: null, pourquoi: e && e.message ? e.message : String(e) }; }
+  };
   const proprietaire = compte || '0x0000000000000000000000000000000000000001';
   const e = await etatPool({ appel, cle, jetons: [b20, v.quote], proprietaire, posm: v.posm, permit2: PERMIT2, stateView: v.stateView });
 
@@ -1039,9 +1059,14 @@ async function construirePlan() {
    * initialization`. Deplacer du code qui depend d autre chose deplace le probleme tant qu on ne
    * remonte pas TOUTE la dependance. Et aucune des 6 regles de coherence ne voit ca : elles
    * verifient que les noms EXISTENT, pas qu ils sont initialises au moment ou on les lit. */
-  const decQ = await appel(v.quote, abi.selecteurs['decimals()']).then((h) => Number(BigInt(h))).catch(() => null);
-  const decB = await appel(b20, abi.selecteurs['decimals()']).then((h) => Number(BigInt(h))).catch(() => null);
-  const supply = await appel(b20, abi.selecteurs['totalSupply()']).then(BigInt).catch(() => null);
+  const lQ = await lire(v.quote, abi.selecteurs['decimals()'], (h) => Number(BigInt(h)));
+  const lB = await lire(b20, abi.selecteurs['decimals()'], (h) => Number(BigInt(h)));
+  const lS = await lire(b20, abi.selecteurs['totalSupply()'], BigInt);
+  const decQ = lQ.v, decB = lB.v, supply = lS.v;
+  /* ⛔ LA PREMIERE CAUSE, NOMMEE. Trois lectures peuvent manquer ; l utilisateur n a besoin que
+   * de la premiere pour agir, et lister les trois noierait le geste. */
+  const causePrix = [[decQ, 'the quote currency decimals', lQ], [decB, 'the block decimals', lB],
+    [supply, 'the block supply', lS]].find(([val]) => val === null);
   const valeurVoulue = BigInt(($('#poolValeur').value || '0').replace(/\D/g, '') || '0');
   const jetons = (supply !== null && decB !== null) ? supply / 10n ** BigInt(decB) : null;
   const quoteEst0 = cle.currency0.toLowerCase() === v.quote.toLowerCase();
@@ -1155,11 +1180,22 @@ async function construirePlan() {
         + (Number(valeurVoulue) / Number(jetons)).toExponential(3) + ' ' + v.quoteNom
         + '  <span class="dim">(' + jetons.toLocaleString('en-US') + ' whole blocks)</span>')
       + ligne('sqrtPriceX96', '<span class="dim">' + sqrtPrix + '</span>')
+    /* ⛔ « CANNOT PRICE — decimals or supply not measured » etait VRAI et INUTILISABLE : il ne
+     * disait ni LAQUELLE des trois lectures manquait, ni POURQUOI, donc pas quoi faire. Une
+     * limite de debit appelle « reessaie » ; une adresse sans jeton appelle « change d adresse ».
+     * Le meme texte pour les deux envoie chercher au mauvais endroit. */
     : ligne('initial price', pastille(
         valeurVoulue === 0n ? 'SET A STARTING VALUE ABOVE'
         : jetons === 0n ? 'SUPPLY BELOW ONE WHOLE TOKEN'
-        : 'CANNOT PRICE — decimals or supply not measured',
-        valeurVoulue === 0n ? 'warn' : 'bad'));
+        : causePrix ? 'COULD NOT READ ' + causePrix[1].toUpperCase()
+        : 'CANNOT PRICE — reason unknown',
+        valeurVoulue === 0n ? 'warn' : 'bad')
+      + (causePrix && causePrix[2].pourquoi
+        ? '<br><span class="dim">' + enTexte(causePrix[2].pourquoi)
+          + (/rate limit|429|timeout|fetch/i.test(causePrix[2].pourquoi)
+            ? ' — the public RPC throttled us. Click "Read the six steps" again in a few seconds.'
+            : '') + '</span>'
+        : ''));
   let vue = ligne('pair', enTexte(v.quoteNom) + ' / block')
     + prixVue
     /* ⛔ AFFICHER CE QUE LA POSITION EXIGE, pas seulement la liquidite demandee. `L` ne se
