@@ -158,6 +158,11 @@ animation:trace .3s .18s ease-out forwards}
   <label for="supply">Total supply (whole units)</label><input id="supply" value="1000000000" inputmode="numeric">
   <label for="sel">Salt — it fixes the address. Two blocks cannot share the same one.</label>
   <input id="sel" value="tblock-v1">
+  <!-- ⛔ « change the salt » sans dire LEQUEL laisse deviner ce que seule la factory sait : le
+       couple (ton adresse, ce sel) est pris ou non, et personne ne peut le savoir de tete. Le
+       bouton DEMANDE a la chaine, essaie un nombre BORNE de variantes, et le dit si aucune ne
+       passe plutot que d en inventer une. -->
+  <button class="act sec" id="selLibre" style="margin-top:8px">Find a free salt</button>
   <label for="desc">Description (engraved in the metadata, permanent)</label>
   <textarea id="desc"></textarea>
   <label for="teinte">Block colour</label><input id="teinte" type="range" min="0" max="360" value="222">
@@ -330,7 +335,7 @@ animation:trace .3s .18s ease-out forwards}
 </main>
 
 <script type="module">
-import { encodeCreateB20, paramsAsset, encodeUpdateSupplyCap, encodeUpdateContractURI, encodeBatchMint, adresseOuRefus, expliquerRefus } from './encodeur.js';
+import { encodeCreateB20, paramsAsset, encodeUpdateSupplyCap, encodeUpdateContractURI, encodeBatchMint, adresseOuRefus, expliquerRefus, adresseDejaPrise } from './encodeur.js';
 /* ⛔ Le formatage des montants vit dans son module POUR ETRE TESTE : la conversion wei -> ETH
  * fait de la division et du remplissage sur des BigInt, et elle arrondit VERS LE HAUT — un cout
  * affiche ne doit jamais etre inferieur au cout reel. 8 tests dans `test-montants.mjs`. */
@@ -550,12 +555,15 @@ async function rafraichir() {
 
   /* ⛔ L adresse n est PAS calculee ici : elle est DEMANDEE au precompile. Une adresse que je
    * calculerais moi-meme pourrait differer de celle que la chaine attribuera. */
-  let adr = null, cause = null;
+  let adr = null, cause = null, dejaLa = null;
   /* ⛔ On DEMANDE au precompile, et on NOMME son refus. « execution reverted » ne dit rien a
    * personne ; « that salt is already used » dit quoi faire. */
   if (compte) {
     const r = await adresseOuRefus(appelBrut, compte, data);
     adr = r.adresse; cause = r.refus ? (r.refus + (r.brut ? '  [' + r.brut + ']' : '')) : null;
+    /* ⛔ Les donnees du refus portent l adresse du block existant. Elles etaient rendues et
+     * jamais lues — troisieme valeur LUE PUIS JETEE trouvee le meme jour. */
+    dejaLa = adresseDejaPrise(r.donnees);
   }
 
   /* ⛔ CE QUE CA COUTE, AVANT QUE LE WALLET S OUVRE. La page promettait « what you pay is the
@@ -575,7 +583,14 @@ async function rafraichir() {
     + ligne('supply', f.supply.toString() + ' (' + f.unites + ' × 10^' + f.dec + ')')
     + ligne('cap', pastille('EQUALS THE SUPPLY', 'ok'))
     + ligne('admin', pastille('NONE', 'ok'))
+    /* ⛔ SI LE SEL EST DEJA PRIS, MONTRER LE BLOCK — il est a l utilisateur, il l a cree.
+     * `adresseOuRefus` rendait deja les donnees entieres du refus ; personne ne les decodait.
+     * « change the salt » sans montrer ce qui occupe la place cache a quelqu un son propre block. */
     + ligne('address', adr ? `<a href="${RESEAUX[chaine].scan}/address/${adr}" target="_blank" rel="noopener">${adr}</a>`
+        : dejaLa ? pastille('ALREADY YOURS', 'warn')
+          + ` <a href="${RESEAUX[chaine].scan}/address/${dejaLa}" target="_blank" rel="noopener">${dejaLa}</a>`
+          + '<br><span class="dim">That block is yours. To make another, change the salt above'
+          + ' — or press « Find a free salt ».</span>'
         : cause ? pastille('NOT COMPUTED: ' + cause, 'warn')
         : pastille('connect — it derives from YOUR address', 'dim'));
   if (adr) await relireJeton(adr);
@@ -715,6 +730,28 @@ function peuplerDevises() {
  * La borne etait ecrite ; elle vient de mordre. */
 $('#poolDevise').onchange = () => { plan = null; $('#poolVue').innerHTML = ''; };
 $('#relire').onclick = rafraichir;
+
+/**
+ * Trouve un sel LIBRE pour ce compte, en le DEMANDANT a la factory.
+ * ⛔ On n en invente pas un : seule la chaine sait si le couple (adresse, sel) est pris, et un
+ *    sel « probablement libre » enverrait l utilisateur au meme mur, en pire — avec la confiance
+ *    en plus. On essaie un nombre BORNE de variantes et on le dit si aucune ne passe.
+ */
+$('#selLibre').onclick = async () => {
+  if (!compte) return dire('Connect your wallet first — a free salt depends on YOUR address.', 'warn');
+  const base = ($('#sel').value.trim() || 'tblock-v1').replace(/-\d+$/, '');
+  dire('Asking the chain for a salt that is free for you…');
+  for (let i = 2; i <= 12; i++) {
+    const essai = base + '-' + i;
+    $('#sel').value = essai;
+    const f = lire();
+    const r = await adresseOuRefus(appelBrut, compte, calldata(f, compte));
+    if (r.adresse) { await rafraichir(); return dire('« ' + essai + ' » is free for your address.', 'ok'); }
+  }
+  $('#sel').value = base;
+  await rafraichir();
+  dire('Tried « ' + base + '-2 » through « ' + base + '-12 » — all taken.\nType a salt of your own.', 'warn');
+};
 
 /* ⛔ Le lecteur vient de lecteur.js — le MEME module que la suite de tests exerce. Une copie
  * inline ici divergerait du module teste sans que rien ne le signale. */

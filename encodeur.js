@@ -132,3 +132,27 @@ export async function adresseOuRefus(appelBrut, appelant, calldata) {
   if (!res || res === '0x') return { adresse: null, refus: 'the factory returned nothing', brut: null };
   return { adresse: '0x' + res.slice(-40), refus: null, brut: null };
 }
+
+/**
+ * L adresse du block DEJA EXISTANT, extraite du refus `TokenAlreadyExists(address)`.
+ *
+ * ⛔ LE REFUS PORTE LA REPONSE. La chaine ne dit pas seulement « ce sel est pris » : elle rend
+ *    l adresse du block qui occupe la place — celui que l utilisateur a lui-meme cree. Dire
+ *    « change the salt » en jetant cette adresse, c est cacher a quelqu un son propre block.
+ *    `adresseOuRefus` rendait deja `donnees` ; personne ne les decodait. Troisieme fois ce
+ *    jour-la qu une valeur est LUE puis JETEE — apres le prix de `slot0` et le sqrtPrice de la
+ *    pool. Un helper existe maintenant, pour que ca ne recommence pas.
+ *
+ * ⚠️ Rend `null` plutot qu une adresse tronquee si la donnee est trop courte ou n est pas ce
+ *    refus-la : une adresse devinee vaut pire que pas d adresse.
+ */
+export function adresseDejaPrise(donnees) {
+  const d = String(donnees || '');
+  const sel = '0x' + selecteur('TokenAlreadyExists(address)');
+  if (!d.startsWith(sel) || d.length < sel.length + 64) return null;
+  const mot = d.slice(sel.length, sel.length + 64);
+  /* ⛔ les 12 premiers octets d une adresse ABI sont nuls : sinon ce n est pas une adresse. */
+  if (!/^0{24}[0-9a-fA-F]{40}$/.test(mot)) return null;
+  const a = '0x' + mot.slice(24);
+  return /^0x0{40}$/.test(a) ? null : a;
+}
