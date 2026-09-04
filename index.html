@@ -312,7 +312,7 @@ import { encodeCreateB20, paramsAsset, encodeUpdateSupplyCap, encodeUpdateContra
  * fait de la division et du remplissage sur des BigInt, et elle arrondit VERS LE HAUT — un cout
  * affiche ne doit jamais etre inferieur au cout reel. 8 tests dans `test-montants.mjs`. */
 import { formaterEth, estArrondi, formaterGas } from './montants.js';
-import { classerUri, sourceImage, metadonnees, PASSERELLE_PAR_DEFAUT } from './lecteur.js';
+import { classerUri, sourceImage, metadonnees, enAttribut, PASSERELLE_PAR_DEFAUT } from './lecteur.js';
 import { listerCreations, creationsDe } from './index-blocks.js';
 import { cleDePool, etatPool, encodeInitialize, encodeApprove, encodePermit2Approve, encodeMintPosition,
   MAX_UINT256, MAX_UINT160, MAX_UINT48, MAX_UINT128, PRIX_1_POUR_1, TICK_BAS, TICK_HAUT,
@@ -679,7 +679,7 @@ async function lireBlock(adr) {
       const src = sourceImage(m.doc.image);
       if (m.doc.description) vue += ligne('about', enTexte(m.doc.description));
       if (src) vue += '<div class="row"><span class="k">image</span><span class="v">'
-        + '<img src="' + enTexte(src) + '" alt="" style="width:120px;height:auto;border-radius:10px;display:block"></span></div>';
+        + '<img src="' + enAttribut(src) + '" alt="" style="width:120px;height:auto;border-radius:10px;display:block"></span></div>';
       else if (m.doc.image) vue += ligne('image', pastille('SCHEME REFUSED', 'warn'));
     }
     box.innerHTML = vue;

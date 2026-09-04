@@ -17,6 +17,34 @@
 
 export const PASSERELLE_PAR_DEFAUT = 'https://ipfs.io/ipfs/';
 
+/**
+ * Echappe une valeur destinee a un ATTRIBUT HTML entre guillemets.
+ *
+ * ⛔ NE PAS CONFONDRE AVEC UN ECHAPPEUR DE TEXTE. L app posait la source de l image avec un
+ *    helper bati sur `textContent -> innerHTML` : il echappe `<`, `>` et `&`, mais **PAS le
+ *    guillemet ni l apostrophe**. Mesure du 2026-09-04, sur le site EN LIGNE :
+ *
+ *      data:image/svg+xml,<svg/>" data-x="oui        <- accepte par la liste blanche
+ *      -> <img src="…"> obtenue avec l attribut `data-x` INJECTE
+ *
+ *    Le champ `image` d un block tiers est ecrit par son auteur. `onerror=` s executerait.
+ *
+ * ⛔ ET LA GARDE PRECEDENTE ETAIT VRAIE MAIS INSUFFISANTE. Le module affirmait qu un SVG charge
+ *    par `<img src>` ne peut pas executer de script — c est exact, et ca protege contre
+ *    l execution DEPUIS le SVG. Ca ne protege pas contre l injection DANS la balise. Une garde
+ *    correcte peut couvrir la mauvaise moitie du probleme.
+ *
+ * ⚠️ `&` D ABORD, sinon on re-echappe les entites qu on vient d ecrire.
+ */
+export function enAttribut(v) {
+  return String(v)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 /** Classe un contractURI SANS aller le chercher. Pur, donc testable sans reseau. */
 export function classerUri(u, passerelle = PASSERELLE_PAR_DEFAUT) {
   if (typeof u !== 'string' || u === '') return { type: 'VIDE' };
