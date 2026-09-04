@@ -1,30 +1,34 @@
-<!-- block-0.html — la page qui remet a TON wallet la transaction deja auditee. Rien d autre.
+<!-- block-0.html — creer un block avec les parametres audites, DEPUIS TON PROPRE COMPTE.
 ================================================================================================
-⛔ CETTE PAGE NE PEUT ENVOYER QU UNE SEULE TRANSACTION. Le calldata est charge depuis
-   `A-SIGNER-mainnet.json`, celui qui a passe les 20 controles de `audit-mainnet.mjs`, et il
-   n est PAS reconstruit ici : le reconstruire, c est risquer d en produire un autre.
-   ⚠️ L app principale ne peut PAS le produire — mesure : elle cable un `contractURI` en `data:`
-   et son sel par defaut differe. Elle creerait un AUTRE block, a une AUTRE adresse.
+⛔ PREMIERE VERSION : ELLE NE MARCHAIT QUE POUR UNE SEULE ADRESSE. Le `from` etait celui de la
+   fiche auditee, et toute autre connexion recevait un refus AVANT que le wallet s ouvre — donc
+   aucun message, aucune demande de confirmation, l impression que rien ne se passe. Une page qui
+   refuse en silence ressemble a une page cassee.
+⇒ L adresse d un B-20 derive de (variant, msg.sender, salt) : chaque compte a DEJA la sienne.
+  On construit donc la transaction POUR CELUI QUI SE CONNECTE, et on lui montre SON adresse.
 
-⛔ ELLE NE DETIENT AUCUNE CLE. Elle encode, affiche, et appelle `eth_sendTransaction`. Le wallet
-   montre la transaction et c est un humain qui accepte. C est la propriete que le projet vend :
-   elle ne peut pas etre la premiere chose qu on abandonne.
+⛔ LES PARAMETRES RESTENT CEUX QUI ONT ETE AUDITES — nom, symbole, supply, plafond, contractURI,
+   sel, et surtout `initialAdmin = address(0)`. Seul le DESTINATAIRE du mint change, parce qu il
+   doit etre celui qui signe. Le tout est reconstruit par `encodeur.js`, dont la sortie a ete
+   comparee OCTET POUR OCTET a `base-forge`.
 
-⛔ ET ELLE REFUSE D ELLE-MEME dans quatre cas, verifies SUR LA CHAINE juste avant :
-   chaine != 8453 · adresse deja prise · la factory refuse le calldata · solde insuffisant.
-   Un bouton actif sur un etat non verifie serait un piege, pas un raccourci. -->
+⛔ ELLE NE DETIENT AUCUNE CLE. Elle encode, affiche, appelle `eth_sendTransaction`. Le wallet
+   montre la transaction et c est un humain qui accepte.
+
+⛔ ET ELLE DEMANDE A LA CHAINE AVANT D OFFRIR QUOI QUE CE SOIT : la factory doit accepter le
+   calldata et rendre l adresse, cette adresse doit etre libre, et le solde doit couvrir le gas. -->
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BLOCK 0 — sign it yourself</title>
+<title>BLOCK 0 — create your block</title>
 <style>
 :root{color-scheme:dark}
 body{margin:0;background:#07090f;color:#dce6f5;font:15px/1.55 ui-sans-serif,system-ui,sans-serif;padding:22px}
 .w{max-width:720px;margin:0 auto}
 h1{font-size:20px;margin:0 0 4px}
-.sub{color:#7f8ba3;margin:0 0 22px}
+.sub{color:#7f8ba3;margin:0 0 20px}
 .card{background:#0d1220;border:1px solid #1c2740;border-radius:14px;padding:16px;margin-bottom:14px}
 .row{display:flex;gap:12px;padding:5px 0;border-bottom:1px solid #141c2e;font-size:13px}
 .row:last-child{border:0}
-.k{color:#7f8ba3;min-width:150px}
+.k{color:#7f8ba3;min-width:145px}
 .v{flex:1;word-break:break-all;font-family:ui-monospace,monospace}
 .p{display:inline-block;padding:1px 8px;border-radius:99px;font-size:11px;font-weight:700}
 .ok{background:#0d3320;color:#63e6a0}.bad{background:#3a1116;color:#ff8b96}
@@ -33,119 +37,182 @@ button{width:100%;padding:13px;border:0;border-radius:11px;font-size:15px;font-w
 .go{background:#2f6ef0;color:#fff}.go:disabled{background:#1a2133;color:#6b788f;cursor:not-allowed}
 .sec{background:#141c2e;color:#b8c6dc}
 #msg{white-space:pre-wrap;font-size:13px;margin-top:12px;color:#9fb0c9}
-code{background:#141c2e;padding:1px 5px;border-radius:5px;font-size:12px}
+label{display:block;color:#7f8ba3;font-size:12px;margin:12px 0 4px}
+select{width:100%;padding:10px;border-radius:9px;background:#0d1220;color:#dce6f5;border:1px solid #1c2740;font-size:14px}
 </style>
 <div class="w">
 <h1>BLOCK 0</h1>
-<p class="sub">The transaction below was audited byte for byte. This page hands it to your wallet — it holds no key and can send nothing else.</p>
+<p class="sub">Creates a B-20 block with no administrator and no minter, in one transaction. The address is derived from <em>your</em> wallet — connect and you will see yours before anything is sent.</p>
+
+<label for="reseau">Network</label>
+<select id="reseau">
+  <option value="8453">Base mainnet — real, costs gas</option>
+  <option value="84532">Base Sepolia — free, for trying it</option>
+</select>
 
 <div class="card"><div id="fiche"></div></div>
-<button class="sec" id="revoir">Re-check the chain</button>
-<button class="go" id="envoyer" disabled>Checking…</button>
+<button class="sec" id="connecter">Connect wallet</button>
+<button class="go" id="envoyer" disabled>Connect first</button>
 <div id="msg"></div>
 </div>
 
 <script type="module">
-const RPC = 'https://mainnet.base.org';
+import { encodeCreateB20, paramsAsset, encodeUpdateSupplyCap, encodeUpdateContractURI,
+  encodeBatchMint, expliquerRefus } from './encodeur.js';
+
+const RESEAUX = {
+  8453:  { nom: 'Base mainnet', rpc: 'https://mainnet.base.org', hex: '0x2105',  scan: 'https://basescan.org' },
+  84532: { nom: 'Base Sepolia', rpc: 'https://sepolia.base.org', hex: '0x14a34', scan: 'https://sepolia.basescan.org' },
+};
+const FACTORY = '0xb20f000000000000000000000000000000000000';
 const $ = (s) => document.querySelector(s);
 const ligne = (k, v) => `<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`;
 const p = (t, c) => `<span class="p ${c}">${t}</span>`;
 const dire = (t) => { $('#msg').textContent = t; };
 
-/* ⛔ LE CALLDATA VIENT DU FICHIER AUDITE, il n est pas reconstruit ici. */
-const req = await (await fetch('./A-SIGNER-mainnet.json')).json();
+/* ⛔ LES PARAMETRES AUDITES, lus dans la fiche — pas reecrits ici. */
+const modele = await (await fetch('./A-SIGNER-mainnet.json')).json();
+let compte = null, plan = null;
 
 let n = 0;
-async function rpc(m, params) {
-  const r = await fetch(RPC, { method: 'POST', headers: { 'content-type': 'application/json' },
+async function rpc(chaine, m, params) {
+  const r = await fetch(RESEAUX[chaine].rpc, { method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ jsonrpc: '2.0', id: ++n, method: m, params }) });
   return r.json();
 }
 
+/** Le calldata POUR CE SIGNATAIRE. Seul le destinataire du mint change. */
+function calldataPour(qui) {
+  return encodeCreateB20({
+    variant: 0,
+    saltTexte: modele.sel,
+    /* ⛔ `admin = address(0)` : le block naît sans administrateur. Ce n est pas une option. */
+    params: paramsAsset({ nom: 'Tokenized Block', symbole: 'TBLOCK',
+      admin: '0x0000000000000000000000000000000000000000', decimales: 18 }),
+    initCalls: [
+      encodeUpdateContractURI(modele.contractURI),
+      encodeUpdateSupplyCap(BigInt(modele.supply)),
+      encodeBatchMint([qui], [BigInt(modele.supply)]),
+    ],
+  });
+}
+
 async function verifier() {
+  const chaine = Number($('#reseau').value);
+  const R = RESEAUX[chaine];
   $('#envoyer').disabled = true;
-  $('#envoyer').textContent = 'Checking the chain…';
-  const raisons = [];
 
-  const chaine = parseInt((await rpc('eth_chainId', [])).result, 16);
-  const code = (await rpc('eth_getCode', [req.adresseAttendue, 'latest'])).result;
-  const libre = code === '0x';
-  if (!libre) raisons.push('the expected address is already taken');
-
-  const appel = await rpc('eth_call', [{ from: req.from, to: req.to, data: req.data }, 'latest']);
-  const rendue = appel.error ? null : '0x' + String(appel.result).slice(-40);
-  if (!rendue) raisons.push('the factory refuses this calldata: ' + (appel.error?.message || '?'));
-  else if (rendue.toLowerCase() !== req.adresseAttendue.toLowerCase()) {
-    raisons.push('the factory returns a DIFFERENT address than the audited one');
+  if (!compte) {
+    $('#fiche').innerHTML = ligne('network', R.nom + ' (' + chaine + ')')
+      + ligne('creates', p('CONNECT — your address decides it', 'dim'))
+      + ligne('supply', modele.supply + ' <span class="k">(cap = supply, admin = none)</span>')
+      + ligne('metadata', modele.contractURI);
+    $('#envoyer').textContent = 'Connect first';
+    return dire('The block address is derived from the standard, YOUR wallet address, and the salt.\nConnect and it will be shown before anything is sent.');
   }
 
-  const g = await rpc('eth_estimateGas', [{ from: req.from, to: req.to, data: req.data }]);
-  const prix = BigInt((await rpc('eth_gasPrice', [])).result);
-  const solde = BigInt((await rpc('eth_getBalance', [req.from, 'latest'])).result);
+  $('#envoyer').textContent = 'Checking the chain…';
+  const data = calldataPour(compte);
+  const raisons = [];
+
+  /* ⛔ ON DEMANDE A LA FACTORY. Une adresse qu on calculerait soi-meme pourrait differer. */
+  const appel = await rpc(chaine, 'eth_call', [{ from: compte, to: FACTORY, data }, 'latest']);
+  const adresse = appel.error ? null : '0x' + String(appel.result).slice(-40);
+  if (!adresse) {
+    const d = appel.error?.data ? String(appel.error.data) : '';
+    raisons.push(expliquerRefus(d) || appel.error?.message || 'the factory refuses this calldata');
+  }
+
+  const code = adresse ? (await rpc(chaine, 'eth_getCode', [adresse, 'latest'])).result : null;
+  const libre = code === '0x';
+  if (adresse && !libre) raisons.push('that address already exists — change the salt');
+
+  const g = await rpc(chaine, 'eth_estimateGas', [{ from: compte, to: FACTORY, data }]);
+  const prix = BigInt((await rpc(chaine, 'eth_gasPrice', [])).result);
+  const solde = BigInt((await rpc(chaine, 'eth_getBalance', [compte, 'latest'])).result);
   const gaz = g.error ? null : BigInt(g.result);
   const cout = gaz === null ? null : gaz * prix;
-  if (cout !== null && solde < cout) raisons.push('the signer cannot cover the gas');
+  if (cout !== null && solde < cout) raisons.push('this account cannot cover the gas on ' + R.nom);
 
   const eth = (w) => (Number(w) / 1e18).toFixed(9);
   $('#fiche').innerHTML =
-      ligne('network', 'Base mainnet (' + chaine + ')' + (chaine === 8453 ? ' ' + p('OK', 'ok') : ' ' + p('WRONG CHAIN', 'bad')))
-    + ligne('sign from', req.from)
-    + ligne('to', req.to + ' <span class="k">(the B-20 factory)</span>')
+      ligne('network', R.nom + ' (' + chaine + ')')
+    + ligne('you', compte)
+    + ligne('creates', adresse
+        ? `<a href="${R.scan}/address/${adresse}" target="_blank" rel="noopener">${adresse}</a>`
+          + (libre ? ' ' + p('FREE', 'ok') : ' ' + p('TAKEN', 'bad'))
+        : p('NOT COMPUTED', 'bad'))
+    + ligne('to', FACTORY + ' <span class="k">(the B-20 factory)</span>')
     + ligne('value', '0 ' + p('SENDS NO ETH', 'ok'))
-    + ligne('salt', req.sel)
-    + ligne('creates', libre ? rendue || req.adresseAttendue : req.adresseAttendue + ' ' + p('ALREADY TAKEN', 'bad'))
-    + ligne('address free', libre ? p('YES', 'ok') : p('NO', 'bad'))
-    + ligne('factory accepts', rendue ? p('YES — returns the audited address', 'ok') : p('NO', 'bad'))
-    + ligne('supply', req.supply + ' <span class="k">(cap = supply, admin = none)</span>')
-    + ligne('metadata', req.contractURI)
+    + ligne('salt', modele.sel)
+    + ligne('supply', modele.supply + ' <span class="k">(cap = supply, admin = none)</span>')
+    + ligne('metadata', modele.contractURI)
     + ligne('gas', gaz === null ? p('NOT MEASURED', 'warn')
         : gaz.toString() + ' × ' + prix + ' wei ≈ <b>' + eth(cout) + ' ETH</b>')
-    + ligne('balance', eth(solde) + ' ETH' + (cout && solde >= cout
-        ? ' <span class="k">(' + (Number(solde) / Number(cout)).toFixed(1) + '× the cost)</span>' : ''))
-    + ligne('calldata', req.data.slice(0, 40) + '… <span class="k">(' + (req.data.length / 2 - 1) + ' bytes)</span>');
+    + ligne('your balance', eth(solde) + ' ETH'
+        + (cout && solde >= cout ? ' <span class="k">(' + (Number(solde) / Number(cout)).toFixed(0) + '× the cost)</span>' : ''))
+    + ligne('calldata', data.slice(0, 40) + '… <span class="k">(' + (data.length / 2 - 1) + ' bytes)</span>');
 
-  const pret = chaine === 8453 && libre && rendue && raisons.length === 0;
+  const pret = raisons.length === 0 && adresse && libre;
+  plan = pret ? { chaine, data, adresse } : null;
   $('#envoyer').disabled = !pret;
-  $('#envoyer').textContent = pret ? 'Create BLOCK 0 — your wallet will ask' : 'Blocked: ' + (raisons[0] || 'checking');
-  dire(pret ? 'Every check passed against the chain, just now.\nYour wallet will show the transaction. Read the destination before accepting.'
+  $('#envoyer').textContent = pret ? 'Create it — your wallet will ask' : 'Blocked: ' + raisons[0];
+  dire(pret ? 'Every check passed against ' + R.nom + ', just now.\nYour wallet will open. Re-read the destination before accepting.'
             : '⛔ ' + raisons.join('\n⛔ '));
 }
 
-$('#revoir').onclick = verifier;
+$('#reseau').onchange = () => { plan = null; verifier(); };
 
-$('#envoyer').onclick = async () => {
+$('#connecter').onclick = async () => {
   if (!window.ethereum) return dire("No wallet in this browser.\nOpen this page inside your wallet's browser.");
   try {
-    const [compte] = await window.ethereum.request({ method: 'eth_requestAccounts' });
-    if (compte.toLowerCase() !== req.from.toLowerCase()) {
-      return dire('⛔ Wrong account.\nThis transaction must be signed by ' + req.from + '\nyour wallet offers ' + compte);
-    }
+    [compte] = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    dire('Connected: ' + compte);
+    await verifier();
+  } catch (e) {
+    const refus = e && (e.code === 4001 || /reject|denied/i.test(String(e.message || e)));
+    dire(refus ? 'You declined the connection.' : 'Could not connect: ' + (e.message || e));
+  }
+};
+
+$('#envoyer').onclick = async () => {
+  if (!plan) return dire('Nothing verified yet — press Connect.');
+  const R = RESEAUX[plan.chaine];
+  try {
     const id = parseInt(await window.ethereum.request({ method: 'eth_chainId' }), 16);
-    if (id !== 8453) {
-      await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x2105' }] });
+    if (id !== plan.chaine) {
+      dire('Switching your wallet to ' + R.nom + '…');
+      await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: R.hex }] });
+      /* ⛔ ON REVERIFIE APRES L ALLER-RETOUR. Le wallet a pu changer de compte en meme temps,
+       * et un consentement donne avant un aller-retour n en est plus un apres. */
+      const id2 = parseInt(await window.ethereum.request({ method: 'eth_chainId' }), 16);
+      if (id2 !== plan.chaine) return dire('⛔ Wallet is still not on ' + R.nom + '. Nothing was sent.');
+      const [a] = await window.ethereum.request({ method: 'eth_accounts' });
+      if (!a || a.toLowerCase() !== compte.toLowerCase()) {
+        compte = a || null; await verifier();
+        return dire('⛔ Your wallet switched account. Everything was re-checked — press the button again.');
+      }
     }
-    /* ⛔ ON REVERIFIE APRES LE CHANGEMENT DE RESEAU. Le consentement d avant l aller-retour ne
-     * vaut plus : entre-temps le wallet a pu changer de compte ou de chaine. */
-    const id2 = parseInt(await window.ethereum.request({ method: 'eth_chainId' }), 16);
-    if (id2 !== 8453) return dire('⛔ Still not on Base mainnet. Nothing was sent.');
-    dire('Your wallet will open. Re-read the destination — it must be ' + req.to);
+    dire('Your wallet will open now.\nThe destination must be ' + FACTORY);
     const hash = await window.ethereum.request({ method: 'eth_sendTransaction',
-      params: [{ from: req.from, to: req.to, value: '0x0', data: req.data }] });
+      params: [{ from: compte, to: FACTORY, value: '0x0', data: plan.data }] });
     dire('Sent: ' + hash + '\nWaiting for the receipt…');
     for (let i = 0; i < 40; i++) {
       await new Promise((r) => setTimeout(r, 3000));
-      const r = (await rpc('eth_getTransactionReceipt', [hash])).result;
+      const r = (await rpc(plan.chaine, 'eth_getTransactionReceipt', [hash])).result;
       if (!r) continue;
-      /* ⛔ UN ENVOI REUSSI N EST PAS UNE CREATION. On lit le code a l adresse. */
-      const c = (await rpc('eth_getCode', [req.adresseAttendue, 'latest'])).result;
+      /* ⛔ UN ENVOI REUSSI N EST PAS UNE CREATION. On relit le CODE a l adresse. */
+      const c = (await rpc(plan.chaine, 'eth_getCode', [plan.adresse, 'latest'])).result;
+      if (r.status === '0x1' && c === '0xef') {
+        return dire('✅ Your block exists.\n' + plan.adresse + '\ncode: ' + c
+          + '\n' + R.scan + '/tx/' + hash);
+      }
       return dire(r.status === '0x1'
-        ? '✅ BLOCK 0 exists.\n' + req.adresseAttendue + '\ncode at that address: ' + c
-          + '\nhttps://basescan.org/tx/' + hash
-        : '⛔ REVERTED on-chain. Nothing was created.\nhttps://basescan.org/tx/' + hash);
+        ? '⚠️ The transaction succeeded but the code at that address is "' + c + '", not 0xef.\n' + R.scan + '/tx/' + hash
+        : '⛔ REVERTED on-chain. Nothing was created.\n' + R.scan + '/tx/' + hash);
     }
-    dire('Sent but no receipt yet.\n' + hash + '\nPress « Re-check the chain ».');
+    dire('Sent but no receipt yet.\n' + hash);
   } catch (e) {
-    /* ⛔ « refuse » et « casse » sont deux faits opposes. */
     const refus = e && (e.code === 4001 || /reject|denied/i.test(String(e.message || e)));
     dire(refus ? 'You declined. Nothing was sent.' : 'Failed: ' + (e.message || e));
   }
