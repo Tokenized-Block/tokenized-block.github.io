@@ -226,6 +226,12 @@ animation:trace .3s .18s ease-out forwards}
   <h2>Liquidity</h2>
   <label for="poolToken">Block to pool</label>
   <input id="poolToken" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
+  <!-- ⛔ LA DEVISE SE CHOISIT. Elle etait figee a USDC sur mainnet, et le premier block y a ete
+       cree par un compte qui detient de l ETH et ZERO USDC : la pool etait donc impossible, sans
+       que rien ne le dise. WETH s obtient en enveloppant son propre ETH — une transaction, aucun
+       echange, aucun tiers. -->
+  <label for="poolDevise">Quote currency</label>
+  <select id="poolDevise" style="width:100%;padding:10px;border-radius:9px;background:#0d1220;color:#dce6f5;border:1px solid #1c2740;font-size:14px"></select>
   <label for="poolValeur">Starting value of the whole supply</label>
     <input id="poolValeur" value="10000" inputmode="numeric">
     <!-- ⛔ LE PRIX DE DEPART SE CHOISIT. Il etait code en dur a `PRIX_1_POUR_1` = 2^96, un ratio
@@ -683,8 +689,31 @@ for (const id of [84532, 8453]) $('#t' + id).onclick = () => {
   $('#t8453').setAttribute('aria-selected', String(id === 8453));
   /* ⛔ le consentement ne survit PAS a un changement de reseau */
   $('#gardeCase').checked = false;
+  peuplerDevises();
   dire('Network: ' + RESEAUX[id].nom + '.'); rafraichir();
 };
+
+/**
+ * Remplit le choix de devise pour la chaine courante.
+ * ⛔ ON GARDE LA DEVISE CHOISIE SI ELLE EXISTE AUSSI SUR LA NOUVELLE CHAINE. La reinitialiser a
+ *    chaque bascule ferait changer la paire dans le dos de l utilisateur — et une PoolKey
+ *    differente, c est une autre pool, pas la meme vue autrement.
+ */
+function peuplerDevises() {
+  const sel = $('#poolDevise'); if (!sel) return;
+  const avant = sel.value;
+  const liste = DEVISES[chaine] || [];
+  sel.innerHTML = liste.map((d) => `<option value="${d.adr}">${d.nom}`
+    + (d.enveloppable ? ' — wrap your own ETH, no exchange needed' : ' — you must already hold it')
+    + '</option>').join('');
+  if (liste.some((d) => d.adr.toLowerCase() === String(avant).toLowerCase())) sel.value = avant;
+}
+/* ⛔ CET APPEL EST DESCENDU EN BAS DU MODULE. Ici, il s executait AVANT la declaration de
+ * `DEVISES` qu il lit — `Cannot access 'DEVISES' before initialization`, et toute la page restait
+ * vide. La regle 7 ne l a PAS vu : la lecture est DANS la fonction, et sa borne dit exactement
+ * que les lectures depuis une fonction imbriquee sont indecidables sans suivre les sites d appel.
+ * La borne etait ecrite ; elle vient de mordre. */
+$('#poolDevise').onchange = () => { plan = null; $('#poolVue').innerHTML = ''; };
 $('#relire').onclick = rafraichir;
 
 /* ⛔ Le lecteur vient de lecteur.js — le MEME module que la suite de tests exerce. Une copie
@@ -877,12 +906,31 @@ $('#idxChercher').onclick = async () => {
  *    sur une erreur qui ne parle jamais d autorisation.
  * ⛔ L etat est RELU avant chaque geste : une etape deja faite ne se refait pas (c est du gaz
  *    jete), une etape manquante ne se saute pas (c est un revert paye). */
+/* ⛔ LA DEVISE DE COTATION EST UN CHOIX, PLUS UN CABLAGE. Sur mainnet elle etait figee a USDC —
+ * et le premier block mainnet cree le 2026-09-04 par un compte qui detient de l ETH et ZERO USDC
+ * ne pouvait donc pas etre poole du tout. Une pool a DEUX cotes ; imposer une devise qu on n a
+ * pas ferme la porte sans le dire.
+ * ⚠️ WETH s obtient en enveloppant SON PROPRE ETH — une transaction, aucun echange, aucun tiers.
+ *    USDC exige un swap ou un virement. Ce n est pas la meme barriere, et l app doit laisser
+ *    choisir plutot que decider. */
+const DEVISES = {
+  84532: [{ adr: '0x4200000000000000000000000000000000000006', nom: 'WETH', enveloppable: true }],
+  8453:  [{ adr: '0x4200000000000000000000000000000000000006', nom: 'WETH', enveloppable: true },
+          { adr: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', nom: 'USDC', enveloppable: false }],
+};
 const V4 = {
   84532: { poolm: '0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408', posm: '0x4B2C77d209D3405F41a037Ec6c77F7F5b8e2ca80',
-           stateView: '0x571291b572ed32ce6751a2Cb2486EbEe8DEfB9B4', quote: '0x4200000000000000000000000000000000000006', quoteNom: 'WETH' },
+           stateView: '0x571291b572ed32ce6751a2Cb2486EbEe8DEfB9B4' },
   8453:  { poolm: '0x498581fF718922c3f8e6A244956aF099B2652b2b', posm: '0x7C5f5A4bBd8fD63184577525326123B519429bDc',
-           stateView: '0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71', quote: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', quoteNom: 'USDC' },
+           stateView: '0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71' },
 };
+/** La devise choisie pour la chaine courante. ⛔ Toujours passer par ici : deux endroits qui
+ *  lisent la devise differemment produiraient deux `PoolKey` differentes, donc deux pools. */
+function devise(chaine) {
+  const liste = DEVISES[chaine] || [];
+  const choisi = $('#poolDevise')?.value;
+  return liste.find((d) => d.adr.toLowerCase() === String(choisi).toLowerCase()) || liste[0];
+}
 const PERMIT2 = '0x000000000022D473030F116dDEE9F6B43aC78BA3';
 let plan = null;
 
@@ -890,7 +938,11 @@ async function construirePlan() {
   const b20 = $('#poolToken').value.trim();
   const box = $('#poolVue');
   if (!/^0x[0-9a-fA-F]{40}$/.test(b20)) { box.innerHTML = ligne('state', pastille('NOT AN ADDRESS', 'bad')); return null; }
-  const v = V4[chaine];
+  /* ⛔ UN SEUL POINT DE VERITE POUR LA DEVISE. Deux endroits qui la liraient differemment
+   * produiraient deux `PoolKey` differentes — donc deux pools, dont une vide. */
+  const d0 = devise(chaine);
+  if (!d0) { $('#poolVue').innerHTML = ligne('state', pastille('NO QUOTE CURRENCY FOR THIS CHAIN', 'bad')); return null; }
+  const v = { ...V4[chaine], quote: d0.adr, quoteNom: d0.nom, enveloppable: d0.enveloppable };
   if (!v) { box.innerHTML = ligne('state', pastille('CHAIN NOT SUPPORTED', 'bad')); return null; }
   const liq = BigInt(($('#poolLiq').value || '0').replace(/\D/g, '') || '0');
   if (liq === 0n) { box.innerHTML = ligne('state', pastille('LIQUIDITY MUST BE > 0', 'bad')); return null; }
@@ -926,7 +978,19 @@ async function construirePlan() {
     : sqrtPriceDepuisPrix({ prixNum: valeurVoulue, prixDen: jetons,
         decDevise: decQ, decBlock: decB, deviseEst0: quoteEst0 });
 
+  /* ⛔ L ETAPE ZERO : ENVELOPPER SON PROPRE ETH. Sans elle, un compte qui detient de l ETH et pas
+   * de WETH voyait « Balance below the liquidity you asked for » sans savoir que le remede tenait
+   * en une transaction vers un contrat qu il possede deja le droit d appeler. On ne la propose
+   * que si la devise est enveloppable ET que le solde manque : une etape inutile qui s affiche
+   * est une etape qu on apprend a ignorer.
+   * ⚠️ `deposit()` est PAYABLE — c est le seul endroit de l app ou une transaction porte de la
+   *    valeur, et le montant est exactement ce qui manque. */
+  const manqueDevise = (sQ !== null && sQ < liq) ? liq - sQ : 0n;
   const etapes = [
+    ...(v.enveloppable && manqueDevise > 0n ? [{
+      nom: '0. wrap ' + (Number(manqueDevise) / 1e18).toFixed(9) + ' ETH → WETH',
+      ok: false, to: v.quote, data: '0x' + sel4('deposit()'), valeur: '0x' + manqueDevise.toString(16),
+    }] : []),
     /* ⛔ PLUS DE CONSTANTE ICI. `PRIX_1_POUR_1` ignore les decimales : sur USDC(6)/block(18) elle
    * prixe 1 block a 1e12 USDC et la pool nait morte. On pose le prix DERIVE du champ, et si on
    * n a pas pu le calculer on n offre PAS l etape — un prix devine se grave definitivement. */
@@ -1046,7 +1110,9 @@ async function etatSwap() {
   const box = $('#swapVue');
   const b20 = $('#swapToken').value.trim();
   if (!/^0x[0-9a-fA-F]{40}$/.test(b20)) { box.innerHTML = ligne('state', pastille('NOT AN ADDRESS', 'bad')); return null; }
-  const v = V4[chaine], ur = ROUTEUR[chaine], q = QUOTER[chaine];
+  const dS = devise(chaine);
+  const v = dS ? { ...V4[chaine], quote: dS.adr, quoteNom: dS.nom } : null;
+  const ur = ROUTEUR[chaine], q = QUOTER[chaine];
   if (!v || !ur) { box.innerHTML = ligne('state', pastille('CHAIN NOT SUPPORTED', 'bad')); return null; }
   const montant = BigInt(($('#swapMontant').value || '0').replace(/\D/g, '') || '0');
   if (montant === 0n) { box.innerHTML = ligne('state', pastille('AMOUNT MUST BE > 0', 'bad')); return null; }
@@ -1236,7 +1302,12 @@ $('#poolAgir').onclick = async () => {
     }
     dire('Your wallet will open — ' + s.nom + '\nRe-read the destination before accepting.', 'warn');
     afficherTx('wallet', s.nom);
-    const hash = await window.ethereum.request({ method: 'eth_sendTransaction', params: [{ from: compte, to: s.to, value: '0x0', data }] });
+    /* ⛔ SEULE L ETAPE D ENVELOPPE PORTE DE LA VALEUR, et elle porte EXACTEMENT ce qui manque.
+     * Le defaut reste zero : une etape qui enverrait de l ETH par accident serait une perte
+     * silencieuse, et rien dans l interface ne l aurait annoncee. */
+    const valeur = s.valeur || '0x0';
+    if (valeur !== '0x0') dire('This step SENDS ' + (Number(BigInt(valeur)) / 1e18).toFixed(9) + ' ETH, to wrap it into WETH.', 'warn');
+    const hash = await window.ethereum.request({ method: 'eth_sendTransaction', params: [{ from: compte, to: s.to, value: valeur, data }] });
     dire('Sent: ' + hash + '\nRe-reading the chain…', 'ok');
     afficherTx('pending', s.nom, hash);
     /* ⛔ On ne coche pas l etape parce que l envoi a reussi : on RELIT jusqu a voir le changement. */
@@ -1291,5 +1362,8 @@ $('#agir').onclick = async () => {
   } catch (e) { dire(refusUtilisateur(e) ? 'You declined the transaction.' : 'Failed: ' + (e.message || e), 'bad'); }
 };
 
+/* ⛔ L INITIALISATION VIT EN BAS, apres TOUTES les declarations qu elle lit. Un appel place plus
+ * haut s executait avant `const DEVISES` et vidait la page entiere. */
+peuplerDevises();
 await rafraichir();
 </script>
