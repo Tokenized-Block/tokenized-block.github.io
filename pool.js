@@ -188,3 +188,44 @@ export async function formeAcceptee({ appelBrut, ur, de, cle, zeroForOne, montan
   }
   return { forme: null, causes };
 }
+
+/**
+ * Racine carree entiere d un BigInt (methode de Newton).
+ * ⛔ PAS DE FLOTTANT ICI. `Math.sqrt` sur un nombre au-dela de 2^53 perd des bits, et le
+ *    resultat sert a fixer le prix d une pool — une valeur qu on n a pas le droit de reviser.
+ */
+export function isqrt(n) {
+  if (n < 0n) throw new Error('isqrt d un negatif');
+  if (n < 2n) return n;
+  let x = n, y = (x + 1n) / 2n;
+  while (y < x) { x = y; y = (x + n / x) / 2n; }
+  return x;
+}
+
+/**
+ * sqrtPriceX96 pour un prix EXPRIME EN JETONS ENTIERS, decimales comprises.
+ *
+ * ⛔ NE PAS UTILISER `PRIX_1_POUR_1` SUR UNE PAIRE DONT LES DECIMALES DIFFERENT. Cette constante
+ *    vaut 2^96, soit un ratio 1:1 d UNITES DE BASE. Mesure du 2026-09-04 : avec une devise a 6
+ *    decimales (USDC) face a un block a 18, elle signifie 1 USDC = 1 000 000 000 000 blocks —
+ *    une supply de 1e9 y vaudrait 0,001 USDC, et n importe qui racheterait tout le token pour un
+ *    dixieme de centime. Le prix d une pool ne se reinitialise pas.
+ *
+ * @param {object} p
+ * @param {bigint} p.prixNum  numerateur du prix : combien d unites de DEVISE pour…
+ * @param {bigint} p.prixDen  …`prixDen` jetons entiers de BLOCK. (une fraction, donc exacte)
+ * @param {number} p.decDevise  decimales de la devise, LUES sur la chaine
+ * @param {number} p.decBlock   decimales du block
+ * @param {boolean} p.deviseEst0  la devise est-elle currency0 (adresse la plus basse) ?
+ */
+export function sqrtPriceDepuisPrix({ prixNum, prixDen, decDevise, decBlock, deviseEst0 }) {
+  const n = BigInt(prixNum), d = BigInt(prixDen);
+  if (n <= 0n || d <= 0n) throw new Error('prix nul ou negatif');
+  /* Le pool raisonne en UNITES DE BASE : ratio = currency1 / currency0.
+   * devise = currency0 -> 1 unite de devise vaut (d/n) blocks, corrige des decimales. */
+  const eB = 10n ** BigInt(decBlock), eD = 10n ** BigInt(decDevise);
+  const num = deviseEst0 ? d * eB : n * eD;
+  const den = deviseEst0 ? n * eD : d * eB;
+  /* sqrt(num/den) * 2^96 = sqrt(num * 2^192 / den) — tout en entiers. */
+  return isqrt((num << 192n) / den);
+}

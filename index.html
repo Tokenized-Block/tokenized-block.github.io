@@ -166,9 +166,20 @@ animation:trace .3s .18s ease-out forwards}
   <div class="duo">
     <div><label for="division">Division — how finely the block splits</label>
       <input id="division" type="range" min="1" max="5" value="3"></div>
-    <div><label for="eclats">Shards — pieces breaking away</label>
+    <div><label for="eclats">Shards — how many break away</label>
       <input id="eclats" type="range" min="0" max="6" value="3"></div>
   </div>
+  <!-- ⛔ La disposition des eclats etait FIGEE : un seul sillage possible, et le seul reglage
+       etait combien. C est la partie la plus visible du logo, et c etait la plus impersonnelle —
+       deux blocs differents rendaient la meme trainee. Le choix se fait ici. -->
+  <label for="orbite">Where the shards go</label>
+  <select id="orbite">
+    <option value="sillage">Trail — rising to one side</option>
+    <option value="couronne">Crown — an arc above the block</option>
+    <option value="essaim">Swarm — scattered all around</option>
+    <option value="chute">Falling — dropping away below</option>
+    <option value="coins">Corners — set down, not moving</option>
+  </select>
   <label for="facette">Face style</label>
   <select id="facette">
     <option value="lettre">Letter — the symbol's initial</option>
@@ -215,7 +226,13 @@ animation:trace .3s .18s ease-out forwards}
   <h2>Liquidity</h2>
   <label for="poolToken">Block to pool</label>
   <input id="poolToken" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
-  <label for="poolLiq">Liquidity (raw units of each currency)</label>
+  <label for="poolValeur">Starting value of the whole supply</label>
+    <input id="poolValeur" value="10000" inputmode="numeric">
+    <!-- ⛔ LE PRIX DE DEPART SE CHOISIT. Il etait code en dur a `PRIX_1_POUR_1` = 2^96, un ratio
+         d UNITES DE BASE qui ignore les decimales : sur une paire USDC(6)/block(18) cela signifie
+         1 block = 1e12 USDC, et la pool nait morte. Le prix d une pool ne se reinitialise pas.
+         ⚠️ On le demande dans l unite ou un lanceur pense : ce que VAUT la supply entiere. -->
+    <label for="poolLiq">Liquidity (raw units of each currency)</label>
   <input id="poolLiq" value="1000000000000000" inputmode="numeric">
   <button class="act sec" id="poolEtat" style="margin-top:10px">Check the 6 steps</button>
   <div id="poolVue"></div>
@@ -315,7 +332,10 @@ import { formaterEth, estArrondi, formaterGas } from './montants.js';
 import { classerUri, sourceImage, metadonnees, enAttribut, PASSERELLE_PAR_DEFAUT } from './lecteur.js';
 import { listerCreations, creationsDe } from './index-blocks.js';
 import { cleDePool, etatPool, encodeInitialize, encodeApprove, encodePermit2Approve, encodeMintPosition,
-  MAX_UINT256, MAX_UINT160, MAX_UINT48, MAX_UINT128, PRIX_1_POUR_1, TICK_BAS, TICK_HAUT,
+  /* ⛔ `PRIX_1_POUR_1` N EST PLUS IMPORTE. Le garder disponible, meme inutilise, c est laisser a
+   * portee de main la constante qui prixe une pool a 1e12 — un import mort se relit comme une
+   * option encore valide. Le prix se DERIVE, il ne se choisit plus dans une liste. */
+  MAX_UINT256, MAX_UINT160, MAX_UINT48, MAX_UINT128, TICK_BAS, TICK_HAUT, sqrtPriceDepuisPrix,
   encodeSwapExactInSingle, encodeQuote, formeAcceptee, AVEC_MINHOP, selecteur as sel4 } from './pool.js';
 
 const $ = (s) => document.querySelector(s);
@@ -392,7 +412,7 @@ const chaineDe = (h) => { if (!h || h === '0x') return null;
  * de lecture rend la divergence impossible : il n y a plus qu un endroit ou se tromper. */
 function paramsLogo(symbole) {
   return { teinte: $('#teinte').value, accent: $('#accent').value, division: $('#division').value,
-    eclats: $('#eclats').value, facette: $('#facette').value,
+    eclats: $('#eclats').value, orbite: $('#orbite').value, facette: $('#facette').value,
     lettre: symbole !== undefined ? symbole : $('#sym').value };
 }
 
@@ -438,11 +458,37 @@ function logoSvg(o) {
   };
 
   /* Les eclats : le meme cube, plus petit, qui s eloigne. Zero est un etat valide — un bloc
-   * qu on ne veut pas voir se diviser. */
+   * qu on ne veut pas voir se diviser.
+   *
+   * ⛔ LA DISPOSITION EST UN CHOIX, PLUS UNE FATALITE. Il n y avait qu un seul sillage possible,
+   *    en diagonale vers le haut a droite : le seul reglage etait COMBIEN, jamais OU. Un bloc
+   *    qu on personnalise et dont les eclats partent tous au meme endroit se ressemble d un
+   *    utilisateur a l autre — c est la partie la plus visible du logo, et c etait la plus figee.
+   * ⚠️ Chaque disposition est PURE et deterministe : le meme choix rend toujours le meme dessin.
+   *    Un aleatoire, meme joli, rendrait le logo non reproductible — or il part dans les
+   *    metadonnees, ou il est GRAVE. */
+  const PLACES = {
+    /* le sillage d origine, garde comme defaut : on ne casse pas les blocs deja dessines */
+    sillage: (i) => ({ x: 158 + i * 11, y: 34 - i * 11, s: 0.30 - i * 0.035, o: 1 - i * 0.13 }),
+    /* une couronne au-dessus : les eclats montent en arc plutot qu en ligne */
+    couronne: (i, n) => { const a = Math.PI * (0.15 + 0.7 * (n === 1 ? 0.5 : i / (n - 1)));
+      return { x: 100 - Math.cos(a) * 78, y: 44 - Math.sin(a) * 30, s: 0.26 - i * 0.012, o: 0.95 - i * 0.06 }; },
+    /* un essaim autour du bloc : angles fixes, rayons croissants */
+    essaim: (i) => { const a = (i * 137.5) * Math.PI / 180;   /* angle d or : jamais deux voisins */
+      const r = 74 + (i % 3) * 12;
+      return { x: 100 + Math.cos(a) * r, y: 104 + Math.sin(a) * r * 0.62, s: 0.24 - (i % 3) * 0.04, o: 0.9 - i * 0.07 }; },
+    /* une chute vers le bas a droite : le bloc perd des morceaux */
+    chute: (i) => ({ x: 150 + i * 9, y: 150 + i * 12, s: 0.26 - i * 0.03, o: 0.92 - i * 0.12 }),
+    /* aux quatre coins : poses, pas en mouvement */
+    coins: (i) => { const p = [[26, 26], [174, 26], [26, 196], [174, 196], [100, 14], [100, 208]][i % 6];
+      return { x: p[0], y: p[1], s: 0.22 - (i > 3 ? 0.05 : 0), o: 0.9 }; },
+  };
+  const place = PLACES[o.orbite] || PLACES.sillage;
   let frag = '';
   for (let i = 0; i < eclats; i++) {
-    const s = 0.30 - i * 0.035, x = 158 + i * 11, y = 34 - i * 11;
-    frag += `<g transform="translate(${x} ${Math.max(4, y)}) scale(${Math.max(0.08, s)})" opacity="${(1 - i * 0.13).toFixed(2)}">`
+    const p = place(i, eclats);
+    const s = p.s, x = p.x, y = p.y;
+    frag += `<g transform="translate(${x.toFixed(1)} ${Math.max(4, y).toFixed(1)}) scale(${Math.max(0.08, s).toFixed(3)})" opacity="${Math.max(0.15, p.o).toFixed(2)}">`
       + `<path d="M0-40 46-13 0 13-46-13Z" fill="${c(70, 62)}"/>`
       + `<path d="M-46-13 0 13 0 66-46 40Z" fill="${c(75, 44)}"/>`
       + `<path d="M46-13 0 13 0 66 46 40Z" fill="${c(78, 32)}"/>`
@@ -630,7 +676,7 @@ async function relireJeton(adr) {
 /* ⛔ TOUT champ qui entre dans le logo ou le calldata doit declencher un recalcul. En oublier un
  * afficherait un apercu qui ne correspond PLUS aux octets a signer — et l ecart ne se verrait
  * qu apres la transaction, quand plus rien n est modifiable. */
-const CHAMPS = ['nom','sym','dec','supply','sel','desc','teinte','accent','division','eclats','facette'];
+const CHAMPS = ['nom','sym','dec','supply','sel','desc','teinte','accent','division','eclats','orbite','facette'];
 for (const el of CHAMPS) { const n = $('#' + el); n.oninput = rafraichir; n.onchange = rafraichir; }
 for (const id of [84532, 8453]) $('#t' + id).onclick = () => {
   chaine = id; $('#t84532').setAttribute('aria-selected', String(id === 84532));
@@ -859,8 +905,33 @@ async function construirePlan() {
   const pB = e.permissions[b20.toLowerCase()], pQ = e.permissions[v.quote.toLowerCase()];
   const fait = (x) => typeof x === 'bigint' ? x > 0n : null;
 
+  /* ⛔ LE PRIX SE CALCULE AVANT LES ETAPES, parce que l etape 1 en depend. Ma premiere version
+   * le calculait vingt lignes plus bas : `sqrtPrix` etait lu dans sa zone morte temporelle, et
+   * la section entiere levait un ReferenceError. Un `let` ne se hisse pas comme une fonction. */
+  /* ⚠️ `decQ` MONTE AVEC LE RESTE. En le laissant en bas j ai corrige une zone morte temporelle
+   * et j en ai cree une seconde, sur la ligne suivante — `Cannot access 'decQ' before
+   * initialization`. Deplacer du code qui depend d autre chose deplace le probleme tant qu on ne
+   * remonte pas TOUTE la dependance. Et aucune des 6 regles de coherence ne voit ca : elles
+   * verifient que les noms EXISTENT, pas qu ils sont initialises au moment ou on les lit. */
+  const decQ = await appel(v.quote, abi.selecteurs['decimals()']).then((h) => Number(BigInt(h))).catch(() => null);
+  const decB = await appel(b20, abi.selecteurs['decimals()']).then((h) => Number(BigInt(h))).catch(() => null);
+  const supply = await appel(b20, abi.selecteurs['totalSupply()']).then(BigInt).catch(() => null);
+  const valeurVoulue = BigInt(($('#poolValeur').value || '0').replace(/\D/g, '') || '0');
+  const jetons = (supply !== null && decB !== null) ? supply / 10n ** BigInt(decB) : null;
+  const quoteEst0 = cle.currency0.toLowerCase() === v.quote.toLowerCase();
+  /* ⛔ AUCUN PRIX DEVINE. Il se grave aussi definitivement qu un prix mesure : si une seule des
+   * entrees manque, on ne calcule rien et l etape 1 ne sera pas offerte. */
+  const sqrtPrix = (decQ === null || decB === null || jetons === null || jetons === 0n || valeurVoulue === 0n)
+    ? null
+    : sqrtPriceDepuisPrix({ prixNum: valeurVoulue, prixDen: jetons,
+        decDevise: decQ, decBlock: decB, deviseEst0: quoteEst0 });
+
   const etapes = [
-    { nom: '1. initialize pool', ok: e.initialisee, to: v.poolm, data: encodeInitialize(cle, PRIX_1_POUR_1) },
+    /* ⛔ PLUS DE CONSTANTE ICI. `PRIX_1_POUR_1` ignore les decimales : sur USDC(6)/block(18) elle
+   * prixe 1 block a 1e12 USDC et la pool nait morte. On pose le prix DERIVE du champ, et si on
+   * n a pas pu le calculer on n offre PAS l etape — un prix devine se grave definitivement. */
+    { nom: '1. initialize pool', ok: e.initialisee, to: v.poolm,
+      data: sqrtPrix === null ? null : encodeInitialize(cle, sqrtPrix) },
     { nom: '2. approve block → Permit2', ok: fait(pB.versPermit2), to: b20, data: encodeApprove(PERMIT2, MAX_UINT256) },
     { nom: '3. approve ' + v.quoteNom + ' → Permit2', ok: fait(pQ.versPermit2), to: v.quote, data: encodeApprove(PERMIT2, MAX_UINT256) },
     { nom: '4. Permit2 → PositionManager (block)', ok: fait(pB.versPosm), to: PERMIT2, data: encodePermit2Approve(b20, v.posm, MAX_UINT160, MAX_UINT48) },
@@ -878,10 +949,36 @@ async function construirePlan() {
    * son nombre represente dans la devise reellement utilisee.
    * ⚠️ Les decimales sont LUES sur la chaine, jamais supposees : un jeton nomme USDC ailleurs
    * pourrait en avoir 18, et coder « 6 » en dur transformerait une aide en mensonge. */
-  const decQ = await appel(v.quote, abi.selecteurs['decimals()']).then((h) => Number(BigInt(h))).catch(() => null);
+  /* `decQ` est declare plus haut, avec le calcul du prix qui en depend. */
   const humain = (n) => decQ === null ? null
     : (Number(n) / 10 ** decQ).toLocaleString('en-US', { maximumFractionDigits: 6 });
+
+  /* ⛔ CE QUE LE PRIX INITIAL SIGNIFIE, AVANT L ETAPE 1 — ET C EST IRREVERSIBLE.
+   * L ancienne constante `PRIX_1_POUR_1` (2^96) est un ratio d UNITES DE BASE, pas de jetons :
+   * elle ignore les decimales. Sur une paire USDC(6)/block(18) elle signifie
+   *   1 block = 1e12 USDC  —  la supply serait prixee 1e21 USDC, et la pool nait morte.
+   * ⛔⛔ ET J AI D ABORD ECRIT L INVERSE ICI (« 1 USDC = 1e12 blocks, n importe qui rachete tout
+   *     pour un dixieme de centime »). Deux calculs de moi differaient d un facteur 1e12 ;
+   *     raisonner une troisieme fois n aurait donne qu une troisieme opinion. Departage par
+   *     CALIBRATION sur une pool reelle — WETH/USDC mainnet, 1 WETH = 2512,05 USDC, reproduit
+   *     par la formule. Voir `test-prix.mjs`.
+   * ⇒ Le prix n est plus une constante : il est DERIVE de ce que l utilisateur declare valoir la
+   *   supply entiere, decimales et supply LUES sur la chaine. Quel prix poser reste sa decision ;
+   *   la page se contente de la rendre calculable et visible. */
+  /* ⛔ TROIS ETATS, JAMAIS DEUX. « calcule », « impossible a calculer et pourquoi », « pas encore
+   * saisi ». Un prix absent affiche comme un blanc se lirait comme un zero. */
+  const prixVue = sqrtPrix !== null
+    ? ligne('initial price', '1 block = '
+        + (Number(valeurVoulue) / Number(jetons)).toExponential(3) + ' ' + v.quoteNom
+        + '  <span class="dim">(' + jetons.toLocaleString('en-US') + ' whole blocks)</span>')
+      + ligne('sqrtPriceX96', '<span class="dim">' + sqrtPrix + '</span>')
+    : ligne('initial price', pastille(
+        valeurVoulue === 0n ? 'SET A STARTING VALUE ABOVE'
+        : jetons === 0n ? 'SUPPLY BELOW ONE WHOLE TOKEN'
+        : 'CANNOT PRICE — decimals or supply not measured',
+        valeurVoulue === 0n ? 'warn' : 'bad'));
   let vue = ligne('pair', enTexte(v.quoteNom) + ' / block')
+    + prixVue
     + ligne('you are asking for', decQ === null
         ? pastille('DECIMALS NOT MEASURED', 'warn')
         : humain(liq) + ' ' + v.quoteNom + '  <span class="dim">(' + decQ + ' decimals on this chain)</span>')
@@ -889,8 +986,16 @@ async function construirePlan() {
     + ligne('currency1', cle.currency1)
     + ligne('your block', sB === null ? '—' : sB.toString() + (sB < liq ? '  ⛔ < liquidity' : ''))
     + ligne('your ' + v.quoteNom, sQ === null ? '—' : sQ.toString() + (sQ < liq ? '  ⛔ < liquidity' : ''));
+  /* ⛔ UNE ETAPE SANS CALLDATA N EST PAS « A FAIRE ». Quand le prix n a pas pu etre calcule,
+   * l etape 1 porte `data: null` — et elle s affichait quand meme « TO DO », donc offerte au
+   * clic avec un calldata nul. « Je ne peux pas construire cette etape » et « il reste a la
+   * faire » sont deux etats opposes ; les confondre transforme une impossibilite en invitation.
+   * Trouve en exercant la section sur mainnet avec un jeton qui n y existe pas. */
   for (const s of etapes) {
-    vue += ligne(s.nom, s.ok === true ? pastille('DONE', 'ok') : s.ok === null ? pastille('NOT MEASURED', 'dim') : pastille('TO DO', 'warn'));
+    const impossible = s.data === null || s.data === undefined;
+    vue += ligne(s.nom, s.ok === true ? pastille('DONE', 'ok')
+      : impossible ? pastille('CANNOT BUILD — see above', 'bad')
+      : s.ok === null ? pastille('NOT MEASURED', 'dim') : pastille('TO DO', 'warn'));
   }
   /* ⛔ La garde de solde nomme la VRAIE cause : un premier essai avait rendu TRANSFER_FROM_FAILED,
    * ce qui IMITE PARFAITEMENT « un B20 ne peut pas etre poole ». C etait le montant. */
@@ -904,7 +1009,11 @@ async function construirePlan() {
   const suivante = etapes.find((s) => s.ok !== true);
   const b = $('#poolAgir');
   let empeche = null;
-  if (!suivante) empeche = 'Every step is done';
+  /* ⛔ ON N OFFRE PAS UNE ETAPE QU ON NE SAIT PAS CONSTRUIRE. Sans ce refus, le bouton
+   * enverrait un calldata `null` au wallet — et le refus viendrait de la chaine, apres coup. */
+  if (suivante && (suivante.data === null || suivante.data === undefined)) {
+    empeche = 'Cannot build "' + suivante.nom + '" — read the reason above';
+  } else if (!suivante) empeche = 'Every step is done';
   else if (!compte) empeche = 'Connect your wallet first (button below)';
   else if (manque) empeche = 'Not enough balance for that liquidity';
   b.disabled = empeche !== null;
