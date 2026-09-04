@@ -985,6 +985,33 @@ async function construirePlan() {
   const liq = BigInt(($('#poolLiq').value || '0').replace(/\D/g, '') || '0');
   if (liq === 0n) { box.innerHTML = ligne('state', pastille('LIQUIDITY MUST BE > 0', 'bad')); return null; }
 
+  /* ⛔⛔ CE BLOCK EXISTE-T-IL SUR CE RESEAU ? LA CAUSE LA PLUS FREQUENTE, ET ELLE ETAIT MUETTE.
+   *    Cas reel du 2026-09-04 : BLOCK 0 vit sur Base MAINNET ; la page etait sur Sepolia. Toutes
+   *    les lectures echouaient et la section affichait « NOT MEASURED » et « CANNOT PRICE —
+   *    decimals or supply not measured ». Chaque mot etait VRAI et aucun ne disait la cause :
+   *    le jeton n existe pas ICI. On lisait un diagnostic technique la ou il fallait un geste —
+   *    changer de reseau. Un refus qui ne nomme pas sa cause envoie chercher au mauvais endroit.
+   * ⛔ ET « PAS DE CODE » NE VEUT PAS DIRE « MAUVAISE ADRESSE ». Sous le prefixe 0xb200, c est une
+   *    adresse B20 valide qui n a simplement rien de deploye sur CE reseau — souvent parce qu on
+   *    n est pas sur le bon. Les deux appellent des gestes opposes : corriger l adresse, ou
+   *    changer de chaine. On dit lequel.
+   * ⚠️ TROIS ETATS : existe / n existe pas ici / lecture impossible. Une lecture ratee n est pas
+   *    une absence, et la confondre inviterait a changer de reseau pour rien. */
+  let codeIci = null;
+  try { codeIci = await rpc('eth_getCode', [b20, 'latest']); } catch { codeIci = null; }
+  if (codeIci !== null && codeIci === '0x') {
+    const autres = Object.keys(RESEAUX).filter((c) => String(c) !== String(chaine))
+      .map((c) => RESEAUX[c].nom).join(' or ');
+    box.innerHTML = ligne('state', pastille('THIS BLOCK DOES NOT EXIST ON ' + RESEAUX[chaine].nom.toUpperCase(), 'bad'))
+      + ligne('address', b20)
+      + ligne('what to do', 'Nothing is deployed at this address on ' + RESEAUX[chaine].nom + '.'
+        + '<br>If this is a mainnet block, switch the network above to ' + autres + '.'
+        + '<br><span class="dim">The address itself is fine — a B20 address is the same on every '
+        + 'chain, because it derives from (variant, creator, salt). It simply has nothing living '
+        + 'at it here.</span>');
+    return null;
+  }
+
   const cle = cleDePool(v.quote, b20);
   const appel = (to, data) => rpc('eth_call', [{ to, data }, 'latest']);
   const proprietaire = compte || '0x0000000000000000000000000000000000000001';
