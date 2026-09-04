@@ -362,7 +362,7 @@ async function rpc(m, p, essais = 4, attente = 350) {
     if (!j.error) return j.result;
     /* ⛔ Un refus d execution est DEFINITIF : on le remonte tel quel, sans le rejouer. */
     const msg = String(j.error.message || '');
-    if (/revert|invalid|not found|unauthor/i.test(msg)) throw new Error(msg);
+    if (/revert|invalid|not found|unauthor|unsupported/i.test(msg)) throw new Error(msg);
     derniere = new Error(msg);
     if (k < essais - 1) await new Promise((r) => setTimeout(r, attente * 2 ** k));
   }
