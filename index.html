@@ -339,7 +339,7 @@ import { encodeCreateB20, paramsAsset, encodeUpdateSupplyCap, encodeUpdateContra
 /* ⛔ Le formatage des montants vit dans son module POUR ETRE TESTE : la conversion wei -> ETH
  * fait de la division et du remplissage sur des BigInt, et elle arrondit VERS LE HAUT — un cout
  * affiche ne doit jamais etre inferieur au cout reel. 8 tests dans `test-montants.mjs`. */
-import { formaterEth, estArrondi, formaterGas } from './montants.js';
+import { formaterEth, estArrondi, formaterGas, entierStrict } from './montants.js';
 import { classerUri, sourceImage, metadonnees, enAttribut, PASSERELLE_PAR_DEFAUT } from './lecteur.js';
 import { listerCreations, creationsDe } from './index-blocks.js';
 import { cleDePool, etatPool, encodeInitialize, encodeApprove, encodePermit2Approve, encodeMintPosition,
@@ -525,14 +525,21 @@ function lire() {
   const nom = $('#nom').value.trim() || 'Block';
   const sym = ($('#sym').value.trim() || 'BLOCK').toUpperCase();
   const dec = Math.min(18, Math.max(6, parseInt($('#dec').value || '18', 10)));
-  const unites = BigInt(($('#supply').value || '0').replace(/\D/g, '') || '0');
+  /* ⛔ LA SUPPLY EST GRAVEE A LA CREATION, et jamais rejouable : le block naît sans admin, donc
+   * personne ne pourra jamais en emettre un de plus ni en detruire un. « 1.5 » lu comme 15
+   * creerait un jeton a 10 fois la supply voulue, definitivement. Voir `entierStrict`. */
+  const eSup = entierStrict($('#supply').value);
+  const unites = eSup.etat === 'OK' ? eSup.valeur : 0n;
   const supply = unites * 10n ** BigInt(dec);
   const svg = logoSvg(paramsLogo(sym));
   const meta = { name: nom, symbol: sym, description: $('#desc').value.trim()
       || `Block created with no administrator: no account holds DEFAULT_ADMIN_ROLE or MINT_ROLE, at any point, including at creation. The supply of ${unites} ${sym} is minted in the creation transaction itself and equals the cap. No further unit can ever exist.`,
     image: 'data:image/svg+xml;base64,' + b64(svg) };
   const uri = 'data:application/json;base64,' + b64(JSON.stringify(meta));
-  return { nom, sym, dec, unites, supply, sel: $('#sel').value.trim() || 'block-v1', svg, uri };
+  /* ⛔ LE REFUS VOYAGE AVEC LE RESULTAT. Le laisser ici en silence rendrait une supply de 0 sans
+   * que rien a l ecran ne dise pourquoi — un zero muet sur le chiffre le plus definitif de la page. */
+  return { nom, sym, dec, unites, supply, sel: $('#sel').value.trim() || 'block-v1', svg, uri,
+    refusSupply: eSup.etat === 'REFUSE' ? eSup : null };
 }
 
 function calldata(f, porteur) {
@@ -581,7 +588,13 @@ async function rafraichir() {
     + ligne('value', '0')
     + ligne('data', data.slice(0, 24) + '… (' + (data.length / 2 - 1) + ' bytes)')
     + ligne('gas', cout.texte)
-    + ligne('supply', f.supply.toString() + ' (' + f.unites + ' × 10^' + f.dec + ')')
+    + (f.refusSupply
+        ? ligne('supply', pastille('NOT A WHOLE NUMBER', 'bad')
+            + '<br><span class="dim">You typed <b>' + enTexte(f.refusSupply.tape) + '</b> — '
+            + enTexte(f.refusSupply.pourquoi)
+            + '<br>The supply is minted once, at creation, and this block has no admin — nobody can '
+            + 'ever mint one more or destroy one. Getting it wrong is permanent.</span>')
+        : ligne('supply', f.supply.toString() + ' (' + f.unites + ' × 10^' + f.dec + ')'))
     + ligne('cap', pastille('EQUALS THE SUPPLY', 'ok'))
     + ligne('admin', pastille('NONE', 'ok'))
     /* ⛔ SI LE SEL EST DEJA PRIS, MONTRER LE BLOCK — il est a l utilisateur, il l a cree.
@@ -982,7 +995,15 @@ async function construirePlan() {
   if (!d0) { $('#poolVue').innerHTML = ligne('state', pastille('NO QUOTE CURRENCY FOR THIS CHAIN', 'bad')); return null; }
   const v = { ...V4[chaine], quote: d0.adr, quoteNom: d0.nom, enveloppable: d0.enveloppable };
   if (!v) { box.innerHTML = ligne('state', pastille('CHAIN NOT SUPPORTED', 'bad')); return null; }
-  const liq = BigInt(($('#poolLiq').value || '0').replace(/\D/g, '') || '0');
+  /* ⛔ REFUSER, PAS NETTOYER. Voir `entierStrict` : l ancien `.replace(/\D/g,'')` lisait « 1.5 »
+   * comme 15 et « 0.001 » comme 1, en silence, sur des champs qui decident d argent. */
+  const eLiq = entierStrict($('#poolLiq').value);
+  if (eLiq.etat === 'REFUSE') {
+    box.innerHTML = ligne('state', pastille('LIQUIDITY IS NOT A WHOLE NUMBER', 'bad'))
+      + ligne('you typed', enTexte(eLiq.tape)) + ligne('why', enTexte(eLiq.pourquoi));
+    return null;
+  }
+  const liq = eLiq.etat === 'OK' ? eLiq.valeur : 0n;
   if (liq === 0n) { box.innerHTML = ligne('state', pastille('LIQUIDITY MUST BE > 0', 'bad')); return null; }
 
   /* ⛔⛔ CE BLOCK EXISTE-T-IL SUR CE RESEAU ? LA CAUSE LA PLUS FREQUENTE, ET ELLE ETAIT MUETTE.
@@ -1067,7 +1088,10 @@ async function construirePlan() {
    * de la premiere pour agir, et lister les trois noierait le geste. */
   const causePrix = [[decQ, 'the quote currency decimals', lQ], [decB, 'the block decimals', lB],
     [supply, 'the block supply', lS]].find(([val]) => val === null);
-  const valeurVoulue = BigInt(($('#poolValeur').value || '0').replace(/\D/g, '') || '0');
+  /* ⛔ LE CHAMP LE PLUS DANGEREUX DE LA PAGE : il fixe le prix initial, grave a l etape 1 et
+   * jamais rejouable. « 1.5 » lu comme 15 ouvrait une pool a un prix 10 fois faux, en silence. */
+  const eVal = entierStrict($('#poolValeur').value);
+  const valeurVoulue = eVal.etat === 'OK' ? eVal.valeur : 0n;
   const jetons = (supply !== null && decB !== null) ? supply / 10n ** BigInt(decB) : null;
   const quoteEst0 = cle.currency0.toLowerCase() === v.quote.toLowerCase();
   /* ⛔ AUCUN PRIX DEVINE. Il se grave aussi definitivement qu un prix mesure : si une seule des
@@ -1184,6 +1208,10 @@ async function construirePlan() {
      * disait ni LAQUELLE des trois lectures manquait, ni POURQUOI, donc pas quoi faire. Une
      * limite de debit appelle « reessaie » ; une adresse sans jeton appelle « change d adresse ».
      * Le meme texte pour les deux envoie chercher au mauvais endroit. */
+    : eVal.etat === 'REFUSE'
+      ? ligne('initial price', pastille('STARTING VALUE IS NOT A WHOLE NUMBER', 'bad')
+          + '<br><span class="dim">You typed <b>' + enTexte(eVal.tape) + '</b> — ' + enTexte(eVal.pourquoi)
+          + '<br>This number sets the pool price, and step 1 engraves it for good.</span>')
     : ligne('initial price', pastille(
         valeurVoulue === 0n ? 'SET A STARTING VALUE ABOVE'
         : jetons === 0n ? 'SUPPLY BELOW ONE WHOLE TOKEN'
@@ -1346,7 +1374,14 @@ async function etatSwap() {
   const v = dS ? { ...V4[chaine], quote: dS.adr, quoteNom: dS.nom } : null;
   const ur = ROUTEUR[chaine], q = QUOTER[chaine];
   if (!v || !ur) { box.innerHTML = ligne('state', pastille('CHAIN NOT SUPPORTED', 'bad')); return null; }
-  const montant = BigInt(($('#swapMontant').value || '0').replace(/\D/g, '') || '0');
+  /* ⛔ REFUSER, PAS NETTOYER — c est un montant qu on vend. Voir `entierStrict`. */
+  const eM = entierStrict($('#swapMontant').value);
+  if (eM.etat === 'REFUSE') {
+    box.innerHTML = ligne('state', pastille('AMOUNT IS NOT A WHOLE NUMBER', 'bad'))
+      + ligne('you typed', enTexte(eM.tape)) + ligne('why', enTexte(eM.pourquoi));
+    return null;
+  }
+  const montant = eM.etat === 'OK' ? eM.valeur : 0n;
   if (montant === 0n) { box.innerHTML = ligne('state', pastille('AMOUNT MUST BE > 0', 'bad')); return null; }
 
   const cle = cleDePool(v.quote, b20);

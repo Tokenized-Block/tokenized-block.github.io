@@ -63,3 +63,44 @@ export function estArrondi(wei, decimales = 9) {
 export function formaterGas(gaz) {
   return BigInt(gaz).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 }
+
+/**
+ * Lit un ENTIER tape par un humain — et REFUSE plutot que de transformer.
+ * ================================================================================================
+ * ⛔⛔ CE QUE FAISAIT L ANCIEN NETTOYEUR, ET CE QUE CA COUTAIT. Cinq champs de la page passaient
+ *    par `.replace(/\D/g, '')`, qui SUPPRIME tout ce qui n est pas un chiffre au lieu de refuser.
+ *    Mesure du 2026-09-04, dans la page en cours :
+ *        « 0.001 » -> 1        (1000 fois trop)
+ *        « 1.5 »   -> 15       (10 fois trop)
+ *        « 1e6 »   -> 16       (62 500 fois trop)
+ *        « -5 »    -> 5        (le signe disparait)
+ *        « abc »   -> 0
+ *    Quatre de ces champs decident d ARGENT ou d IRREVERSIBLE : le prix initial de la pool (grave
+ *    a l etape 1 et jamais rejouable), la supply du jeton a sa creation, le depot de liquidite,
+ *    le montant d un swap. Taper « 1.5 » ouvrait donc une pool a un prix 10 fois faux, en
+ *    silence, sans un mot a l ecran. Une saisie mal lue est pire qu une saisie refusee : l une
+ *    coute un clic, l autre coute la pool.
+ *
+ * ⛔ ON N ACCEPTE QUE DES CHIFFRES, ET LES ESPACES DE GROUPEMENT. Pas la virgule, pas le point :
+ *    « 10.000 » vaut dix mille pour un francophone et dix pour un anglophone. Un separateur
+ *    ambigu ne se DEVINE pas — le deviner, c est choisir a la place de l utilisateur sur un
+ *    chiffre qui va etre grave.
+ *
+ * ⚠️ TROIS ETATS, JAMAIS DEUX : une valeur, « rien de tape », ou « ce n est pas un entier » — ce
+ *    dernier PORTANT ce qui a ete tape, pour que le message puisse le montrer.
+ */
+export function entierStrict(texte) {
+  const t = String(texte ?? '').trim();
+  if (t === '') return { etat: 'VIDE' };
+  const sansEspaces = t.replace(/[\s _]/g, '');
+  if (!/^\d+$/.test(sansEspaces)) {
+    return { etat: 'REFUSE', tape: t,
+      pourquoi: /[.,]/.test(t)
+        /* ⛔ Le cas le plus dangereux merite son propre message : c est celui qui a l air de
+         * marcher. On dit ce que ca VAUDRAIT si on l acceptait, pour que l ecart se voie. */
+        ? 'Whole numbers only — "' + t + '" has a decimal separator, and its meaning depends on '
+          + 'your locale. Type the amount in raw units instead.'
+        : 'Whole numbers only — "' + t + '" is not a whole number.' };
+  }
+  return { etat: 'OK', valeur: BigInt(sansEspaces) };
+}
