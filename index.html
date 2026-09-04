@@ -751,13 +751,27 @@ function peuplerDevises() {
     + (d.enveloppable ? ' — wrap your own ETH, no exchange needed' : ' — you must already hold it')
     + '</option>').join('');
   if (liste.some((d) => d.adr.toLowerCase() === String(avant).toLowerCase())) sel.value = avant;
+  /* ⛔⛔ L ETIQUETTE PORTE SON UNITE, ET C EST UNE CORRECTION. « Starting value of the whole
+   *    supply » ne disait NI la devise NI l unite, sur le champ qui GRAVE le prix. Le 2026-09-04,
+   *    je l ai moi-meme lu comme des unites BRUTES (wei) alors qu il se compte en unites
+   *    ENTIERES : taper 1000000 signifie « la supply entiere vaut 1 000 000 WETH », pas
+   *    1 000 000 wei — un facteur 1e18 d ecart, sur un nombre qui ne se rejoue pas.
+   *    Si l auteur de la page se trompe en la relisant, l utilisateur n a aucune chance.
+   * ⚠️ L etiquette suit la devise CHOISIE : la figer dirait « WETH » a quelqu un qui a pris USDC. */
+  const d = liste.find((x) => x.adr.toLowerCase() === String(sel.value).toLowerCase()) || liste[0];
+  const lab = document.querySelector('label[for="poolValeur"]');
+  if (lab && d) lab.textContent = 'Starting value of the whole supply — in whole ' + d.nom
+    + ' (not wei)';
 }
 /* ⛔ CET APPEL EST DESCENDU EN BAS DU MODULE. Ici, il s executait AVANT la declaration de
  * `DEVISES` qu il lit — `Cannot access 'DEVISES' before initialization`, et toute la page restait
  * vide. La regle 7 ne l a PAS vu : la lecture est DANS la fonction, et sa borne dit exactement
  * que les lectures depuis une fonction imbriquee sont indecidables sans suivre les sites d appel.
  * La borne etait ecrite ; elle vient de mordre. */
-$('#poolDevise').onchange = () => { plan = null; $('#poolVue').innerHTML = ''; };
+/* ⛔ L etiquette du champ de prix nomme la devise CHOISIE : changer de devise doit la remettre a
+ * jour, sinon elle dirait « whole WETH » a quelqu un qui vient de prendre USDC — une unite fausse
+ * sur le champ qui grave le prix. */
+$('#poolDevise').onchange = () => { plan = null; $('#poolVue').innerHTML = ''; peuplerDevises(); };
 $('#relire').onclick = rafraichir;
 
 /**
