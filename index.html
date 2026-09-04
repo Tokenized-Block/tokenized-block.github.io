@@ -347,7 +347,8 @@ import { cleDePool, etatPool, encodeInitialize, encodeApprove, encodePermit2Appr
    * portee de main la constante qui prixe une pool a 1e12 — un import mort se relit comme une
    * option encore valide. Le prix se DERIVE, il ne se choisit plus dans une liste. */
   MAX_UINT256, MAX_UINT160, MAX_UINT48, MAX_UINT128, TICK_BAS, TICK_HAUT, sqrtPriceDepuisPrix, montantsPourLiquidite,
-  encodeSwapExactInSingle, encodeQuote, formeAcceptee, AVEC_MINHOP, selecteur as sel4 } from './pool.js';
+  encodeSwapExactInSingle, encodeQuote, formeAcceptee, AVEC_MINHOP, selecteur as sel4,
+  essaiEtape } from './pool.js';
 
 const $ = (s) => document.querySelector(s);
 const etat = $('#etat');
@@ -1211,6 +1212,42 @@ async function construirePlan() {
   } else if (!suivante) empeche = 'Every step is done';
   else if (!compte) empeche = 'Connect your wallet first (button below)';
   else if (manque) empeche = 'Not enough balance for that liquidity';
+  /* ⛔ PREFLIGHT : ON DEMANDE A LA CHAINE AVANT D OUVRIR LE WALLET.
+   * Mesure du 2026-09-04 : `eth_call` sur `initialize` d une pool FRAICHE (Base mainnet) rend
+   * `0x65316` sans rien ecrire — la chaine accepte nos octets avant toute signature. Un refus,
+   * lui, arrive ici gratuitement au lieu d arriver apres une transaction payee.
+   * ⚠️ `appelBrut` de cette page NE LEVE PAS : il rend le JSON-RPC tel quel, erreur comprise.
+   *    `essaiEtape` attend un appelant qui LEVE. On adapte ICI plutot que d affaiblir le helper —
+   *    une copie plus faible du helper correct est le defaut le plus repete de ce depot.
+   * ⚠️ SEULEMENT L ETAPE SUIVANTE. Essayer les six enchainerait des reverts LEGITIMES (l etape 6
+   *    depend d approbations que l etape 4 n a pas posees) et afficherait un defaut la ou il n y
+   *    en a pas. Un seul appel reseau, borne. */
+  const leve = async (tx) => {
+    const j = await appelBrut(tx);
+    if (j.error) throw new Error(j.error.message + (j.error.data ? ' (' + j.error.data + ')' : ''));
+    return j.result;
+  };
+  /* ⛔ NE PAS SURCHARGER `null` POUR DIRE « ne mesure pas ». Premiere version : je passais
+   * `etape: null` quand le plan etait deja bloque — et le helper repondait « no step left to
+   * try », alors qu il restait SIX etapes. Message vrai sur le mauvais fait : l utilisateur
+   * lisait « plus rien a faire » devant un plan entierement a faire. Trouve en EXERCANT la page,
+   * pas en la relisant. On nomme donc la vraie raison ici, et on n appelle pas le helper. */
+  const essai = empeche !== null
+    ? { etat: 'NON_MESURE', pourquoi: 'nothing was sent to the chain — fix the blocker above first' }
+    : await essaiEtape({ appelBrut: leve, de: compte, etape: suivante });
+  vue += ligne('chain preflight', essai.etat === 'ACCEPTE'
+      ? pastille('THE CHAIN ACCEPTS THIS STEP', 'ok')
+        + ' <span class="dim">returned ' + enTexte(String(essai.retour)) + '</span>'
+    : essai.etat === 'REFUSE'
+      ? pastille('THE CHAIN REFUSES THIS STEP', 'bad')
+        + '<br><span class="dim">' + enTexte(essai.pourquoi) + '</span>'
+      /* ⛔ « pas essaye » n est PAS « accepte ». On dit lequel des deux, et pourquoi. */
+      : pastille('NOT TRIED', 'dim') + ' <span class="dim">' + enTexte(essai.pourquoi || '') + '</span>');
+  /* ⛔ UN REFUS DE LA CHAINE FERME LE BOUTON. Sans ca le preflight serait decoratif : il dirait
+   * « refuse » et laisserait quand meme signer. Une garde qui n empeche rien n est pas une garde.
+   * ⚠️ Un ACCEPTE n OUVRE rien : il ne leve aucune des autres raisons de blocage, et il ne promet
+   *    pas que l etat sera le meme au moment de signer. Il ferme, il n autorise pas. */
+  if (essai.etat === 'REFUSE') empeche = 'The chain refuses this step — read the reason above';
   b.disabled = empeche !== null;
   b.textContent = empeche ? empeche : 'Run: ' + suivante.nom;
   if (empeche && !compte) vue += ligne('next', pastille('CONNECT YOUR WALLET', 'warn'));

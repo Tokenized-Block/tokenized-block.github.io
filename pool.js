@@ -96,6 +96,50 @@ export function poolId(cle) {
 
 /** ⛔ Lit l etat REEL avant d agir : une etape deja faite ne doit pas etre refaite, et une etape
  *  manquante ne doit pas etre sautee. `appel` est injecte pour rester testable hors reseau. */
+/**
+ * ESSAIE une etape par `eth_call` AVANT d ouvrir le wallet.
+ * ================================================================================================
+ * ⛔ POURQUOI. Mesure du 2026-09-04 sur Base mainnet : un `eth_call` sur `initialize` d une pool
+ *    FRAICHE execute le meme code, au meme etat, avec le meme `from` — sans signature, sans
+ *    ecriture, sans frais. Le PoolManager a repondu `0x65316` (tick 414 486) et l etat n avait pas
+ *    bouge. La classe « nos octets sont mal formes » est donc eliminable AVANT le geste humain,
+ *    et le refus, s il vient, arrive gratuitement au lieu d arriver apres une transaction payee.
+ *
+ * ⛔ TROIS ETATS, JAMAIS DEUX. `ACCEPTE` / `REFUSE` / `NON_MESURE`. Un essai non fait n est pas un
+ *    essai reussi : sans wallet connecte on ne peut pas prendre `from` — et lire avec l adresse
+ *    de substitution repondrait sur QUELQU UN D AUTRE, la faute exacte deja commise sur les
+ *    soldes. Une etape sans calldata (le mint, construit au moment de signer) est NON_MESURE
+ *    aussi, pas verte.
+ *
+ * ⚠️ CE QU IL NE PROUVE PAS. (1) L etat peut changer entre l essai et la transaction — un `eth_call`
+ *     est une photo. (2) `initialize` accepte n importe quel prix dans les bornes : un prix absurde
+ *     passerait ici. (3) Il ne dit rien du gas. Un ACCEPTE reduit le risque, il ne l annule pas.
+ *
+ * ⚠️ ET IL NE S APPLIQUE QU A L ETAPE SUIVANTE. Essayer les six enchainerait des reverts LEGITIMES
+ *     — l etape 6 depend d approbations que l etape 4 n a pas encore posees — et un refus legitime
+ *     affiche comme un defaut ferait fuir sur une pool qui va tres bien.
+ *
+ * @param {Function} appelBrut  (tx) => Promise<hex>, leve sur revert. Injecte, donc testable.
+ */
+export async function essaiEtape({ appelBrut, de, etape }) {
+  if (!etape) return { etat: 'NON_MESURE', pourquoi: 'no step left to try' };
+  if (!de) return { etat: 'NON_MESURE', pourquoi: 'connect a wallet — trying from someone else would answer about them' };
+  if (etape.data === null || etape.data === undefined) {
+    return { etat: 'NON_MESURE', pourquoi: 'this step has no calldata yet' };
+  }
+  const tx = { from: de, to: etape.to, data: etape.data };
+  /* ⚠️ `value` compte : l etape 0 (wrap) reverte sans elle. On ne la met que si elle existe —
+   * un `value` a zero sur un appel qui n en attend pas est inoffensif, mais un `undefined`
+   * serialise en JSON casse certains noeuds. */
+  if (etape.valeur) tx.value = etape.valeur;
+  try {
+    const r = await appelBrut(tx);
+    return { etat: 'ACCEPTE', retour: r };
+  } catch (e) {
+    return { etat: 'REFUSE', pourquoi: e && e.message ? e.message : String(e) };
+  }
+}
+
 export async function etatPool({ appel, cle, jetons, proprietaire, posm, permit2, stateView }) {
   const motAdr2 = (a) => a.replace(/^0x/, '').toLowerCase().padStart(64, '0');
   const lire = async (to, data) => { try { return await appel(to, data); } catch (e) { return { err: e.message }; } };
