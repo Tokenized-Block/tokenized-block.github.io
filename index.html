@@ -1220,7 +1220,14 @@ async function etatSwap() {
   const proprietaire = compte || '0x0000000000000000000000000000000000000001';
   const appel = (to, data) => rpc('eth_call', [{ to, data }, 'latest']);
 
-  let vue = ligne('selling', enTexte(b20)) + ligne('for', enTexte(v.quoteNom));
+  /* ⛔ DIRE D OU VIENT LA DEVISE, PAS LA DUPLIQUER. Le selecteur vit dans la section Liquidity et
+   * le swap le suivait en silence : on lisait « for: USDC » sans aucun controle a portee, ni
+   * moyen de comprendre pourquoi.
+   * ⚠️ Un SECOND selecteur serait pire : deux endroits qui lisent la devise separement finiraient
+   *    par diverger, et une `PoolKey` differente n est pas la meme pool vue autrement — c est une
+   *    AUTRE pool, dont une vide. Un seul point de verite, et on le NOMME. */
+  let vue = ligne('selling', enTexte(b20))
+    + ligne('for', enTexte(v.quoteNom) + '  <span class="dim">(set by « Quote currency » in Liquidity, above)</span>');
 
   /* ── le quote : gratuit, et il dit si la pool est cotable AVANT tout le reste ── */
   let sortie = null;
