@@ -1,0 +1,155 @@
+<!-- block-0.html — la page qui remet a TON wallet la transaction deja auditee. Rien d autre.
+================================================================================================
+⛔ CETTE PAGE NE PEUT ENVOYER QU UNE SEULE TRANSACTION. Le calldata est charge depuis
+   `A-SIGNER-mainnet.json`, celui qui a passe les 20 controles de `audit-mainnet.mjs`, et il
+   n est PAS reconstruit ici : le reconstruire, c est risquer d en produire un autre.
+   ⚠️ L app principale ne peut PAS le produire — mesure : elle cable un `contractURI` en `data:`
+   et son sel par defaut differe. Elle creerait un AUTRE block, a une AUTRE adresse.
+
+⛔ ELLE NE DETIENT AUCUNE CLE. Elle encode, affiche, et appelle `eth_sendTransaction`. Le wallet
+   montre la transaction et c est un humain qui accepte. C est la propriete que le projet vend :
+   elle ne peut pas etre la premiere chose qu on abandonne.
+
+⛔ ET ELLE REFUSE D ELLE-MEME dans quatre cas, verifies SUR LA CHAINE juste avant :
+   chaine != 8453 · adresse deja prise · la factory refuse le calldata · solde insuffisant.
+   Un bouton actif sur un etat non verifie serait un piege, pas un raccourci. -->
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BLOCK 0 — sign it yourself</title>
+<style>
+:root{color-scheme:dark}
+body{margin:0;background:#07090f;color:#dce6f5;font:15px/1.55 ui-sans-serif,system-ui,sans-serif;padding:22px}
+.w{max-width:720px;margin:0 auto}
+h1{font-size:20px;margin:0 0 4px}
+.sub{color:#7f8ba3;margin:0 0 22px}
+.card{background:#0d1220;border:1px solid #1c2740;border-radius:14px;padding:16px;margin-bottom:14px}
+.row{display:flex;gap:12px;padding:5px 0;border-bottom:1px solid #141c2e;font-size:13px}
+.row:last-child{border:0}
+.k{color:#7f8ba3;min-width:150px}
+.v{flex:1;word-break:break-all;font-family:ui-monospace,monospace}
+.p{display:inline-block;padding:1px 8px;border-radius:99px;font-size:11px;font-weight:700}
+.ok{background:#0d3320;color:#63e6a0}.bad{background:#3a1116;color:#ff8b96}
+.warn{background:#3a2c0d;color:#ffcc55}.dim{background:#1a2133;color:#8290a8}
+button{width:100%;padding:13px;border:0;border-radius:11px;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px}
+.go{background:#2f6ef0;color:#fff}.go:disabled{background:#1a2133;color:#6b788f;cursor:not-allowed}
+.sec{background:#141c2e;color:#b8c6dc}
+#msg{white-space:pre-wrap;font-size:13px;margin-top:12px;color:#9fb0c9}
+code{background:#141c2e;padding:1px 5px;border-radius:5px;font-size:12px}
+</style>
+<div class="w">
+<h1>BLOCK 0</h1>
+<p class="sub">The transaction below was audited byte for byte. This page hands it to your wallet — it holds no key and can send nothing else.</p>
+
+<div class="card"><div id="fiche"></div></div>
+<button class="sec" id="revoir">Re-check the chain</button>
+<button class="go" id="envoyer" disabled>Checking…</button>
+<div id="msg"></div>
+</div>
+
+<script type="module">
+const RPC = 'https://mainnet.base.org';
+const $ = (s) => document.querySelector(s);
+const ligne = (k, v) => `<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`;
+const p = (t, c) => `<span class="p ${c}">${t}</span>`;
+const dire = (t) => { $('#msg').textContent = t; };
+
+/* ⛔ LE CALLDATA VIENT DU FICHIER AUDITE, il n est pas reconstruit ici. */
+const req = await (await fetch('./A-SIGNER-mainnet.json')).json();
+
+let n = 0;
+async function rpc(m, params) {
+  const r = await fetch(RPC, { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: ++n, method: m, params }) });
+  return r.json();
+}
+
+async function verifier() {
+  $('#envoyer').disabled = true;
+  $('#envoyer').textContent = 'Checking the chain…';
+  const raisons = [];
+
+  const chaine = parseInt((await rpc('eth_chainId', [])).result, 16);
+  const code = (await rpc('eth_getCode', [req.adresseAttendue, 'latest'])).result;
+  const libre = code === '0x';
+  if (!libre) raisons.push('the expected address is already taken');
+
+  const appel = await rpc('eth_call', [{ from: req.from, to: req.to, data: req.data }, 'latest']);
+  const rendue = appel.error ? null : '0x' + String(appel.result).slice(-40);
+  if (!rendue) raisons.push('the factory refuses this calldata: ' + (appel.error?.message || '?'));
+  else if (rendue.toLowerCase() !== req.adresseAttendue.toLowerCase()) {
+    raisons.push('the factory returns a DIFFERENT address than the audited one');
+  }
+
+  const g = await rpc('eth_estimateGas', [{ from: req.from, to: req.to, data: req.data }]);
+  const prix = BigInt((await rpc('eth_gasPrice', [])).result);
+  const solde = BigInt((await rpc('eth_getBalance', [req.from, 'latest'])).result);
+  const gaz = g.error ? null : BigInt(g.result);
+  const cout = gaz === null ? null : gaz * prix;
+  if (cout !== null && solde < cout) raisons.push('the signer cannot cover the gas');
+
+  const eth = (w) => (Number(w) / 1e18).toFixed(9);
+  $('#fiche').innerHTML =
+      ligne('network', 'Base mainnet (' + chaine + ')' + (chaine === 8453 ? ' ' + p('OK', 'ok') : ' ' + p('WRONG CHAIN', 'bad')))
+    + ligne('sign from', req.from)
+    + ligne('to', req.to + ' <span class="k">(the B-20 factory)</span>')
+    + ligne('value', '0 ' + p('SENDS NO ETH', 'ok'))
+    + ligne('salt', req.sel)
+    + ligne('creates', libre ? rendue || req.adresseAttendue : req.adresseAttendue + ' ' + p('ALREADY TAKEN', 'bad'))
+    + ligne('address free', libre ? p('YES', 'ok') : p('NO', 'bad'))
+    + ligne('factory accepts', rendue ? p('YES — returns the audited address', 'ok') : p('NO', 'bad'))
+    + ligne('supply', req.supply + ' <span class="k">(cap = supply, admin = none)</span>')
+    + ligne('metadata', req.contractURI)
+    + ligne('gas', gaz === null ? p('NOT MEASURED', 'warn')
+        : gaz.toString() + ' × ' + prix + ' wei ≈ <b>' + eth(cout) + ' ETH</b>')
+    + ligne('balance', eth(solde) + ' ETH' + (cout && solde >= cout
+        ? ' <span class="k">(' + (Number(solde) / Number(cout)).toFixed(1) + '× the cost)</span>' : ''))
+    + ligne('calldata', req.data.slice(0, 40) + '… <span class="k">(' + (req.data.length / 2 - 1) + ' bytes)</span>');
+
+  const pret = chaine === 8453 && libre && rendue && raisons.length === 0;
+  $('#envoyer').disabled = !pret;
+  $('#envoyer').textContent = pret ? 'Create BLOCK 0 — your wallet will ask' : 'Blocked: ' + (raisons[0] || 'checking');
+  dire(pret ? 'Every check passed against the chain, just now.\nYour wallet will show the transaction. Read the destination before accepting.'
+            : '⛔ ' + raisons.join('\n⛔ '));
+}
+
+$('#revoir').onclick = verifier;
+
+$('#envoyer').onclick = async () => {
+  if (!window.ethereum) return dire("No wallet in this browser.\nOpen this page inside your wallet's browser.");
+  try {
+    const [compte] = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    if (compte.toLowerCase() !== req.from.toLowerCase()) {
+      return dire('⛔ Wrong account.\nThis transaction must be signed by ' + req.from + '\nyour wallet offers ' + compte);
+    }
+    const id = parseInt(await window.ethereum.request({ method: 'eth_chainId' }), 16);
+    if (id !== 8453) {
+      await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x2105' }] });
+    }
+    /* ⛔ ON REVERIFIE APRES LE CHANGEMENT DE RESEAU. Le consentement d avant l aller-retour ne
+     * vaut plus : entre-temps le wallet a pu changer de compte ou de chaine. */
+    const id2 = parseInt(await window.ethereum.request({ method: 'eth_chainId' }), 16);
+    if (id2 !== 8453) return dire('⛔ Still not on Base mainnet. Nothing was sent.');
+    dire('Your wallet will open. Re-read the destination — it must be ' + req.to);
+    const hash = await window.ethereum.request({ method: 'eth_sendTransaction',
+      params: [{ from: req.from, to: req.to, value: '0x0', data: req.data }] });
+    dire('Sent: ' + hash + '\nWaiting for the receipt…');
+    for (let i = 0; i < 40; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const r = (await rpc('eth_getTransactionReceipt', [hash])).result;
+      if (!r) continue;
+      /* ⛔ UN ENVOI REUSSI N EST PAS UNE CREATION. On lit le code a l adresse. */
+      const c = (await rpc('eth_getCode', [req.adresseAttendue, 'latest'])).result;
+      return dire(r.status === '0x1'
+        ? '✅ BLOCK 0 exists.\n' + req.adresseAttendue + '\ncode at that address: ' + c
+          + '\nhttps://basescan.org/tx/' + hash
+        : '⛔ REVERTED on-chain. Nothing was created.\nhttps://basescan.org/tx/' + hash);
+    }
+    dire('Sent but no receipt yet.\n' + hash + '\nPress « Re-check the chain ».');
+  } catch (e) {
+    /* ⛔ « refuse » et « casse » sont deux faits opposes. */
+    const refus = e && (e.code === 4001 || /reject|denied/i.test(String(e.message || e)));
+    dire(refus ? 'You declined. Nothing was sent.' : 'Failed: ' + (e.message || e));
+  }
+};
+
+verifier();
+</script>
