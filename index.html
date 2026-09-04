@@ -994,7 +994,28 @@ async function construirePlan() {
    * est une etape qu on apprend a ignorer.
    * ⚠️ `deposit()` est PAYABLE — c est le seul endroit de l app ou une transaction porte de la
    *    valeur, et le montant est exactement ce qui manque. */
-  const manqueDevise = (sQ !== null && sQ < liq) ? liq - sQ : 0n;
+  /* ⛔ ENVELOPPER NE DOIT PAS VIDER DE QUOI FINIR. Mesure du 2026-09-04, compte reel sur mainnet :
+   * solde 998 159 919 663 404 wei, liquidite demandee par defaut 1 000 000 000 000 000 wei.
+   * L etape 0 aurait voulu envelopper PLUS QUE TOUT LE SOLDE (2 140 080 336 596 wei de trop) — et
+   * meme si elle avait passe, il n aurait plus rien reste pour les cinq etapes suivantes
+   * (3 557 520 000 000 wei de gas). Suivre les etapes dans l ordre echouait.
+   * ⇒ On calcule le PLAFOND enveloppable et on le DIT, au lieu de proposer un geste impossible.
+   * ⚠️ La marge de 3x n est pas decorative : le prix du gas peut bouger entre deux etapes, et un
+   *    compte vide au milieu d une sequence laisse une pool a moitie faite. */
+  let plafondEnveloppe = null;
+  if (v.enveloppable && compte) {
+    try {
+      const ethNatif = BigInt(await rpc('eth_getBalance', [compte, 'latest']));
+      const prixGas = BigInt(await rpc('eth_gasPrice', []));
+      const gasRestant = (46283n + 45858n + 95300n + 405479n) * prixGas;   /* apres le wrap */
+      const gasWrap = 50000n * prixGas;
+      const dispo = ethNatif - gasWrap - gasRestant * 3n;
+      plafondEnveloppe = dispo > 0n ? dispo : 0n;
+    } catch { plafondEnveloppe = null; }
+  }
+  const manqueBrut = (sQ !== null && sQ < liq) ? liq - sQ : 0n;
+  const manqueDevise = (plafondEnveloppe !== null && manqueBrut > plafondEnveloppe)
+    ? plafondEnveloppe : manqueBrut;
   const etapes = [
     ...(v.enveloppable && manqueDevise > 0n ? [{
       nom: '0. wrap ' + (Number(manqueDevise) / 1e18).toFixed(9) + ' ETH → WETH',
@@ -1078,6 +1099,16 @@ async function construirePlan() {
    * ce qui IMITE PARFAITEMENT « un B20 ne peut pas etre poole ». C etait le montant. */
   const manque = (sB !== null && sB < liq) || (sQ !== null && sQ < liq);
   if (manque) vue += ligne('⛔', 'Balance below the liquidity you asked for. That is the AMOUNT, not the block.');
+  /* ⛔ DIRE LE PLAFOND, PAS SEULEMENT « pas assez ». Un refus qui ne donne pas le chiffre
+   * atteignable oblige l utilisateur a chercher par tatonnement — et chaque essai est un aller
+   * simple vers le meme mur. */
+  if (plafondEnveloppe !== null && manqueBrut > plafondEnveloppe) {
+    vue += ligne('⛔ too much', 'You asked to wrap ' + (Number(manqueBrut) / 1e18).toFixed(9)
+      + ' ETH, but only ' + (Number(plafondEnveloppe) / 1e18).toFixed(9)
+      + ' can be wrapped while keeping enough for the remaining steps.'
+      + '<br><span class="dim">Set the liquidity to ' + (plafondEnveloppe + (sQ || 0n)).toString()
+      + ' or less.</span>');
+  }
   box.innerHTML = vue;
 
   /* ⛔ LE BOUTON RESTE VISIBLE, TOUJOURS. Le cacher ferait passer l app pour cassee au lieu de
