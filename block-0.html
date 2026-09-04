@@ -50,7 +50,16 @@ select{width:100%;padding:10px;border-radius:9px;background:#0d1220;color:#dce6f
   <option value="84532">Base Sepolia — free, for trying it</option>
 </select>
 
+<!-- ⛔ LE SEL ETAIT EN DUR, ET C EST CE QUI BLOQUAIT LES GENS. Le couple (ton adresse, ce sel)
+     fixe l adresse du block : si tu as deja utilise ce sel, la chaine refuse, et sans champ tu
+     n avais AUCUN recours — la page te disait « change the salt » sans te laisser le changer.
+     Une page qui nomme la solution sans l offrir est plus frustrante qu une page muette. -->
+<label for="sel">Salt — it fixes your address. One salt per block, per wallet.</label>
+<input id="sel" spellcheck="false" autocapitalize="off"
+  style="width:100%;padding:10px;border-radius:9px;background:#0d1220;color:#dce6f5;border:1px solid #1c2740;font-size:14px;font-family:ui-monospace,monospace;box-sizing:border-box">
+
 <div class="card"><div id="fiche"></div></div>
+<button class="sec" id="proposer">Find a salt that is free for me</button>
 <button class="sec" id="connecter">Connect wallet</button>
 <button class="go" id="envoyer" disabled>Connect first</button>
 <div id="msg"></div>
@@ -81,11 +90,24 @@ async function rpc(chaine, m, params) {
   return r.json();
 }
 
+/**
+ * ⛔ LE REFUS PORTE LA REPONSE. `TokenAlreadyExists(address)` transporte l adresse du block qui
+ *    occupe deja la place — mesure : `0x15ef3a57` suivi de l adresse sur 32 octets. Dire « change
+ *    the salt » en jetant cette adresse, c est cacher a l utilisateur le block qu il a lui-meme
+ *    cree. On la DECODE et on la lui montre.
+ * ⚠️ On ne devine pas : si la donnee est trop courte, on rend null plutot qu une adresse tronquee.
+ */
+function adresseDuRefus(donnee) {
+  const d = String(donnee || '');
+  if (!d.startsWith('0x15ef3a57') || d.length < 74) return null;
+  return '0x' + d.slice(34, 74);
+}
+
 /** Le calldata POUR CE SIGNATAIRE. Seul le destinataire du mint change. */
 function calldataPour(qui) {
   return encodeCreateB20({
     variant: 0,
-    saltTexte: modele.sel,
+    saltTexte: $('#sel').value.trim() || modele.sel,
     /* ⛔ `admin = address(0)` : le block naît sans administrateur. Ce n est pas une option. */
     params: paramsAsset({ nom: 'Tokenized Block', symbole: 'TBLOCK',
       admin: '0x0000000000000000000000000000000000000000', decimales: 18 }),
@@ -118,9 +140,13 @@ async function verifier() {
   /* ⛔ ON DEMANDE A LA FACTORY. Une adresse qu on calculerait soi-meme pourrait differer. */
   const appel = await rpc(chaine, 'eth_call', [{ from: compte, to: FACTORY, data }, 'latest']);
   const adresse = appel.error ? null : '0x' + String(appel.result).slice(-40);
+  let dejaLa = null;
   if (!adresse) {
     const d = appel.error?.data ? String(appel.error.data) : '';
-    raisons.push(expliquerRefus(d) || appel.error?.message || 'the factory refuses this calldata');
+    dejaLa = adresseDuRefus(d);
+    raisons.push(dejaLa
+      ? 'you already created a block with this salt'
+      : (expliquerRefus(d) || appel.error?.message || 'the factory refuses this calldata'));
   }
 
   const code = adresse ? (await rpc(chaine, 'eth_getCode', [adresse, 'latest'])).result : null;
@@ -141,7 +167,10 @@ async function verifier() {
     + ligne('creates', adresse
         ? `<a href="${R.scan}/address/${adresse}" target="_blank" rel="noopener">${adresse}</a>`
           + (libre ? ' ' + p('FREE', 'ok') : ' ' + p('TAKEN', 'bad'))
-        : p('NOT COMPUTED', 'bad'))
+        : dejaLa
+          /* ⛔ On MONTRE le block existant plutot que de le taire : c est le sien, il l a cree. */
+          ? p('ALREADY YOURS', 'warn') + ` <a href="${R.scan}/address/${dejaLa}" target="_blank" rel="noopener">${dejaLa}</a>`
+          : p('NOT COMPUTED', 'bad'))
     + ligne('to', FACTORY + ' <span class="k">(the B-20 factory)</span>')
     + ligne('value', '0 ' + p('SENDS NO ETH', 'ok'))
     + ligne('salt', modele.sel)
@@ -157,11 +186,47 @@ async function verifier() {
   plan = pret ? { chaine, data, adresse } : null;
   $('#envoyer').disabled = !pret;
   $('#envoyer').textContent = pret ? 'Create it — your wallet will ask' : 'Blocked: ' + raisons[0];
+  /* ⛔ UN REFUS DOIT DIRE QUOI FAIRE. « change the salt » sans indiquer lequel laisse l utilisateur
+   * deviner ce que seule la chaine sait. On nomme le geste et le bouton qui le fait. */
   dire(pret ? 'Every check passed against ' + R.nom + ', just now.\nYour wallet will open. Re-read the destination before accepting.'
-            : '⛔ ' + raisons.join('\n⛔ '));
+            : '⛔ ' + raisons.join('\n⛔ ')
+              + (dejaLa ? '\n\nThat block is yours — it is linked above.\nTo create ANOTHER one, change the salt, or press « Find a salt that is free for me ».' : ''));
 }
 
+$('#sel').value = modele.sel;
+/* ⛔ TOUT CHANGEMENT DU SEL INVALIDE LE PLAN. Sans ca, le bouton garderait le calldata d avant
+ * et signerait un autre block que celui affiche — l ecart ne se verrait qu apres la transaction. */
+let minuteur = null;
+$('#sel').oninput = () => { plan = null; $('#envoyer').disabled = true;
+  $('#envoyer').textContent = 'Salt changed — re-checking…';
+  clearTimeout(minuteur); minuteur = setTimeout(verifier, 600); };
 $('#reseau').onchange = () => { plan = null; verifier(); };
+
+/**
+ * Propose un sel LIBRE pour ce compte, en demandant a la chaine — pas en inventant.
+ * ⛔ « change the salt » sans dire lequel laisse l utilisateur deviner, et il ne peut pas :
+ *    seule la factory sait si un couple (adresse, sel) est pris.
+ * ⚠️ Borne : on essaie un nombre fini de variantes et on le DIT si aucune ne passe.
+ */
+async function proposerSel() {
+  if (!compte) return dire('Connect first — a free salt depends on your address.');
+  const chaine = Number($('#reseau').value);
+  const base = ($('#sel').value.trim() || modele.sel).replace(/-\d+$/, '');
+  dire('Asking the chain for a free salt…');
+  for (let i = 2; i <= 12; i++) {
+    const essai = base + '-' + i;
+    const d = encodeCreateB20({ variant: 0, saltTexte: essai,
+      params: paramsAsset({ nom: 'Tokenized Block', symbole: 'TBLOCK',
+        admin: '0x0000000000000000000000000000000000000000', decimales: 18 }),
+      initCalls: [encodeUpdateContractURI(modele.contractURI),
+        encodeUpdateSupplyCap(BigInt(modele.supply)),
+        encodeBatchMint([compte], [BigInt(modele.supply)])] });
+    const r = await rpc(chaine, 'eth_call', [{ from: compte, to: FACTORY, data: d }, 'latest']);
+    if (!r.error) { $('#sel').value = essai; dire('« ' + essai +' » is free for your address.'); return verifier(); }
+  }
+  dire('⛔ Tried « ' + base + '-2 » through « ' + base + '-12 », all taken.\nType something of your own.');
+}
+$('#proposer').onclick = proposerSel;
 
 $('#connecter').onclick = async () => {
   if (!window.ethereum) return dire("No wallet in this browser.\nOpen this page inside your wallet's browser.");
