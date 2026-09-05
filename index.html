@@ -1676,8 +1676,20 @@ function gardeMainnet() {
   const ok = $('#gardeCase').checked;
   /* ⛔ « #agir » n a AUCUN autre proprietaire de son etat desactive : la garde doit donc le poser
    * ET le lever. Ne poser que le refus laissait le bouton mort meme apres consentement — une
-   * garde qui prend la main sans jamais la rendre est une panne, pas une protection. */
-  $('#agir').disabled = !ok;
+   * garde qui prend la main sans jamais la rendre est une panne, pas une protection.
+   *
+   * ⛔⛔ MAIS CE BOUTON A DEUX ROLES, ET LA GARDE LES CONFONDAIT. Tant que rien n est connecte,
+   *    `#agir` dit « Connect wallet » ; une fois connecte, il dit « Create the block ». La garde
+   *    le desactivait dans LES DEUX cas — donc sur mainnet, avant d avoir coche la case, on ne
+   *    pouvait meme pas SE CONNECTER. Signale par l utilisateur le 2026-09-05 : « le site n ouvre
+   *    plus mainnet et je n arrive plus a me connecter ». Le site n etait pas casse : la garde
+   *    enfermait.
+   * ⇒ SE CONNECTER NE SIGNE RIEN et ne depense rien : c est une lecture. Le consentement mainnet
+   *   protege ce qui ENGAGE — la creation, la pool, le swap — pas l ouverture du wallet. Une garde
+   *   qui bloque un geste inoffensif finit par etre contournee, et c est elle qu on desarmera le
+   *   jour ou elle protegera vraiment quelque chose.
+   * ⚠️ Des que `compte` existe, `#agir` redevient un bouton qui SIGNE : la garde le reprend. */
+  $('#agir').disabled = compte ? !ok : false;
   /* Les deux autres sont recalcules par leur propre section a chaque lecture : on ne fait que
    * FORCER le refus, jamais l autorisation. */
   if (!ok) for (const id of ['#poolAgir', '#swapAgir']) { const b = $(id); if (b) b.disabled = true; }
