@@ -408,7 +408,26 @@ async function rpc(m, p, essais = 4, attente = 350) {
    * vient de couper attend simplement que sa fenetre se rouvre ; changer de noeud repond tout de
    * suite. Le noeud officiel reste le premier essai a chaque appel : le secours depanne, il ne
    * prend pas la place. */
-  const noeuds = [RESEAUX[chaine].rpc, ...(RESEAUX[chaine].secours || [])];
+  /* ⛔⛔ LES SECOURS NE SAVENT PAS LIRE UN PRECOMPILE B20, ET MON CORRECTIF L A IGNORE.
+   *    Mesure du 2026-09-05 (`sonde-secours-b20.mjs`), sur les trois noeuds, meme appel :
+   *        WETH.balanceOf   : les trois repondent 1 200 000 000 000 000
+   *        BLOCK0.balanceOf : officiel ✅ 1e27 · drpc ⛔ « Request timeout on the free plan »
+   *                           · 1rpc ⛔ null
+   *        BLOCK0 code      : les trois rendent bien 0xef
+   *    Ils SERVENT le code du precompile mais ne savent pas EXECUTER un appel contre lui. En
+   *    ajoutant la rotation j ai donc remplace une panne intermittente (limite de debit) par une
+   *    panne SYSTEMATIQUE sur le seul jeton qui compte — c est exactement le « your block NOT
+   *    MEASURED » observe. Un correctif qui casse ailleurs est pire que le defaut d origine.
+   * ⇒ On ROUTE PAR DESTINATION : tout appel visant une adresse B20 reste sur le noeud officiel,
+   *   avec sa temporisation. Le reste peut tourner.
+   * ⚠️ Le tri se fait sur le prefixe `0xb200`, pas sur le code : c est un ROUTAGE, pas un jugement
+   *    d identite. Une adresse qui commencerait par 0xb200 sans etre un B20 irait simplement au
+   *    noeud officiel — sans consequence. L identite, elle, se prouve par `code === '0xef'`. */
+  const viseUnB20 = Array.isArray(p) && p.some((x) =>
+    (typeof x === 'string' && x.toLowerCase().startsWith('0xb200'))
+    || (x && typeof x === 'object' && typeof x.to === 'string' && x.to.toLowerCase().startsWith('0xb200')));
+  const noeuds = viseUnB20 ? [RESEAUX[chaine].rpc]
+    : [RESEAUX[chaine].rpc, ...(RESEAUX[chaine].secours || [])];
   for (let k = 0; k < essais; k++) {
     const url = noeuds[k % noeuds.length];
     let j;
