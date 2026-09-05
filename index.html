@@ -428,6 +428,21 @@ async function rpc(m, p, essais = 4, attente = 350) {
     || (x && typeof x === 'object' && typeof x.to === 'string' && x.to.toLowerCase().startsWith('0xb200')));
   const noeuds = viseUnB20 ? [RESEAUX[chaine].rpc]
     : [RESEAUX[chaine].rpc, ...(RESEAUX[chaine].secours || [])];
+  /* ⛔⛔ ET SANS SECOURS, IL FAUT PLUS DE PATIENCE — CORRECTIF DE MON PROPRE CORRECTIF.
+   *    En routant les appels B20 vers le seul noeud officiel, je leur ai retire toute alternative
+   *    SANS allonger l attente : 4 essais a 350 ms doubles = 2,45 s en tout. WETH, lui, bascule
+   *    sur un secours et repond. Resultat observe chez l utilisateur : « your WETH » se lit,
+   *    « your block » reste NOT MEASURED — mon correctif avait rendu le jeton central plus
+   *    fragile que les autres.
+   * ⛔ ET LA CAUSE N EST PAS CELLE QUE JE CROYAIS. J ai d abord suppose que lire un precompile
+   *    coutait plus cher au noeud. MESURE (`sonde-lecture-b20.mjs`, 20 appels ALTERNES dans la
+   *    meme rafale — les mesurer l un apres l autre aurait donne au second un compteur deja
+   *    entame) : BLOCK 7 echecs, WETH 8, duree moyenne 191 ms des DEUX cotes. Le precompile n y
+   *    est pour rien, c est du pur debit. Le correctif est donc la PATIENCE, pas un traitement
+   *    special — et sans cette mesure j aurais optimise la mauvaise chose.
+   * ⚠️ Plus lent, delibere : jusqu a ~37 s dans le pire cas. Un solde lu tard vaut mieux qu un
+   *    « NOT MEASURED » qui ferme le bouton — et la garde de solde, elle, doit rester fermee. */
+  if (viseUnB20) { essais = Math.max(essais, 6); attente = Math.max(attente, 1200); }
   for (let k = 0; k < essais; k++) {
     const url = noeuds[k % noeuds.length];
     let j;
