@@ -1584,6 +1584,55 @@ async function etatSwap() {
  *    retour sur Sepolia, puis un retour sur mainnet, ne doit PAS retrouver un consentement
  *    donne pour une autre session d attention. */
 const MAINNET = 8453;
+
+/**
+ * ⛔⛔ LE WALLET EST-IL SUR LE RESEAU QUE LA PAGE AFFICHE ? A APPELER AVANT CHAQUE ENVOI.
+ * ================================================================================================
+ * DEFAUT REEL, OBSERVE LE 2026-09-04, ET IL A COUTE DU GAS. Cette page lisait mainnet (BLOCK 0,
+ * soldes, autorisations) et appelait `eth_sendTransaction` SANS VERIFIER la chaine du wallet. Le
+ * wallet signe sur le reseau ou IL se trouve, pas sur celui que la page montre. Resultat mesure :
+ * quatre approbations signees, « Confirmed on-chain » affiche, et sur mainnet les quatre
+ * autorisations valent toujours ZERO — parce que tout est parti sur Sepolia.
+ *
+ * ⛔ ET LE PIRE EST QUE CA « REUSSIT ». Un `approve(...)` envoye a 0xb200…d563f sur Sepolia
+ * touche une adresse SANS CODE : l EVM accepte l appel, ne fait rien, et le recu porte
+ * `status: 0x1`. L utilisateur voit une confirmation verte pour une transaction qui n a rien
+ * change. Un succes qui ne fait rien est pire qu un echec : l echec, au moins, se voit.
+ *
+ * ⛔ ET LA GARDE EXISTAIT DEJA — DANS `block-0.html`, jamais ici. Le jumeau qui diverge, motif
+ * releve plusieurs fois dans ce depot : le correctif tombe dans une copie et pas dans l autre.
+ * Elle vit desormais UNE seule fois, et les trois points d envoi l appellent.
+ *
+ * ⚠️ ON REVERIFIE APRES L ALLER-RETOUR : le wallet peut changer de compte en meme temps que de
+ * reseau, et un consentement donne avant n en est plus un apres.
+ * @returns {Promise<boolean>} true si l envoi peut se faire, false si on a refuse (et dit pourquoi)
+ */
+async function memeChaineQueLaPage() {
+  const R = RESEAUX[chaine];
+  let id;
+  try { id = parseInt(await window.ethereum.request({ method: 'eth_chainId' }), 16); }
+  catch (e) { dire('⛔ Could not read your wallet network. Nothing was sent.\n' + e.message, 'bad'); return false; }
+  if (id === chaine) return true;
+  const nomAutre = (RESEAUX[id] && RESEAUX[id].nom) || ('chain ' + id);
+  dire('⛔ Your wallet is on ' + nomAutre + ', this page is showing ' + R.nom + '.'
+    + '\nAsking your wallet to switch — nothing has been sent.', 'warn');
+  try { await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: R.hex }] }); }
+  catch (e) {
+    dire('⛔ Your wallet stayed on ' + nomAutre + '. NOTHING WAS SENT.'
+      + '\nA transaction sent there would have looked confirmed and done nothing.', 'bad');
+    return false;
+  }
+  const id2 = parseInt(await window.ethereum.request({ method: 'eth_chainId' }), 16);
+  if (id2 !== chaine) { dire('⛔ Wallet is still not on ' + R.nom + '. Nothing was sent.', 'bad'); return false; }
+  const [a] = await window.ethereum.request({ method: 'eth_accounts' });
+  if (!a || !compte || a.toLowerCase() !== compte.toLowerCase()) {
+    compte = a || null;
+    dire('⛔ Your wallet switched account while changing network. Nothing was sent —'
+      + ' read the steps again, then press the button.', 'bad');
+    return false;
+  }
+  return true;
+}
 function gardeMainnet() {
   const surMainnet = chaine === MAINNET;
   $('#gardeMainnet').classList.toggle('on', surMainnet);
@@ -1653,6 +1702,8 @@ $('#swapAgir').onclick = async () => {
       data = encodeSwapExactInSingle({ cle: p.cle, zeroForOne: p.zeroForOne, montant: p.montant,
         sortieMin: min, deadline: BigInt(bloc0.timestamp) + 600n, forme: p.forme });
     }
+    /* ⛔ MEME CHAINE QUE LA PAGE, sinon rien ne part. Voir `memeChaineQueLaPage`. */
+    if (!(await memeChaineQueLaPage())) return;
     dire("Your wallet will open — " + quoi + "\nRe-read the destination before accepting.", 'warn');
     afficherTx('wallet', quoi);
     const hash = await window.ethereum.request({ method: 'eth_sendTransaction', params: [{ from: compte, to, value: '0x0', data }] });
@@ -1703,6 +1754,9 @@ $('#poolAgir').onclick = async () => {
      * silencieuse, et rien dans l interface ne l aurait annoncee. */
     const valeur = s.valeur || '0x0';
     if (valeur !== '0x0') dire('This step SENDS ' + (Number(BigInt(valeur)) / 1e18).toFixed(9) + ' ETH, to wrap it into WETH.', 'warn');
+    /* ⛔ MEME CHAINE QUE LA PAGE. C est ICI que le defaut a coute : quatre approbations parties
+     * sur Sepolia avec des adresses mainnet, « confirmees », et sans effet. */
+    if (!(await memeChaineQueLaPage())) return;
     const hash = await window.ethereum.request({ method: 'eth_sendTransaction', params: [{ from: compte, to: s.to, value: valeur, data }] });
     dire('Sent: ' + hash + '\nRe-reading the chain…', 'ok');
     afficherTx('pending', s.nom, hash);
@@ -1743,6 +1797,10 @@ $('#agir').onclick = async () => {
     if (!adr) return dire('The chain refuses this block:\n' + vu.refus + (vu.brut ? '\n(' + vu.brut + ')' : ''), 'bad');
     if ((await rpc('eth_getCode', [adr, 'latest'])) !== '0x') return dire('This salt is already used: ' + adr + '\nChange the salt.', 'warn');
 
+    /* ⛔ MEME CHAINE QUE LA PAGE. Une creation partie sur le mauvais reseau produirait un block
+     * a la MEME adresse ailleurs — l adresse derive de (variant, createur, sel), pas de la chaine
+     * — et l utilisateur croirait avoir cree sur mainnet. */
+    if (!(await memeChaineQueLaPage())) return;
     dire("Your wallet will open.\nRe-read the destination and the start of `data` before accepting.", 'warn');
     afficherTx("wallet", "Confirm the creation in your wallet.");
     const hash = await window.ethereum.request({ method: 'eth_sendTransaction',
