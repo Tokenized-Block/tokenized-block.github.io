@@ -97,6 +97,46 @@ export function poolId(cle) {
 /** ⛔ Lit l etat REEL avant d agir : une etape deja faite ne doit pas etre refaite, et une etape
  *  manquante ne doit pas etre sautee. `appel` est injecte pour rester testable hors reseau. */
 /**
+ * POURQUOI le bouton refuse — ou `null` s il ne doit pas refuser.
+ * ================================================================================================
+ * ⛔⛔ EXTRAIT APRES UNE FAUTE COMMISE DEUX FOIS : corriger UNE MOITIE. L etape 6 (mint) n a pas
+ *    de `data` au moment du plan — c est VOULU, son `deadline` se prend sur le bloc courant.
+ *    J avais corrige l AFFICHAGE (« CANNOT BUILD » -> « TO DO ») et laisse la decision du BOUTON
+ *    sur le meme test `data === undefined`. En conditions reelles, 2026-09-05 : cinq etapes sur
+ *    six faites, soldes lus, AUCUN blocage affiche, et le bouton refusait quand meme en renvoyant
+ *    vers « the blocker above » — qui n existait pas. Une garde peut etre VRAIE et couvrir la
+ *    mauvaise moitie du probleme.
+ *
+ * ⛔ ET ELLE VIVAIT DANS UNE CHAINE DE `else if` AU MILIEU D UNE FONCTION DE 400 LIGNES,
+ *    verifiable seulement a l oeil et seulement en conditions reelles — c est-a-dire chez
+ *    l utilisateur. Ici elle est PURE, donc testee, y compris le cas qui a echoue.
+ *
+ * ⚠️ L ORDRE DES REFUS EST DELIBERE : du plus structurel au plus circonstanciel. Un utilisateur
+ *    ne lit que le PREMIER message ; « connecte ton wallet » doit passer avant « pas assez de
+ *    solde », parce que sans compte le solde n a meme pas de sens.
+ *
+ * @param {object|null} suivante  l etape a faire, ou null s il n en reste aucune
+ * @param {boolean} besoinsCalcules  les montants exiges par la position sont-ils connus ?
+ */
+export function raisonDeBloquer({ suivante, compte, manque, soldeInconnu, besoinsCalcules }) {
+  if (!suivante) return 'Every step is done';
+  /* ⛔ UNE ETAPE DIFFEREE SE JUGE SUR SES DEPENDANCES, pas sur un champ qu on a choisi de ne pas
+   * remplir. Sans cette distinction on refuse pour toujours (le defaut d origine) ou on accepte
+   * pour toujours (le correctif naif) — les deux sont faux. */
+  const inconstructible = suivante.mint
+    ? !besoinsCalcules
+    : (suivante.data === null || suivante.data === undefined);
+  if (inconstructible) return 'Cannot build "' + suivante.nom + '" — read the reason above';
+  if (!compte) return 'Connect your wallet first (button below)';
+  if (manque) return 'Not enough balance for that liquidity';
+  /* ⛔ FERMER SUR L INCONNU, et le DIRE autrement que « pas assez » : signer sans savoir si le
+   * solde suffit, c est decouvrir le refus apres avoir paye. Le message donne le geste — relire,
+   * pas corriger. */
+  if (soldeInconnu) return 'Your balances could not be read — click "Read the six steps" again';
+  return null;
+}
+
+/**
  * Transforme une reponse JSON-RPC en valeur, ou en exception MARQUEE.
  * ⛔ UNE SEULE DEFINITION, parce que la page ET la sonde mainnet en ont besoin. En ecrire une
  *    copie dans chacune ferait diverger le jugement « refus » / « panne » entre ce qui est

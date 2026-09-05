@@ -348,7 +348,7 @@ import { cleDePool, etatPool, encodeInitialize, encodeApprove, encodePermit2Appr
    * option encore valide. Le prix se DERIVE, il ne se choisit plus dans une liste. */
   MAX_UINT256, MAX_UINT160, MAX_UINT48, MAX_UINT128, TICK_BAS, TICK_HAUT, sqrtPriceDepuisPrix, montantsPourLiquidite,
   encodeSwapExactInSingle, encodeQuote, formeAcceptee, AVEC_MINHOP, selecteur as sel4,
-  essaiEtape, valeurOuRefus } from './pool.js';
+  essaiEtape, valeurOuRefus, raisonDeBloquer } from './pool.js';
 
 const $ = (s) => document.querySelector(s);
 const etat = $('#etat');
@@ -1432,17 +1432,12 @@ async function construirePlan() {
    * Grise + une raison NOMMEE. */
   const suivante = etapes.find((s) => s.ok !== true);
   const b = $('#poolAgir');
-  let empeche = null;
-  /* ⛔ ON N OFFRE PAS UNE ETAPE QU ON NE SAIT PAS CONSTRUIRE. Sans ce refus, le bouton
-   * enverrait un calldata `null` au wallet — et le refus viendrait de la chaine, apres coup. */
-  if (suivante && (suivante.data === null || suivante.data === undefined)) {
-    empeche = 'Cannot build "' + suivante.nom + '" — read the reason above';
-  } else if (!suivante) empeche = 'Every step is done';
-  else if (!compte) empeche = 'Connect your wallet first (button below)';
-  else if (manque) empeche = 'Not enough balance for that liquidity';
-  /* ⛔ FERMER SUR L INCONNU. Signer sans savoir si le solde suffit, c est decouvrir le refus
-   * apres avoir paye. Le message dit le geste : relire, pas corriger. */
-  else if (soldeInconnu) empeche = 'Your balances could not be read — click "Read the six steps" again';
+  /* ⛔ LA DECISION VIT DANS `pool.js`, PURE ET TESTEE (`test-blocage.mjs`, 7 assertions). Elle
+   * etait ici, dans une chaine de `else if` au milieu de 400 lignes, verifiable seulement a
+   * l oeil et seulement en conditions reelles — c est-a-dire chez l utilisateur. C est la qu elle
+   * a rate l etape 6 : bouton bloque, message renvoyant vers un blocage inexistant. */
+  let empeche = raisonDeBloquer({ suivante, compte, manque, soldeInconnu,
+    besoinsCalcules: besoinB !== null && besoinQ !== null && sqrtPrix !== null });
   /* ⛔ PREFLIGHT : ON DEMANDE A LA CHAINE AVANT D OUVRIR LE WALLET.
    * Mesure du 2026-09-04 : `eth_call` sur `initialize` d une pool FRAICHE (Base mainnet) rend
    * `0x65316` sans rien ecrire — la chaine accepte nos octets avant toute signature. Un refus,
