@@ -2214,8 +2214,14 @@ $('#lancCalculer').onclick = async () => {
     /* ⛔ UN SEUL POINT DE VERITE POUR LA DEVISE, comme dans `construirePlan`. Deux endroits qui la
      *    liraient differemment produiraient deux `PoolKey` differentes — donc deux pools, dont
      *    une vide, et le createur ne saurait pas laquelle porte sa supply. */
-    const d0 = devise(chaine);
-    if (!d0) return box.innerHTML = ligne('state', pastille('NO QUOTE CURRENCY FOR THIS CHAIN', 'bad'));
+    /* ⛔⛔ ETH NATIF, PAS WETH — ET C EST MESURE, PAS COPIE. Leur Initialize porte
+     *    `currency0 = 0x0000…0000`. Avec du WETH, quiconque veut acheter doit d abord ENVELOPPER
+     *    son ETH : une transaction de plus, payante, et incomprehensible pour qui debute.
+     *    Simulation des deux, meme prix et meme frais : poolId DIFFERENTS (donc deux vraies pools),
+     *    economie IDENTIQUE au dernier chiffre. Le seul ecart est la friction pour l acheteur.
+     * ⚠️ On imprime les deux poolId dans l instrument precisement parce que des chiffres
+     *    identiques ne distinguent pas « correct » de « je n ai rien fait varier ». */
+    const d0 = { adr: '0x0000000000000000000000000000000000000000', nom: 'ETH' };
     if (!compte) return box.innerHTML = ligne('state', pastille('CONNECT FIRST', 'dim'));
     const V = V4[chaine];
     const lire4 = async (to, data) => {
@@ -2265,7 +2271,8 @@ $('#lancCalculer').onclick = async () => {
     const ethRequis = blockEst1 ? m.montant0 : m.montant1;
     const blocksRequis = blockEst1 ? m.montant1 : m.montant0;
 
-    let vue = ligne('pool', 'fee 3% · spacing 200 · ' + (sqrtExistant === 0n ? 'to be created' : pastille('ALREADY EXISTS', 'warn')))
+    let vue = ligne('paired with', 'native ETH <span class="k">(buyers do NOT have to wrap — one less transaction)</span>')
+      + ligne('pool', 'fee 3% · spacing 200 · ' + (sqrtExistant === 0n ? 'to be created' : pastille('ALREADY EXISTS', 'warn')))
       + ligne('valuation', valo + ' ETH for the whole supply')
       + ligne('range', '[' + p.tickBas + ', ' + p.tickHaut + ']' + (p.prixImpose ? '  ⚠️ upper tick forced by the existing pool' : ''))
       + ligne('this places', formaterUnites(blocksRequis, dec) + ' blocks')
