@@ -136,6 +136,53 @@ export function poolId(cle) {
 /** ⛔ Lit l etat REEL avant d agir : une etape deja faite ne doit pas etre refaite, et une etape
  *  manquante ne doit pas etre sautee. `appel` est injecte pour rester testable hors reseau. */
 /**
+ * Le `L` a poser pour deposer AU PLUS `depot` de devise, marge de securite comprise.
+ * ================================================================================================
+ * ⛔ POURQUOI CETTE FONCTION EXISTE. Le champ de l app demandait `L` directement — un PARAMETRE
+ *    DE COURBE, en unites brutes, sans rapport lisible avec un montant. Pour deposer 0,001176 WETH
+ *    il fallait taper 37188385283580172, un nombre que j ai du calculer A LA MAIN et transmettre.
+ *    Un champ qu on ne peut pas remplir sans qu un tiers calcule a votre place n est pas un champ.
+ *
+ * ⛔ ET LA MARGE DE 2 % EST STRUCTURELLE, PAS COSMETIQUE. L app plafonne le mint au besoin + 2 %.
+ *    Si le besoin vaut deja 100 % du solde, ce plafond DEPASSE le solde : la borne ne borne plus
+ *    rien, et l etape 6 peut reverter avec les jetons deja approuves. J ai failli faire signer
+ *    exactement ce L-la ; la marge est desormais dans le calcul, pas dans un conseil oral.
+ *
+ * ⚠️ RECHERCHE BINAIRE SUR `montantsPourLiquidite`, le helper REEL — pas une formule reecrite ici.
+ *    Une inversion analytique divergerait du code qui sera execute au mint, et l ecart ne se
+ *    verrait qu apres signature.
+ * ⚠️ TROIS REFUS NOMMES : pas de depot, pas de prix, ou depot trop petit pour un L non nul. Un
+ *    `L = 0` passerait toutes les gardes de plafond en ne deposant rien.
+ */
+export function liquiditePourDepot({ depot, sqrtPrix, deviseEst0, margePct = 102n }) {
+  const d = BigInt(depot || 0);
+  if (d === 0n) return { etat: 'VIDE' };
+  if (sqrtPrix === null || sqrtPrix === undefined || BigInt(sqrtPrix) === 0n) return { etat: 'SANS_PRIX' };
+  const tient = (L) => {
+    const m = montantsPourLiquidite(L, sqrtPrix);
+    const besoin = deviseEst0 ? m.montant0 : m.montant1;
+    const autre = deviseEst0 ? m.montant1 : m.montant0;
+    /* ⛔ LES DEUX COTES DOIVENT ETRE NON NULS, et c est un test qui me l a appris. Sur un depot
+     *    minuscule, la recherche trouvait un `L` positif dont le besoin ARRONDIT A ZERO : la
+     *    garde du plafond passait (0 <= depot) et la position n aurait rien depose d un cote.
+     *    Un `L` accepte qui ne depose rien est pire qu un refus — il a l air d avoir marche. */
+    if (besoin === 0n || autre === 0n) return false;
+    /* ⛔ C est le PLAFOND que l app posera qui doit tenir dans la poche, pas le besoin nu. */
+    return (besoin * margePct) / 100n <= d;
+  };
+  let bas = 0n, haut = 1n << 140n;
+  while (bas < haut) {
+    const mil = (bas + haut + 1n) / 2n;
+    if (tient(mil)) bas = mil; else haut = mil - 1n;
+  }
+  if (bas === 0n) return { etat: 'TROP_PETIT' };
+  const m = montantsPourLiquidite(bas, sqrtPrix);
+  return { etat: 'OK', liquidite: bas,
+    besoinDevise: deviseEst0 ? m.montant0 : m.montant1,
+    besoinBlock: deviseEst0 ? m.montant1 : m.montant0 };
+}
+
+/**
  * POURQUOI le bouton refuse — ou `null` s il ne doit pas refuser.
  * ================================================================================================
  * ⛔⛔ EXTRAIT APRES UNE FAUTE COMMISE DEUX FOIS : corriger UNE MOITIE. L etape 6 (mint) n a pas
