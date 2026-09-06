@@ -373,6 +373,7 @@ import { cleDePool, etatPool, encodeInitialize, encodeApprove, encodePermit2Appr
   MAX_UINT256, MAX_UINT160, MAX_UINT48, MAX_UINT128, TICK_BAS, TICK_HAUT, sqrtPriceDepuisPrix, montantsPourLiquidite,
   encodeSwapExactInSingle, encodeQuote, formeAcceptee, AVEC_MINHOP, selecteur as sel4,
   essaiEtape, valeurOuRefus, raisonDeBloquer, poolId, liquiditePourDepot } from './pool.js';
+import { consentementValide, marquerConsentement } from './consentement.js';
 
 const $ = (s) => document.querySelector(s);
 const etat = $('#etat');
@@ -1818,7 +1819,31 @@ function gardeMainnet() {
    * FORCER le refus, jamais l autorisation. */
   if (!ok) for (const id of ['#poolAgir', '#swapAgir']) { const b = $(id); if (b) b.disabled = true; }
 }
-$('#gardeCase').onchange = () => { gardeMainnet(); if (chaine === MAINNET) { rafraichir(); } };
+/* ⛔ ON N ENREGISTRE QUE LE « OUI ». Decocher n efface pas la trace — ce serait un troisieme etat
+ * (« a retire son consentement ») que personne n a demande, et qui ferait redemander a la
+ * prochaine visite sans que l utilisateur comprenne pourquoi. Cocher enregistre, decocher agit
+ * seulement sur la session en cours. */
+$('#gardeCase').onchange = () => {
+  if ($('#gardeCase').checked && compte) {
+    marquerConsentement({ stockage: window.localStorage, compte });
+  }
+  gardeMainnet(); if (chaine === MAINNET) { rafraichir(); }
+};
+
+/**
+ * Restaure la case si CE compte a deja consenti.
+ * ⛔ ON PRE-COCHE, ON NE MASQUE RIEN. La banniere et son texte restent affiches : c est la CASE
+ *    qui est retrouvee, pas l avertissement qui disparait. Masquer serait une autre decision,
+ *    bien plus lourde, et personne ne l a prise.
+ * ⚠️ Lie au COMPTE et borne a 30 jours — voir `consentement.js`. Un consentement qui survivrait a
+ *    un changement de wallet vaudrait pour quelqu un qui ne l a jamais donne.
+ */
+function restaurerConsentement() {
+  if (chaine !== MAINNET || !compte) return;
+  if (!consentementValide({ stockage: window.localStorage, compte })) return;
+  $('#gardeCase').checked = true;
+  gardeMainnet();
+}
 
 const ov = $('#ov');
 const PHASES = {
@@ -1952,6 +1977,7 @@ $('#agir').onclick = async () => {
        * donnees vient au navigateur, pas l inverse. Un criblage qui interrogerait un service
        * transformerait une verification en collecte, sur une page vendue sur le fait qu elle ne
        * detient et n envoie rien. */
+      restaurerConsentement();
       const c = await cribler_(compte);
       return dire('Connected: ' + compte + (c ? '\n' + c : ''), c && c.startsWith('⛔') ? 'bad' : 'ok');
     }
