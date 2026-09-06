@@ -16,19 +16,23 @@
 <meta name="fc:miniapp" content='{"version":"1","imageUrl":"https://tokenized-block.github.io/embed.png","button":{"title":"Build a block","action":{"type":"launch_miniapp","url":"https://tokenized-block.github.io/","name":"TokenizedBlock","splashImageUrl":"https://tokenized-block.github.io/splash.png","splashBackgroundColor":"#000000"}}}'>
 <meta name="fc:frame" content='{"version":"1","imageUrl":"https://tokenized-block.github.io/embed.png","button":{"title":"Build a block","action":{"type":"launch_miniapp","url":"https://tokenized-block.github.io/","name":"TokenizedBlock","splashImageUrl":"https://tokenized-block.github.io/splash.png","splashBackgroundColor":"#000000"}}}'>
 <style>
-/* ══ NOIR ET BLANC ═════════════════════════════════════════════════════════════════════════════
- * ⛔ UN PRINCIPE, PAS UNE PALETTE : l interface est monochrome, LE BLOCK EST LA SEULE CHOSE
- *    COLOREE. Le logo se derive de la teinte et de l accent choisis par l utilisateur — en
- *    retirant la couleur de tout le reste, on rend cette couleur-la SIGNIFIANTE. Un fond bleu
- *    degrade rivalisait avec le seul element qui doit se distinguer.
- * ⛔⛔ ET LES COULEURS D ALERTE RESTENT COLOREES, DELIBEREMENT. « Noir et blanc » ne s applique
- *    PAS a `--warn`, `--bad`, `--ok` : un avertissement monochrome sur une page qui signe des
- *    transactions irreversibles serait une regression de securite deguisee en choix esthetique.
- *    Le rouge du danger n est pas un ornement.
- * ⚠️ Le contraste est verifie, pas suppose : --dim (#9a9a9a) sur --card (#0d0d0d) donne 7,4:1,
- *    au-dessus du seuil AA (4,5). L ancien --dim bleu sur fond bleu passait tout juste. */
-:root{--bg:#000;--bg2:#0d0d0d;--card:#0a0a0a;--line:#262626;--fg:#fafafa;--dim:#9a9a9a;
---or:#fafafa;--ok:#22c55e;--warn:#f5a317;--bad:#ef4444;--blue:#fafafa}
+/* ══ BLEU NUIT ═════════════════════════════════════════════════════════════════════════════════
+ * ⚠️ RETOUR AU BLEU NUIT, DEMANDE. Le noir integral a ete essaye puis ecarte : c est un choix
+ *    d auteur, pas une mesure, et il n est pas le mien.
+ * ⛔⛔ ET J AI CASSE LA FEUILLE DE STYLE EN LE REMETTANT : mon commentaire s est retrouve APRES
+ *    le `*​/` du bloc precedent, donc en plein CSS. Resultat : fond transparent, cartes
+ *    disparues, page entiere sans style. La chaine de tests ne pouvait pas le voir — aucune
+ *    assertion ne lit le CSS — et seul le controle NAVIGATEUR l a montre
+ *    (`backgroundColor: rgba(0,0,0,0)`). Une page qui SIGNE ne se verifie pas qu au vert des tests.
+ *
+ * CE QUI EST GARDE DE L ESSAI NOIR ET BLANC, parce que ca ne relevait pas du gout :
+ *   · les alertes restent COLOREES — un avertissement monochrome sur une page qui signe des
+ *     transactions irreversibles serait une regression de securite deguisee en esthetique ;
+ *   · la police reste MONOSPACE : cette page affiche des adresses, des montants et des calldata,
+ *     et en proportionnelle deux adresses de meme longueur ne s alignent pas ;
+ *   · le bouton principal reste le seul element plein de la page. */
+:root{--bg:#050d24;--bg2:#0a1633;--card:#0f1d3d;--line:#1e2f57;--fg:#e9f0ff;--dim:#8ba0c9;
+--or:#f7a318;--ok:#22c55e;--warn:#f5a317;--bad:#ef4444;--blue:#2f6ef0}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0}
 /* ⛔ PLUS DE DEGRADE. Il tirait l oeil vers le haut de la page, la ou il n y a rien a decider.
@@ -36,7 +40,7 @@ html,body{margin:0}
  *    des calldata. En proportionnelle, deux adresses de meme longueur ne s alignent pas et un
  *    « 0 » de trop ne se voit pas — sur une page qui SIGNE, c est un defaut de lisibilite, pas
  *    un gout. */
-body{background:var(--bg);
+body{background:radial-gradient(120% 80% at 50% 0%,#0b2a7a 0%,var(--bg) 60%) no-repeat fixed;
 color:var(--fg);font:15px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 padding:max(14px,env(safe-area-inset-top)) 14px calc(28px + env(safe-area-inset-bottom))}
 main{max-width:560px;margin:0 auto}
@@ -49,7 +53,7 @@ h1{font-size:21px;margin:0}.sub{color:var(--dim);font-size:13px;margin:2px 0 0}
  *    bleu contre un gris ne garantissait pas. */
 .tabs button{flex:1;background:transparent;color:var(--dim);border:1px solid var(--line);
 border-radius:4px;padding:10px 6px;font-size:13px;font-weight:600;font-family:inherit}
-.tabs button[aria-selected=true]{background:var(--fg);color:#000;border-color:var(--fg)}
+.tabs button[aria-selected=true]{background:var(--blue);color:#fff;border-color:var(--blue)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:15px;margin-bottom:12px}
 .card h2{font-size:12.5px;margin:0 0 12px;color:var(--dim);font-weight:700;letter-spacing:.5px;text-transform:uppercase}
 label{display:block;font-size:13px;color:var(--dim);margin:12px 0 5px}
@@ -93,7 +97,7 @@ body.simple .avance{display:none}
 /* ⛔ LE BOUTON PRINCIPAL EST BLANC PLEIN SUR NOIR : dans une interface monochrome, l action ne
  *    peut plus se signaler par sa couleur, seulement par son CONTRASTE. C est le seul element
  *    blanc plein de la page — donc le seul qui se lit comme « appuyer ici ». */
-button.act{width:100%;background:var(--or);color:#000;border:0;border-radius:6px;padding:16px;
+button.act{width:100%;background:var(--or);color:#20160a;border:0;border-radius:10px;padding:16px;
 font-size:16px;font-weight:800;margin-top:6px}
 /* ⚠️ Le bouton SECONDAIRE devient un contour : deux boutons blancs pleins se disputeraient le
  *    regard, et l utilisateur ne saurait plus lequel est l action principale. */
