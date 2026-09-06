@@ -1234,8 +1234,18 @@ async function construirePlan() {
    *    saisie, poser un prix, ou augmenter le montant. Un message unique enverrait chercher au
    *    mauvais endroit. */
   const eDep = decQ === null ? { etat: 'VIDE' } : montantHumain(texteDepot, decQ);
+  /* ⛔⛔ SUR LE PRIX REEL DE LA POOL, PAS SUR CELUI DU CHAMP — CORRECTION D UNE REGRESSION QUE
+   *    J AI INTRODUITE. Ma premiere version dimensionnait `L` avec `sqrtPrix`, le prix VOULU,
+   *    tandis que les besoins etaient calcules plus bas avec `prixReel ?? sqrtPrix`. Sur une pool
+   *    DEJA prixee par quelqu un d autre, les deux divergent : on dimensionnait le depot pour un
+   *    prix qui n est pas celui de la pool, et l ecran affichait « this position needs » VIDE.
+   *    Trouve en exercant le site EN LIGNE apres une quinzaine d editions — pas en relisant.
+   * ⚠️ `e.sqrtPrix` vient de `etatPool`, lu juste avant : c est le premier point du fichier ou le
+   *    prix REEL est connu. Le calculer plus haut serait une zone morte temporelle. */
+  const prixPourL = (e.sqrtPrix !== null && e.sqrtPrix !== undefined && e.sqrtPrix !== 0n)
+    ? e.sqrtPrix : sqrtPrix;
   const calcL = eDep.etat === 'OK'
-    ? liquiditePourDepot({ depot: eDep.valeur, sqrtPrix, deviseEst0: quoteEst0 })
+    ? liquiditePourDepot({ depot: eDep.valeur, sqrtPrix: prixPourL, deviseEst0: quoteEst0 })
     : { etat: eDep.etat === 'REFUSE' ? 'SAISIE' : 'VIDE' };
   const liq = calcL.etat === 'OK' ? calcL.liquidite : 0n;
   if (calcL.etat !== 'OK') {
