@@ -361,6 +361,28 @@ summary:hover{color:var(--fg)}
   <div id="rendu"></div>
 </div>
 
+<!-- ⛔ LANCEMENT UNILATERAL — la carte qui supprime le besoin de capital.
+     Mesure du 2026-09-06 : chez openlaunch 99,99 % de la supply est DANS la pool, chez nous
+     0,00 %. Leur position est placee ENTIEREMENT sous le prix, donc elle ne contient que le
+     jeton du createur. Zero ETH. Le regime a ete PROUVE accepte par la chaine (281 980 gas,
+     avec temoin positif ET temoin negatif).
+     ⚠️ Elle reste dans les reglages avances : c est un geste definitif qui place TOUTE la
+     supply, et il ne doit pas se trouver sous la main de quelqu un qui decouvre la page. -->
+<div class="card avance">
+  <h2>Launch — put the whole supply in the pool</h2>
+  <p class="expl">The creator puts in <b>only the token</b>. Buyers bring the ETH. This is how a
+  launch needs no capital: the position sits entirely below the price, so it holds nothing but
+  your blocks.</p>
+  <label for="lancBlock">Block to launch</label>
+  <input id="lancBlock" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
+  <label for="lancValo">What the whole supply is worth at the start — in ETH</label>
+  <input id="lancValo" value="10" inputmode="decimal">
+  <div id="lancPlan" class="fiche" style="margin-top:10px"></div>
+  <button class="act sec" id="lancCalculer" style="margin-top:10px">Work out the launch</button>
+  <button class="act" id="lancEtape1" style="margin-top:8px;display:none">1 · create the pool at this price</button>
+  <button class="act" id="lancEtape2" style="margin-top:8px;display:none">2 · place the whole supply</button>
+</div>
+
 <div class="card avance">
   <h2>Liquidity</h2>
   <label for="poolToken">Block to pool</label>
@@ -516,7 +538,11 @@ import { cleDePool, etatPool, encodeInitialize, encodeApprove, encodePermit2Appr
    * option encore valide. Le prix se DERIVE, il ne se choisit plus dans une liste. */
   MAX_UINT256, MAX_UINT160, MAX_UINT48, MAX_UINT128, TICK_BAS, TICK_HAUT, sqrtPriceDepuisPrix, montantsPourLiquidite,
   encodeSwapExactInSingle, encodeQuote, formeAcceptee, AVEC_MINHOP, selecteur as sel4,
-  essaiEtape, valeurOuRefus, raisonDeBloquer, poolId, liquiditePourDepot } from './pool.js';
+  essaiEtape, valeurOuRefus, raisonDeBloquer, poolId, liquiditePourDepot,
+  /* ⛔ AJOUTES POUR LE LANCEMENT UNILATERAL. `montantsPourLiquidite` reste utilisee ailleurs et
+   *    n a PAS ete remplacee : elle leve hors plage, ce qui est correct pour son usage. */
+  montantsPosition, liquiditeUnilaterale } from './pool.js';
+import { parametresLancement } from './lancement.js';
 import { consentementValide, marquerConsentement } from './consentement.js';
 import { verdictPhoto, chercherQualite, octetsUri, PHOTO_MAX } from './photo.js';
 
@@ -2162,6 +2188,157 @@ async function cribler_(adresse) {
  * reseau, et un consentement donne avant n en est plus un apres.
  * @returns {Promise<boolean>} true si l envoi peut se faire, false si on a refuse (et dit pourquoi)
  */
+/* ══ LANCEMENT UNILATERAL ══════════════════════════════════════════════════════════════════════
+ * ⛔ CE CHEMIN PLACE TOUTE LA SUPPLY, DEFINITIVEMENT. Il calcule d abord, montre tout, et
+ *    n autorise les deux envois qu APRES avoir verifie sur la chaine que la position ne demande
+ *    AUCUN ETH. Un plan qui echoue arrive sinon apres la signature.
+ * ⚠️ DEUX TRANSACTIONS, PAS UNE : `initialize` cree la pool, `mint` y place la supply. On ne
+ *    pretend pas les enchainer tout seul — le portefeuille signe l une, puis l autre, et l app
+ *    RELIT la chaine entre les deux au lieu de supposer que la premiere a pris. */
+let plancement = null;
+
+$('#lancCalculer').onclick = async () => {
+  const box = $('#lancPlan');
+  $('#lancEtape1').style.display = 'none';
+  $('#lancEtape2').style.display = 'none';
+  plancement = null;
+  const jeton = $('#lancBlock').value.trim();
+  if (!/^0x[0-9a-fA-F]{40}$/.test(jeton)) return box.innerHTML = ligne('state', pastille('NOT AN ADDRESS', 'warn'));
+  const valo = Number($('#lancValo').value);
+  /* ⛔ UNE VALORISATION ILLISIBLE NE DONNE PAS UN DEFAUT : elle refuse. Un repli silencieux
+   *    graverait un prix que personne n a choisi. */
+  if (!Number.isFinite(valo) || valo <= 0) return box.innerHTML = ligne('state', pastille('VALUATION UNREADABLE', 'warn'));
+
+  box.innerHTML = ligne('state', 'asking the chain…');
+  try {
+    /* ⛔ UN SEUL POINT DE VERITE POUR LA DEVISE, comme dans `construirePlan`. Deux endroits qui la
+     *    liraient differemment produiraient deux `PoolKey` differentes — donc deux pools, dont
+     *    une vide, et le createur ne saurait pas laquelle porte sa supply. */
+    const d0 = devise(chaine);
+    if (!d0) return box.innerHTML = ligne('state', pastille('NO QUOTE CURRENCY FOR THIS CHAIN', 'bad'));
+    if (!compte) return box.innerHTML = ligne('state', pastille('CONNECT FIRST', 'dim'));
+    const V = V4[chaine];
+    const lire4 = async (to, data) => {
+      const r = await rpc('eth_call', [{ to, data: data.startsWith('0x') ? data : '0x' + data }, 'latest']);
+      if (!r || r === '0x') throw new Error('empty answer from ' + to);
+      return r;
+    };
+    /* ⚠️ `pad` existe deja plus haut : j avais redefini le meme helper sous un autre nom. Deux
+     *    copies d une meme conversion finissent par diverger, et c est le motif « helper canonique
+     *    contre copie plus faible » qu on a deja paye huit fois dans ce depot. */
+    const cle = cleDePool(d0.adr, jeton, { fee: 30000, tickSpacing: 200 });
+    const blockEst1 = cle.currency1.toLowerCase() === jeton.toLowerCase();
+    const supply = BigInt(await lire4(jeton, sel4('totalSupply()')));
+    const dec = Number(BigInt(await lire4(jeton, sel4('decimals()'))));
+    const solde = BigInt(await lire4(jeton, sel4('balanceOf(address)') + pad(compte)));
+    const entiere = supply / 10n ** BigInt(dec);
+
+    /* Le tick courant, LU — s il existe. La pool peut deja etre prixee, et alors SON prix commande. */
+    const s0 = await lire4(V.stateView, sel4('getSlot0(bytes32)') + poolId(cle).slice(2));
+    const sqrtExistant = BigInt('0x' + s0.slice(2, 66));
+    const tickCourant = sqrtExistant === 0n ? null : Number(BigInt.asIntN(24, BigInt('0x' + s0.slice(66, 130))));
+
+    const p = parametresLancement({ supply: entiere, valorisationEth: valo, espacement: 200, tickCourant });
+    if (p.etat !== 'OK') return box.innerHTML = ligne('state', pastille('REFUSED', 'bad')) + ligne('why', enTexte(p.pourquoi));
+
+    const sqrtVise = sqrtExistant !== 0n ? sqrtExistant
+      : sqrtPriceDepuisPrix({ prixNum: BigInt(Math.round(valo * 1e6)), prixDen: entiere * 1000000n,
+        decDevise: 18, decBlock: dec, deviseEst0: blockEst1 });
+    const sqrtDe = (t) => BigInt(Math.floor(Math.sqrt(Math.pow(1.0001, t)) * 2 ** 96));
+    const sqA = sqrtDe(p.tickBas), sqB = sqrtDe(p.tickHaut);
+    const L = liquiditeUnilaterale({ montant: solde, cote: blockEst1 ? 1 : 0, sqrtMin: sqA, sqrtMax: sqB });
+    if (!L) return box.innerHTML = ligne('state', pastille('NO LIQUIDITY COMPUTABLE', 'bad'));
+    const m = montantsPosition(L, sqrtVise, sqA, sqB);
+    const ethRequis = blockEst1 ? m.montant0 : m.montant1;
+    const blocksRequis = blockEst1 ? m.montant1 : m.montant0;
+
+    let vue = ligne('pool', 'fee 3% · spacing 200 · ' + (sqrtExistant === 0n ? 'to be created' : pastille('ALREADY EXISTS', 'warn')))
+      + ligne('valuation', valo + ' ETH for the whole supply')
+      + ligne('range', '[' + p.tickBas + ', ' + p.tickHaut + ']' + (p.prixImpose ? '  ⚠️ upper tick forced by the existing pool' : ''))
+      + ligne('this places', formaterUnites(blocksRequis, dec) + ' blocks')
+      + ligne('you hold', formaterUnites(solde, dec) + ' blocks')
+      + ligne('ETH needed', ethRequis === 0n ? pastille('NONE', 'ok') : pastille(ethRequis + ' wei — NOT capital-free', 'bad'));
+    /* ⛔ TROIS REFUS, ET AUCUN N EST REDONDANT : demander de l ETH veut dire que la plage est du
+     *    mauvais cote ; demander plus que le solde veut dire que le calcul et la realite ont
+     *    diverge. Les deux se voient ICI ou apres la signature. */
+    if (ethRequis !== 0n || blocksRequis > solde || blocksRequis === 0n) {
+      vue += ligne('blocked', enTexte(ethRequis !== 0n ? 'the range is on the wrong side of the price'
+        : blocksRequis === 0n ? 'this would place nothing at all'
+        : 'it would place more blocks than you hold'));
+      return box.innerHTML = vue;
+    }
+    vue += ligne('warning', 'this places your ENTIRE supply, and it cannot be taken back out by this app');
+    box.innerHTML = vue;
+    plancement = { cle, sqrtVise, tickBas: p.tickBas, tickHaut: p.tickHaut, L, blocksRequis,
+      blockEst1, dejaCreee: sqrtExistant !== 0n };
+    $('#lancEtape1').style.display = plancement.dejaCreee ? 'none' : '';
+    $('#lancEtape2').style.display = plancement.dejaCreee ? '' : 'none';
+  } catch (e) {
+    /* ⛔ FAIL-CLOSED : toute lecture qui echoue laisse les boutons FERMES. « Je n ai pas pu
+     *    mesurer » ne doit jamais ouvrir un geste definitif. */
+    box.innerHTML = ligne('state', pastille('NOT MEASURED', 'dim')) + ligne('cause', enTexte(e.message || String(e)));
+  }
+};
+
+/* ⛔⛔ TOUT ENVOI EST ENVELOPPE, ET LE REFUS SE DIT. Ma premiere version laissait l exception
+ *    partir dans la console : un utilisateur qui refuse dans son portefeuille voyait l app figee
+ *    sur « Your wallet will open… », sans savoir si quelque chose etait parti. Le reste de la
+ *    page distingue deja « j ai refuse » de « ca a plante » (code EIP-1193 4001) — ce chemin ne
+ *    le faisait pas. */
+async function envoyerLancement(nom, to, data, apres) {
+  try {
+    /* ⛔ LA GARDE DE CHAINE EST ICI, PAS CHEZ L APPELANT — et la regle 8 me l a impose. Un helper
+     *    d envoi peut etre appele depuis un endroit qui a oublie de verifier ; la garde appartient
+     *    donc a l endroit ou la TRANSACTION part. Meme lecon que « la garde SSRF appartient la ou
+     *    la connexion se fait ». C est ici qu ont coute quatre approbations parties sur Sepolia. */
+    if (!(await memeChaineQueLaPage())) return;
+    dire('Your wallet will open — ' + nom + '\nThe destination must be ' + to, 'warn');
+    const hash = await window.ethereum.request({ method: 'eth_sendTransaction',
+      params: [{ from: compte, to, value: '0x0', data }] });
+    dire('Sent: ' + hash + '\nRe-reading the chain…', 'ok');
+    /* ⛔ ON RELIT AU LIEU DE SUPPOSER. Traiter un envoi accepte comme un fait accompli offrirait
+     *    l etape suivante sur une pool qui n existe peut-etre pas encore. */
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      const r = await rpc('eth_getTransactionReceipt', [hash]).catch(() => null);
+      if (r) {
+        if (r.status !== '0x1') return dire('⛔ REVERTED on-chain — ' + nom + '\n' + hash, 'bad');
+        return apres ? apres(hash) : dire('Confirmed: ' + nom + '\n' + hash, 'ok');
+      }
+    }
+    dire('⚠️ Not confirmed yet: ' + hash + '\nDo NOT send the next step until this one is mined.', 'warn');
+  } catch (e) {
+    dire(refusUtilisateur(e) ? 'You refused in your wallet. NOTHING was sent.'
+      : '⛔ The send failed. Check your wallet before retrying — it may or may not have gone out.\n'
+        + (e.message || String(e)), refusUtilisateur(e) ? 'warn' : 'bad');
+  }
+}
+
+$('#lancEtape1').onclick = async () => {
+  if (!plancement) return dire('Work out the launch first.', 'warn');
+  if (!(await memeChaineQueLaPage())) return;
+  await envoyerLancement('creating the pool at the chosen price', V4[chaine].poolm,
+    encodeInitialize(plancement.cle, plancement.sqrtVise),
+    () => { dire('Pool created. Working the launch out again…', 'ok'); $('#lancCalculer').click(); });
+};
+
+$('#lancEtape2').onclick = async () => {
+  if (!plancement) return dire('Work out the launch first.', 'warn');
+  /* ⛔ CACHER UN BOUTON N EST PAS UNE GARDE : il reste appelable. Ce refus est teste. */
+  if (!plancement.dejaCreee) return dire('⛔ The pool does not exist yet. Do step 1 first.', 'bad');
+  if (!(await memeChaineQueLaPage())) return;
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 1800);
+  const data = encodeMintPosition({ cle: plancement.cle, tickBas: plancement.tickBas,
+    tickHaut: plancement.tickHaut, liquidite: plancement.L,
+    /* ⛔ LE PLAFOND DU COTE VIDE EST ZERO, PAS UNE MARGE. Y mettre « au cas ou » autoriserait
+     *    silencieusement un prelevement d ETH si la plage bougeait. Zero le rend impossible. */
+    max0: plancement.blockEst1 ? 0n : (plancement.blocksRequis * 102n) / 100n,
+    max1: plancement.blockEst1 ? (plancement.blocksRequis * 102n) / 100n : 0n,
+    proprietaire: compte, deadline });
+  await envoyerLancement('placing the ENTIRE supply — this cannot be undone here',
+    V4[chaine].posm, data);
+};
+
 async function memeChaineQueLaPage() {
   const R = RESEAUX[chaine];
   let id;
