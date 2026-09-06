@@ -1938,4 +1938,34 @@ $('#agir').onclick = async () => {
  * haut s executait avant `const DEVISES` et vidait la page entiere. */
 peuplerDevises();
 await rafraichir();
+
+/* ══ MINI APP : RETIRER L ECRAN DE CHARGEMENT DE L HOTE ═════════════════════════════════════════
+ * ⛔ SANS CET APPEL, UNE MINI APP PARFAITEMENT CONFIGUREE RESTE BLOQUEE SUR UN SPLASH. Le
+ *    manifeste est servi, les trois images sont aux bonnes dimensions, les balises `fc:miniapp` et
+ *    `fc:frame` sont la — et l hote ne montre jamais la page, parce que rien ne lui dit qu elle
+ *    est prete. Mesure du 2026-09-06 : tout etait vert SAUF ca.
+ *
+ * ⛔ ET ON NE CHARGE PAS DE CODE TIERS POUR RIEN. Cette page fait signer des transactions. Tirer un
+ *    module externe a chaque visite serait un risque de chaine d approvisionnement paye par tous
+ *    les visiteurs pour un besoin qui ne concerne que les hotes mini app.
+ * ⇒ L import est DYNAMIQUE et conditionne a la detection d un hote : dans un onglet ordinaire,
+ *   AUCUNE requete tierce ne part. La version est EPINGLEE — un « latest » signifierait que le
+ *   code execute demain n est pas celui qu on a lu aujourd hui.
+ *
+ * ⚠️ ECHEC NON FATAL, ET DIT. Si le module ne se charge pas, la page reste utilisable dans un
+ *    navigateur ordinaire ; seule l integration mini app est perdue, et la console le nomme. Une
+ *    exception ici casserait toute la page pour une fonctionnalite accessoire.
+ * ⚠️ IL N EXISTE AUCUN EQUIVALENT `postMessage` DOCUMENTE — verifie dans la documentation
+ *    officielle le 2026-09-06. Le SDK est donc le seul chemin, et c est une dependance assumee,
+ *    pas un choix de confort. */
+(async () => {
+  const dansUnHote = window.parent !== window || typeof window.ReactNativeWebView !== 'undefined';
+  if (!dansUnHote) return;
+  try {
+    const { sdk } = await import('https://cdn.jsdelivr.net/npm/@farcaster/miniapp-sdk@0.1.7/+esm');
+    await sdk.actions.ready();
+  } catch (e) {
+    console.warn('mini app SDK not loaded — the host splash screen may stay up:', e && e.message);
+  }
+})();
 </script>
