@@ -543,6 +543,7 @@ import { cleDePool, etatPool, encodeInitialize, encodeApprove, encodePermit2Appr
    *    n a PAS ete remplacee : elle leve hors plage, ce qui est correct pour son usage. */
   montantsPosition, liquiditeUnilaterale } from './pool.js';
 import { parametresLancement } from './lancement.js';
+import { apparenceDepuisAdresse } from './apparence.js';
 import { consentementValide, marquerConsentement } from './consentement.js';
 import { verdictPhoto, chercherQualite, octetsUri, PHOTO_MAX } from './photo.js';
 
@@ -1235,6 +1236,34 @@ $('#bascule').onclick = () => {
   appliquerMode();
 };
 appliquerMode();
+
+/* ══ LE BLOCK DE CHACUN ═════════════════════════════════════════════════════════════════════════
+ * ⛔ POURQUOI. Jusqu ici tout nouveau venu voyait le MEME block bleu : celui de la demo.
+ *    « Personnaliser » lui demandait de bouger huit curseurs avant d avoir quelque chose a lui —
+ *    un travail pour obtenir ce qu il croyait deja posseder. Derive de son adresse, son block est
+ *    le sien des la connexion, sans un geste.
+ * ⛔⛔ ET IL N ECRASE JAMAIS UN CHOIX. `aTouche` passe a vrai des qu un reglage d apparence bouge,
+ *    et l apparence personnelle ne s applique plus. Remplacer un reglage choisi serait pire que
+ *    de ne rien proposer — c est le defaut qu on reproche a toutes les interfaces « intelligentes ».
+ * ⚠️ Elle ne s applique qu UNE FOIS par session : se reconnecter ne doit pas defaire ce qu on
+ *    vient de regler. */
+const APPARENCE = ['teinte', 'accent', 'division', 'eclats', 'orbite', 'facette', 'matiere'];
+let aTouche = false, personnelApplique = false;
+for (const el of APPARENCE) {
+  const n = $('#' + el);
+  n.addEventListener('input', () => { aTouche = true; });
+  n.addEventListener('change', () => { aTouche = true; });
+}
+function appliquerBlockPersonnel(adresse) {
+  if (aTouche || personnelApplique) return;
+  const a = apparenceDepuisAdresse(adresse);
+  /* ⛔ `null` VEUT DIRE « ce n est pas une adresse ». On ne retombe pas sur un defaut : deux
+   *    personnes auraient alors le meme block « personnel » sans que rien ne le dise. */
+  if (!a) return;
+  for (const [cle, v] of Object.entries(a)) { const n = $('#' + cle); if (n) n.value = String(v); }
+  personnelApplique = true;
+  rafraichir();
+}
 
 const CHAMPS = ['nom','sym','dec','supply','sel','desc','teinte','accent','division','eclats','orbite','facette','matiere','photo'];
 /* ⛔ `addEventListener` ET NON `n.onchange = …` — LA GARDE VIENT D EVITER LE BUG. `#photo` a deja
@@ -2576,6 +2605,9 @@ $('#agir').onclick = async () => {
     if (!compte) {
       [compte] = await window.ethereum.request({ method: 'eth_requestAccounts' });
       $('#agir').textContent = 'Create the block';
+      /* ⛔ LE BLOCK DE CETTE PERSONNE, AVANT MEME QU ELLE TOUCHE QUOI QUE CE SOIT. Derive de son
+       *    adresse, donc stable et reconnaissable. N ecrase rien si elle a deja regle l apparence. */
+      appliquerBlockPersonnel(compte);
       await rafraichir();
       /* ⛔ ON CRIBLE ICI, ET LOCALEMENT. 812 adresses publiques embarquees (OFAC SDN, eth-labels,
        * trouvailles forensiques MainStreet). L adresse n est envoyee A PERSONNE : le jeu de
