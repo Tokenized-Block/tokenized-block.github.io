@@ -460,6 +460,60 @@ export const SQRT_MAX = 1461446703485210103287273052203988822378723970342n;
  *    en virgule fixe X96. Hors de l intervalle elle ne vaut plus — ici l intervalle est la
  *    pleine etendue, donc le prix y est toujours.
  */
+/**
+ * Les montants d une position DONT LA PLAGE NE CONTIENT PAS forcement le prix courant.
+ * ⛔⛔ C EST CE QUI REND UN LANCEMENT POSSIBLE SANS CAPITAL, et c est mesure : chez openlaunch,
+ *    99,99 % de la supply est DANS la pool ; chez nous, 0,00 %. La difference n est pas une
+ *    question de moyens — on a amorce DES DEUX COTES, il fallait des blocks ET de l ETH. Une
+ *    position placee ENTIEREMENT d un cote du prix ne demande QU UN SEUL jeton : celui que le
+ *    createur possede deja, integralement. Les acheteurs apportent l autre.
+ *
+ * ⛔ `montantsPourLiquidite` LEVE hors plage, et c est correct pour ce qu elle fait — elle n est
+ *    pas modifiee. On AJOUTE le cas general plutot que d elargir une fonction dont huit
+ *    assertions dependent : elargir une garde pour un nouveau besoin, c est la retirer pour
+ *    l ancien.
+ *
+ * Trois regimes, et le SENS de chacun compte plus que sa formule :
+ *   · prix SOUS la plage  -> la position ne contient que le jeton 0. Elle attend que le prix
+ *     monte jusqu a elle ; d ici la, elle ne detient rien du jeton 1.
+ *   · prix DANS la plage  -> les deux, comme avant.
+ *   · prix AU-DESSUS      -> la position ne contient que le jeton 1.
+ * ⚠️ QUEL JETON EST « 0 » DEPEND DE L ORDRE DES ADRESSES, PAS DU ROLE. Se tromper de cote
+ *    demanderait le jeton qu on n a pas, et l erreur ne se verrait qu au moment de signer.
+ */
+export function montantsPosition(L, sqrtP, sqrtMin, sqrtMax) {
+  const l = BigInt(L), p = BigInt(sqrtP), a = BigInt(sqrtMin), b = BigInt(sqrtMax);
+  if (l < 0n) throw new Error('liquidite negative');
+  if (a >= b) throw new Error('bornes inversees ou nulles : sqrtMin doit etre < sqrtMax');
+  const Q96 = 2n ** 96n;
+  /* montant du jeton 0 entre deux bornes : L * Q96 * (hi - lo) / (lo * hi) */
+  const m0 = (lo, hi) => (l * Q96 * (hi - lo)) / (lo * hi);
+  /* montant du jeton 1 entre deux bornes : L * (hi - lo) / Q96 */
+  const m1 = (lo, hi) => (l * (hi - lo)) / Q96;
+
+  if (p <= a) return { montant0: m0(a, b), montant1: 0n, regime: 'SOUS_LA_PLAGE' };
+  if (p >= b) return { montant0: 0n, montant1: m1(a, b), regime: 'AU_DESSUS_DE_LA_PLAGE' };
+  return { montant0: m0(p, b), montant1: m1(a, p), regime: 'DANS_LA_PLAGE' };
+}
+
+/**
+ * La liquidite `L` qui deposera EXACTEMENT `montant` d un seul jeton, hors plage.
+ * ⛔ ON INVERSE LA FORMULE PLUTOT QUE DE CHERCHER PAR DICHOTOMIE : l inversion est exacte, et
+ *    une recherche approcherait par en dessous en laissant des jetons non deposes — sur une
+ *    supply entiere, « presque tout » n est pas « tout ».
+ * ⚠️ Rend `null` si le cote demande est vide dans ce regime : demander du jeton 1 a une position
+ *    qui n en contient pas doit REFUSER, jamais rendre 0 — un L de 0 minterait une position vide.
+ */
+export function liquiditeUnilaterale({ montant, cote, sqrtMin, sqrtMax }) {
+  const m = BigInt(montant), a = BigInt(sqrtMin), b = BigInt(sqrtMax);
+  if (m <= 0n) return null;
+  if (a >= b) return null;
+  const Q96 = 2n ** 96n;
+  if (cote === 1) return (m * Q96) / (b - a);
+  if (cote === 0) return (m * a * b) / (Q96 * (b - a));
+  return null;
+}
+
 export function montantsPourLiquidite(L, sqrtP, sqrtMin = SQRT_MIN, sqrtMax = SQRT_MAX) {
   const l = BigInt(L), p = BigInt(sqrtP);
   if (l < 0n) throw new Error('liquidite negative');
