@@ -124,6 +124,34 @@ animation:trace .3s .18s ease-out forwards}
 40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(3px)}}
 @keyframes eclate{to{transform:translate(26px,-22px) rotate(18deg);opacity:0}}
 
+/* ══ LECTURE EN VERTICAL ═══════════════════════════════════════════════════════════════════════
+ * ⛔ CES REGLES VIENNENT D UNE MESURE, PAS D UNE IMPRESSION. Sur un ecran de 375x812 le
+ *    2026-09-06 : 6,1 ecrans a faire defiler (4 969 px), 4 elements qui debordent DANS leur
+ *    conteneur — `.duo` (319 px pour 315 disponibles) et `#poolDevise` (329 pour 313) — et 8
+ *    cibles tactiles sous 44 px, dont les onglets de reseau a 37.
+ * ⚠️ LE DOCUMENT NE DEBORDAIT PAS HORIZONTALEMENT : le defaut etait INTERNE, donc invisible au
+ *    test le plus courant (« la page glisse-t-elle sur le cote ? »). Un debordement interne se
+ *    voit comme un texte coupe, pas comme un glissement.
+ * ⚠️ 44 px est le minimum recommande pour un doigt ; en dessous on vise a cote, et cette page
+ *    ouvre un portefeuille. */
+/* Le resume repliable : c est une CIBLE TACTILE, pas un titre decoratif. */
+summary{cursor:pointer;padding:12px 0;min-height:44px;display:flex;align-items:center;
+  color:var(--dim);font-size:13.5px}
+summary:hover{color:var(--fg)}
+@media (max-width: 560px){
+  /* ⛔ LA GRILLE A DEUX COLONNES NE TIENT PAS A 375 px : c est elle qui coupait les libelles.
+   *    Elle se dispose donc en colonne, ce qui rallonge la page mais rend les champs lisibles —
+   *    un champ illisible ne fait economiser aucun defilement, il fait abandonner. */
+  .duo{flex-direction:column;gap:14px}
+  /* ⛔ `box-sizing` : sans lui le rembourrage d un `select` s ajoute a sa largeur de 100 %, et il
+   *    depasse de quelques pixels — exactement les 16 px mesures sur `#poolDevise`. */
+  input,select,textarea,button{box-sizing:border-box;max-width:100%}
+  select,input[type=text],input[type=number],textarea{width:100%}
+  /* les cibles que le doigt doit atteindre */
+  button,select,input[type=file]{min-height:44px}
+  input[type=range]{height:44px}
+  .k{flex:0 0 84px}
+}
 @media (prefers-reduced-motion: reduce){
   #ov,#ov *{animation:none !important}
   #ov[data-phase="ok"] .ovMarque,#ov[data-phase="fail"] .ovMarque{stroke-dashoffset:0}
@@ -289,6 +317,15 @@ animation:trace .3s .18s ease-out forwards}
      qui n a pas ete mesure. Ce qui n existe pas est dit comme n existant pas. -->
 <div class="card" id="commentCaMarche">
   <h2>How a Tokenized Block works</h2>
+  <!-- ⛔ REPLIE PAR DEFAUT, ET C EST UNE MESURE QUI LE DECIDE. Cette carte pesait 1 465 px pour
+       517 mots — 26 % de toute la page — et elle se tenait ENTRE l utilisateur et le formulaire.
+       Sur un ecran de 375 px la page demandait 7 ecrans de defilement.
+       ⚠️ REPLIER N EST PAS SUPPRIMER, et la nuance est le sujet : ce texte s adresse a des gens
+       qui ne connaissent pas la crypto, il doit rester atteignable en un geste. `<details>` le
+       garde dans le document — donc lisible par un lecteur d ecran, trouvable par la recherche du
+       navigateur, et indexable — au lieu de le cacher en JavaScript. -->
+  <details>
+    <summary>Read what a block is, and what nobody can do to it once it exists</summary>
 
   <p class="expl"><b>A block is bytes you own.</b> You choose a name, a symbol, a supply and a
   description. The app turns that into a <b>B-20 token</b> — Base's native token standard, where the
@@ -352,6 +389,7 @@ animation:trace .3s .18s ease-out forwards}
   been exercised end to end on <b>Base Sepolia</b> — a test network. The encoders are compared byte
   for byte against the reference toolchain, but nothing here has been used at scale by anyone other
   than its author. Treat it as working code, not as a finished product.</p>
+  </details>
 </div>
 <div id="ov" hidden>
   <div class="ovBox">
