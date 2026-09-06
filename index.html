@@ -76,6 +76,15 @@ textarea{min-height:74px;resize:vertical}
  *    des deux seuls champs qu un debutant doit remplir. Un selecteur trop large ne se voit pas
  *    dans le code : il se voit a l ecran, et seulement si on regarde. */
 body.simple .avance{display:none}
+/* ⚠️ `auto-fill` et non `auto-fit` : avec deux blocks seulement, `auto-fit` les etirerait sur
+ *    toute la largeur et deux vignettes occuperaient l ecran. La grille garde sa maille. */
+.galerie{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:10px}
+.galerie figure{margin:0;text-align:center}
+.galerie svg{width:100%;height:auto;border-radius:8px;display:block}
+.galerie figcaption{font-size:11px;color:var(--dim);margin-top:4px;
+  /* ⛔ UN SYMBOLE VENU D UN INCONNU PEUT ETRE TRES LONG. Sans cette coupe, une seule entree
+   *    deformerait toute la grille — une mise en page qu un tiers controle est un defaut. */
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bascule{width:100%;margin:10px 0 2px;background:transparent;border:1px dashed var(--line);
   color:var(--dim);padding:12px;border-radius:10px;font:inherit;cursor:pointer;min-height:44px}
 .bascule:hover{color:var(--fg);border-color:var(--fg)}
@@ -227,6 +236,17 @@ summary:hover{color:var(--fg)}
 <!-- ⛔ MESURE, PAS INTUITION : 24 champs, 9 sections, 11 termes de jargon, 5,3 ecrans. Le mode
      simple ne RETIRE rien — il replie. Un clic rend tout visible, et le plan signe est identique
      au caractere pres dans les deux modes. -->
+<!-- ⛔ LES BLOCKS DES AUTRES, AVANT TOUTE CONNEXION. Mesure du 2026-09-06 : 116 blocks crees dans
+     les 9 000 derniers blocs de chaine, 2 483 sur 200 000. Le standard est ACTIVEMENT utilise —
+     c est ce qui rend cette galerie possible. Avec trois entrees elle aurait dit « personne ne
+     s en sert » a chaque visiteur, et on ne reprend pas la premiere chose qu on montre.
+     ⚠️ Elle se charge APRES la page : elle ne doit jamais retarder ce que l utilisateur est venu
+     faire. Si elle echoue, elle se tait plutot que d inventer. -->
+<div class="card" id="carteGalerie" style="display:none">
+  <h2>Blocks people made</h2>
+  <div id="galerie" class="galerie"></div>
+  <div id="galerieNote" class="k" style="margin-top:10px"></div>
+</div>
 <button class="bascule" id="bascule" aria-expanded="false">Show every setting</button>
 
 <div id="gardeMainnet">
@@ -1265,6 +1285,76 @@ function appliquerBlockPersonnel(adresse) {
   rafraichir();
 }
 
+/* ══ LA GALERIE DES BLOCKS DEJA CREES ══════════════════════════════════════════════════════════
+ * ⛔⛔ CE SONT LES BLOCKS D INCONNUS, ET RIEN DE CE QU ILS ONT ECRIT N EST RENDU EN HTML.
+ *    Le nom et le symbole passent par `enTexte` ; leur image n est JAMAIS chargee. On dessine a la
+ *    place NOTRE logo, derive de l ADRESSE du jeton — donc distinct pour chacun, deterministe, et
+ *    sans qu une seule donnee hostile atteigne la page. Charger l image d un tiers sur une page
+ *    qui parle au portefeuille serait offrir une surface pour rien.
+ * ⚠️ ELLE SE TAIT PLUTOT QUE D INVENTER. Fenetres ratees comprises : « je n ai pas lu » et « il
+ *    n y en a pas » sont deux faits differents, et la note le dit.
+ * ⚠️ ET ELLE NE RETARDE RIEN : lancee apres le premier rendu, elle n empeche jamais quelqu un de
+ *    creer son block pendant qu elle charge. */
+/**
+ * Les parametres de logo issus d une apparence derivee d adresse.
+ * ⛔ IL EST NOMME, ET LA REGLE 2 AVAIT RAISON DE L EXIGER. Un objet bricole en ligne
+ *    (`{ ...a, lettre }`) peut manquer un champ sans que rien ne le dise : `logoSvg` se replie
+ *    alors en silence et dessine autre chose que ce qu on croit. Un constructeur unique force
+ *    les valeurs de repli a etre ECRITES une seule fois, ici.
+ * ⚠️ `apparenceDepuisAdresse` rend `null` sur une entree qui n est pas une adresse : on retombe
+ *    alors sur les valeurs d origine du logo, jamais sur des champs absents.
+ */
+function paramsLogoDepuisApparence(a, lettre) {
+  const d = a || {};
+  return {
+    teinte: d.teinte ?? 222, accent: d.accent ?? 38,
+    division: d.division ?? 3, eclats: d.eclats ?? 3,
+    orbite: d.orbite ?? 'sillage', facette: d.facette ?? 'lettre',
+    matiere: d.matiere ?? 'verre', lettre,
+  };
+}
+
+/* ⛔⛔ ELLE NOMME SON RESEAU, ET J AI DECOUVERT POURQUOI DE LA PIRE FACON. Mon instrument comptait
+ *    116 creations sur 9 000 blocs, la galerie en annoncait 909 — huit fois plus, meme fenetre,
+ *    meme code. J ai cherche une troncature de noeud, compare cinq RPC, importe le module dans la
+ *    console. La cause etait ailleurs : l app DEMARRE sur Base Sepolia, donc la galerie montrait
+ *    des jetons de TEST sous le titre « Blocks people made ». Un visiteur aurait pris des essais
+ *    pour de vrais lancements.
+ * ⛔ DEUX CHIFFRES QUI SE CONTREDISENT SONT UN DEFAUT, PAS UN DETAIL. Si j avais choisi le plus
+ *    flatteur — 909 remplit mieux une galerie que 116 — le bug serait parti en production avec
+ *    un chiffre qui a l air d un succes.
+ * ⇒ La galerie suit desormais le reseau CHOISI, le DIT, et se refait quand on en change. */
+async function remplirGalerie() {
+  const boite = $('#galerie'), note = $('#galerieNote');
+  const R = RESEAUX[chaine];
+  try {
+    const r = await listerCreations({ rpc, blocs: 9000 });
+    const vues = (r.creations || []).slice(0, 12);
+    if (!vues.length) {
+      /* ⛔ ZERO N EST PAS UN RESULTAT A MONTRER. On cache la carte plutot que d afficher un vide
+       *    qui dirait « personne ne s en sert » — et qui pourrait n etre qu une fenetre ratee. */
+      return;
+    }
+    boite.innerHTML = vues.map((c) => {
+      const sym = String(c.symbole || '?').slice(0, 11);
+      const svg = logoSvg(paramsLogoDepuisApparence(apparenceDepuisAdresse(c.jeton), sym));
+      return '<figure>' + svg + '<figcaption>' + enTexte(sym) + '</figcaption></figure>';
+    }).join('');
+    const rates = (r.fenetresRatees || []).length;
+    /* ⛔ LE RESEAU EN PREMIER. Sans lui, des jetons de test se lisent comme de vrais lancements —
+     *    et c est exactement ce que cette carte a fait avant d etre corrigee. */
+    note.textContent = 'on ' + R.nom + ' · ' + vues.length + ' of ' + (r.creations || []).length
+      + ' blocks made in the last ' + (r.fenetre.a - r.fenetre.de).toLocaleString('en-US') + ' chain blocks'
+      + (rates ? ' · ' + rates + ' window(s) could not be read — this list is incomplete' : '');
+    $('#carteGalerie').style.display = '';
+  } catch (e) {
+    /* ⛔ ON NE MONTRE RIEN PLUTOT QU UN FAUX. Une galerie vide « par erreur » se lirait comme un
+     *    fait sur le produit. */
+  }
+}
+/* ⚠️ Apres le premier rendu, jamais avant. */
+setTimeout(remplirGalerie, 400);
+
 const CHAMPS = ['nom','sym','dec','supply','sel','desc','teinte','accent','division','eclats','orbite','facette','matiere','photo'];
 /* ⛔ `addEventListener` ET NON `n.onchange = …` — LA GARDE VIENT D EVITER LE BUG. `#photo` a deja
  * son propre gestionnaire, assigne plus haut, qui redimensionne et mesure l image. Une affectation
@@ -1281,6 +1371,10 @@ for (const id of [84532, 8453]) $('#t' + id).onclick = () => {
   /* ⛔ le consentement ne survit PAS a un changement de reseau */
   $('#gardeCase').checked = false;
   peuplerDevises();
+  /* ⛔ LA GALERIE SUIT LE RESEAU. Sans ce rappel, elle garderait les blocks de l ancien reseau
+   *    sous une note qui nommerait le nouveau — un mensonge pire que l absence de note. */
+  $('#carteGalerie').style.display = 'none';
+  remplirGalerie();
   dire('Network: ' + RESEAUX[id].nom + '.'); rafraichir();
 };
 
