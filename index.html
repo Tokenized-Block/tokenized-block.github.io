@@ -2246,7 +2246,20 @@ $('#lancCalculer').onclick = async () => {
         decDevise: 18, decBlock: dec, deviseEst0: blockEst1 });
     const sqrtDe = (t) => BigInt(Math.floor(Math.sqrt(Math.pow(1.0001, t)) * 2 ** 96));
     const sqA = sqrtDe(p.tickBas), sqB = sqrtDe(p.tickHaut);
-    const L = liquiditeUnilaterale({ montant: solde, cote: blockEst1 ? 1 : 0, sqrtMin: sqA, sqrtMax: sqB });
+    /* ⛔⛔ ON NE PLACE PAS 100 % DU SOLDE, ET C EST MESURE. Simulation `eth_simulateV1` des deux
+     *    transactions enchainees, le 2026-09-06 : a 1000/1000 le mint REVERTE sur
+     *    TRANSFER_FROM_FAILED ; a 999/1000 il passe (321 084 gas).
+     *    Cause : `sqrtDe()` calcule sqrt(1.0001^tick) en FLOTTANTS. Sur 7,9e32, une erreur
+     *    relative de 1e-16 vaut ~1e17 wei — alors qu il ne restait que 4 641 wei entre le montant
+     *    calcule et le solde. En placant tout, il ne reste rien pour absorber l arrondi, et
+     *    Uniswap arrondit VERS LE HAUT ce qu il prend a l utilisateur.
+     * ⚠️ Detail qui confirme : openlaunch ne place pas 100 % non plus — leur position mesuree
+     *    porte 99,9938 % de la supply.
+     * ⛔ Et une marge de 0,1 % n est pas « presque tout » : ce sont des blocks qui RESTENT au
+     *    createur, donc vendables hors pool. On l affiche, on ne le cache pas. */
+    const MARGE_POUR_MILLE = 999n;
+    const aPlacer = (solde * MARGE_POUR_MILLE) / 1000n;
+    const L = liquiditeUnilaterale({ montant: aPlacer, cote: blockEst1 ? 1 : 0, sqrtMin: sqA, sqrtMax: sqB });
     if (!L) return box.innerHTML = ligne('state', pastille('NO LIQUIDITY COMPUTABLE', 'bad'));
     const m = montantsPosition(L, sqrtVise, sqA, sqB);
     const ethRequis = blockEst1 ? m.montant0 : m.montant1;
@@ -2257,6 +2270,10 @@ $('#lancCalculer').onclick = async () => {
       + ligne('range', '[' + p.tickBas + ', ' + p.tickHaut + ']' + (p.prixImpose ? '  ⚠️ upper tick forced by the existing pool' : ''))
       + ligne('this places', formaterUnites(blocksRequis, dec) + ' blocks')
       + ligne('you hold', formaterUnites(solde, dec) + ' blocks')
+      /* ⛔ LA PART QUI RESTE SE DIT. Un « presque tout » silencieux laisserait croire que la
+       *    supply entiere est dans la pool, alors que 0,1 % reste vendable hors pool. */
+      + ligne('stays with you', formaterUnites(solde - blocksRequis, dec)
+        + ' blocks <span class="k">(0.1 % margin — placing 100 % is REFUSED by the chain, measured)</span>')
       + ligne('ETH needed', ethRequis === 0n ? pastille('NONE', 'ok') : pastille(ethRequis + ' wei — NOT capital-free', 'bad'));
     /* ⛔ TROIS REFUS, ET AUCUN N EST REDONDANT : demander de l ETH veut dire que la plage est du
      *    mauvais cote ; demander plus que le solde veut dire que le calcul et la realite ont
@@ -2267,7 +2284,10 @@ $('#lancCalculer').onclick = async () => {
         : 'it would place more blocks than you hold'));
       return box.innerHTML = vue;
     }
-    vue += ligne('warning', 'this places your ENTIRE supply, and it cannot be taken back out by this app');
+    /* ⚠️ LE MOT SUIT LA MESURE. Il disait « your ENTIRE supply » alors que la marge de 0,1 % en
+     *    laisse une part dehors : sur un geste definitif, une phrase inexacte est un defaut, pas
+     *    un raccourci. */
+    vue += ligne('warning', 'this places almost all of your supply, and it cannot be taken back out by this app');
     box.innerHTML = vue;
     plancement = { cle, sqrtVise, tickBas: p.tickBas, tickHaut: p.tickHaut, L, blocksRequis,
       blockEst1, dejaCreee: sqrtExistant !== 0n };
@@ -2335,7 +2355,7 @@ $('#lancEtape2').onclick = async () => {
     max0: plancement.blockEst1 ? 0n : (plancement.blocksRequis * 102n) / 100n,
     max1: plancement.blockEst1 ? (plancement.blocksRequis * 102n) / 100n : 0n,
     proprietaire: compte, deadline });
-  await envoyerLancement('placing the ENTIRE supply — this cannot be undone here',
+  await envoyerLancement('placing almost all of your supply — this cannot be undone here',
     V4[chaine].posm, data);
 };
 
