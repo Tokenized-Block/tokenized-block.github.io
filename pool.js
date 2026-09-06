@@ -36,6 +36,45 @@ export function encodeInitialize(cle, sqrtPriceX96) {
     + cleInline(cle) + mot(sqrtPriceX96);
 }
 
+/**
+ * COLLECTE les frais d une position et les envoie a une adresse CHOISIE.
+ * ================================================================================================
+ * ⛔ CE QUE CA REGLE. La tokenomics designe une adresse pour les frais ; en Uniswap v4 les frais
+ *    reviennent au PROPRIETAIRE de la position. J avais d abord conclu qu il fallait TRANSFERER
+ *    le NFT — reponse dangereuse : qui detient le NFT peut aussi retirer toute la liquidite.
+ *    `TAKE_PAIR` prend un DESTINATAIRE : on collecte vers qui on veut en gardant la position.
+ *
+ * ⛔ LES DEUX CONSTANTES SONT MESUREES, PAS LUES. `sonde-actions-v4.mjs` a demande au
+ *    PositionManager lesquelles il accepte (`UnsupportedAction(uint256)` nomme ce qu il refuse) ;
+ *    `Actions.sol` a donne les noms ; les deux concordent la ou c est verifiable — MINT_POSITION
+ *    0x02 et SETTLE_PAIR 0x0d sont celles du mint qui a REUSSI, TAKE_ALL 0x0f et TAKE_PORTION
+ *    0x10 sont refusees des deux cotes. Une constante d action fausse n echoue pas proprement :
+ *    elle EXECUTE UNE AUTRE ACTION.
+ *
+ * ⛔ LA LIQUIDITE RETIREE EST ZERO, ET C EST TOUTE LA DIFFERENCE entre collecter les frais et
+ *    fermer la position. `DECREASE_LIQUIDITY` a zero ne touche pas au capital : elle ne fait
+ *    remonter que ce qui s est accumule. Le test asserte ce zero dans les OCTETS, pas dans
+ *    l intention.
+ *
+ * ⚠️ ORDRE NON COSMETIQUE : decroitre PUIS prendre. Prendre d abord ne prendrait rien.
+ */
+export function encodeCollecteFrais({ tokenId, currency0, currency1, versQui, deadline }) {
+  const actions = '01' + '11';                    // DECREASE_LIQUIDITY, TAKE_PAIR
+  /* params[0] : (tokenId, liquidite=0, min0=0, min1=0, hookData) — 5 mots + les octets vides */
+  const p0 = mot(tokenId) + mot(0) + mot(0) + mot(0) + mot(0xa0) + mot(0);
+  /* params[1] : (currency0, currency1, destinataire) */
+  const p1 = motAdr(currency0) + motAdr(currency1) + motAdr(versQui);
+
+  const elements = [dyn(p0), dyn(p1)];
+  let curseur = BigInt(32 * elements.length);
+  const offsets = elements.map((e) => { const o = mot(curseur); curseur += BigInt(e.length / 2); return o; });
+  const tableau = mot(elements.length) + offsets.join('') + elements.join('');
+
+  const blocActions = dyn(actions);
+  const unlock = mot(0x40) + mot(0x40 + blocActions.length / 2) + blocActions + tableau;
+  return '0x' + selecteur('modifyLiquidities(bytes,uint256)') + mot(0x40) + mot(deadline) + dyn(unlock);
+}
+
 export function encodeApprove(spender, montant) {
   return '0x' + selecteur('approve(address,uint256)') + motAdr(spender) + mot(montant);
 }

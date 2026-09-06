@@ -254,8 +254,8 @@ animation:trace .3s .18s ease-out forwards}
   <h2>Swap</h2>
   <label for="swapToken">Block</label>
   <input id="swapToken" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
-  <label for="swapMontant">Amount of block to sell (raw units)</label>
-  <input id="swapMontant" value="1000000000000" inputmode="numeric">
+  <label for="swapMontant">How many blocks to sell</label>
+  <input id="swapMontant" value="0.2" inputmode="decimal" placeholder="0.2">
   <button class="act sec" id="swapEtat" style="margin-top:10px">Quote it</button>
   <div id="swapVue"></div>
   <button class="act" id="swapAgir" disabled>Run the next step</button>
@@ -339,7 +339,7 @@ import { encodeCreateB20, paramsAsset, encodeUpdateSupplyCap, encodeUpdateContra
 /* ⛔ Le formatage des montants vit dans son module POUR ETRE TESTE : la conversion wei -> ETH
  * fait de la division et du remplissage sur des BigInt, et elle arrondit VERS LE HAUT — un cout
  * affiche ne doit jamais etre inferieur au cout reel. 8 tests dans `test-montants.mjs`. */
-import { formaterEth, estArrondi, formaterGas, entierStrict, decimalesStrictes } from './montants.js';
+import { formaterEth, estArrondi, formaterGas, entierStrict, decimalesStrictes, montantHumain, formaterUnites } from './montants.js';
 import { classerUri, sourceImage, metadonnees, enAttribut, PASSERELLE_PAR_DEFAUT } from './lecteur.js';
 import { listerCreations, creationsDe } from './index-blocks.js';
 import { cleDePool, etatPool, encodeInitialize, encodeApprove, encodePermit2Approve, encodeMintPosition,
@@ -348,7 +348,7 @@ import { cleDePool, etatPool, encodeInitialize, encodeApprove, encodePermit2Appr
    * option encore valide. Le prix se DERIVE, il ne se choisit plus dans une liste. */
   MAX_UINT256, MAX_UINT160, MAX_UINT48, MAX_UINT128, TICK_BAS, TICK_HAUT, sqrtPriceDepuisPrix, montantsPourLiquidite,
   encodeSwapExactInSingle, encodeQuote, formeAcceptee, AVEC_MINHOP, selecteur as sel4,
-  essaiEtape, valeurOuRefus, raisonDeBloquer } from './pool.js';
+  essaiEtape, valeurOuRefus, raisonDeBloquer, poolId } from './pool.js';
 
 const $ = (s) => document.querySelector(s);
 const etat = $('#etat');
@@ -1509,10 +1509,36 @@ async function etatSwap() {
   const v = dS ? { ...V4[chaine], quote: dS.adr, quoteNom: dS.nom } : null;
   const ur = ROUTEUR[chaine], q = QUOTER[chaine];
   if (!v || !ur) { box.innerHTML = ligne('state', pastille('CHAIN NOT SUPPORTED', 'bad')); return null; }
-  /* ⛔ REFUSER, PAS NETTOYER — c est un montant qu on vend. Voir `entierStrict`. */
-  const eM = entierStrict($('#swapMontant').value);
+  /* ⛔⛔ CE CHAMP SE COMPTE DESORMAIS EN JETONS, PAS EN UNITES BRUTES. Pour vendre l equivalent
+   * de 0,50 $ il fallait taper `200436811106540992`. Personne ne tape ca, et surtout personne ne
+   * le RELIT : un zero de trop passe inapercu et vend mille fois plus. Le champ accepte « 0,2 ».
+   * ⚠️ Les decimales sont LUES sur la chaine, jamais supposees — un jeton nomme autrement pourrait
+   *    en avoir 6, et coder 18 en dur transformerait une aide en piege. */
+  /* ⛔ `lire` vit dans `construirePlan`, pas ici, et `appel` est declare PLUS BAS : l utiliser
+   * serait une zone morte temporelle — la faute exacte que la regle 7 traque. On passe par `rpc`,
+   * qui est au niveau du module, et on garde la cause au lieu de l avaler. */
+  let decB = null, causeDec = null;
+  try { decB = Number(BigInt(await rpc('eth_call', [{ to: b20, data: abi.selecteurs['decimals()'] }, 'latest']))); }
+  catch (e) { causeDec = e && e.message ? e.message : String(e); }
+  if (decB === null) {
+    box.innerHTML = ligne('state', pastille('COULD NOT READ THE BLOCK DECIMALS', 'warn'))
+      + ligne('why', enTexte(causeDec || 'not measured'))
+      + ligne('what to do', 'Click "Quote it" again in a few seconds.');
+    return null;
+  }
+  /* ⛔ LES DECIMALES DE LA DEVISE AUSSI, et pour la meme raison : afficher « tu recois 170736… »
+   * sans unite est illisible, et les supposer a 18 mentirait sur USDC, qui en a 6. */
+  let decQuote = null;
+  try { decQuote = Number(BigInt(await rpc('eth_call', [{ to: v.quote, data: abi.selecteurs['decimals()'] }, 'latest']))); }
+  catch { decQuote = null; }
+  if (decQuote === null) {
+    box.innerHTML = ligne('state', pastille('COULD NOT READ THE CURRENCY DECIMALS', 'warn'))
+      + ligne('what to do', 'Click "Quote it" again in a few seconds.');
+    return null;
+  }
+  const eM = montantHumain($('#swapMontant').value, decB);
   if (eM.etat === 'REFUSE') {
-    box.innerHTML = ligne('state', pastille('AMOUNT IS NOT A WHOLE NUMBER', 'bad'))
+    box.innerHTML = ligne('state', pastille('THAT IS NOT AN AMOUNT', 'bad'))
       + ligne('you typed', enTexte(eM.tape)) + ligne('why', enTexte(eM.pourquoi));
     return null;
   }
@@ -1539,8 +1565,37 @@ async function etatSwap() {
   try {
     const r = await appel(q, encodeQuote({ cle, zeroForOne, montant }));
     sortie = BigInt('0x' + r.slice(2, 66));
-    const perte = Number((montant - sortie) * 1000000n / montant) / 10000;
-    vue += ligne('quote', sortie.toString() + '  (−' + perte.toFixed(4) + ' %)');
+    /* ⛔⛔ L ANCIENNE LIGNE DE PERTE COMPARAIT DEUX UNITES DIFFERENTES.
+     *    Elle calculait `(montant - sortie) / montant` — or `montant` est en BLOCKS et `sortie`
+     *    en WETH. Soustraire l un de l autre n a aucun sens : le pourcentage affiche etait un
+     *    nombre sans signification, et il ressemblait a une mesure. Avec 0,2 block vendu il
+     *    annoncait ~99,9 % de perte quelle que soit la profondeur reelle.
+     *    C est « l instrument repond pour une autre mesure » : juste dans sa forme, faux dans son
+     *    objet, et donc invisible tant qu on ne demande pas CE QU IL COMPARE.
+     * ⇒ La perte se mesure contre ce que le PRIX AFFICHE aurait donne, pas contre l entree. */
+    let refPrix = null;
+    try {
+      const s0 = await appel(v.stateView, '0x' + sel4('getSlot0(bytes32)') + poolId(cle).slice(2));
+      const sq = BigInt('0x' + String(s0).slice(2, 66));
+      if (sq > 0n) {
+        /* ratio currency1/currency0 en unites de BASE ; on veut « devise recue par block vendu » */
+        const r2 = (Number(sq) / Number(2n ** 96n)) ** 2;
+        refPrix = zeroForOne ? r2 : 1 / r2;
+      }
+    } catch { refPrix = null; }
+    const attendu = refPrix === null ? null : Number(montant) * refPrix;
+    /* ⚠️ TROIS ETATS : une perte non calculable ne s affiche pas comme zero. */
+    const perte = attendu === null || attendu === 0 ? null : (1 - Number(sortie) / attendu) * 100;
+    vue += ligne('you receive', formaterUnites(sortie, decQuote) + ' ' + enTexte(v.quoteNom)
+      + '  <span class="dim">(' + sortie.toString() + ' raw)</span>');
+    vue += ligne('cost vs displayed price', perte === null
+      ? pastille('NOT MEASURED', 'warn')
+      : (perte > 5 ? '<b style="color:#ff9f6b">−' + perte.toFixed(1) + ' %</b>' : '−' + perte.toFixed(2) + ' %')
+        + '  <span class="dim">— 0.30 % is the pool fee, the rest is depth</span>');
+    if (perte !== null && perte > 5) {
+      vue += ligne('⚠️', 'This pool is thin. You lose ' + perte.toFixed(1)
+        + ' % on this trade, and a bigger one loses more.');
+    }
   } catch (e) {
     /* ⛔ « pas de quote » n est pas « pas de pool » : ce peut etre un montant hors bornes. */
     vue += ligne('quote', pastille('NO QUOTE', 'warn')) + ligne('why', enTexte(e.message));

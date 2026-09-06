@@ -132,6 +132,58 @@ export function decimalesStrictes(texte, min = 6, max = 18) {
   return { etat: 'OK', valeur: n };
 }
 
+/**
+ * Lit un montant tape EN JETONS ENTIERS (« 0,17 ») et rend des unites brutes.
+ * ================================================================================================
+ * ⛔ POURQUOI. Tous les champs de montant de l app se lisaient en unites BRUTES. Pour vendre
+ *    l equivalent de 0,50 $ il fallait taper `200436811106540992`. Personne ne tape ca, et
+ *    surtout personne ne le RELIT : un zero de trop passe inapercu et vend mille fois plus.
+ *
+ * ⛔ DEUX CHAMPS, DEUX REGLES, ET C EST VOULU. `entierStrict` REFUSE les decimales parce qu un
+ *    champ en unites brutes n en a pas — « 1.5 unite » n existe pas. Ce champ-ci se compte en
+ *    jetons, donc « 1,5 » y est une saisie normale. Une seule fonction pour les deux accepterait
+ *    l ambigu d un cote ou refuserait le legitime de l autre.
+ *
+ * ⛔ AUCUN PASSAGE PAR `Number`. `1.005 * 1e18` ne rend PAS 1005000000000000000 — le flottant se
+ *    trompe, et un jeton a 18 decimales perd des chiffres bien avant. Tout se fait sur les
+ *    CHAINES, puis en BigInt.
+ *
+ * ⚠️ LA VIRGULE EST ACCEPTEE. Refuser « 0,5 » ferait echouer la moitie des gens sur leur propre
+ *    clavier. Aucune ambiguite ici, contrairement au champ de prix : un separateur de MILLIERS
+ *    n a pas sa place dans un montant a decimales, donc « , » et « . » designent la meme chose.
+ *
+ * ⚠️ TROP DE DECIMALES : REFUSE, jamais tronque. Tronquer ferait accepter une saisie et en
+ *    executer une autre — le defaut exact du nettoyeur `\D` qui lisait « 1.5 » comme 15.
+ */
+export function montantHumain(texte, decimales) {
+  const t = String(texte ?? '').trim().replace(',', '.');
+  if (t === '') return { etat: 'VIDE' };
+  if (!/^\d+(\.\d+)?$/.test(t)) {
+    return { etat: 'REFUSE', tape: String(texte),
+      pourquoi: '"' + texte + '" is not an amount. Digits and one decimal point only.' };
+  }
+  const [ent, frac = ''] = t.split('.');
+  if (frac.length > decimales) {
+    return { etat: 'REFUSE', tape: String(texte),
+      pourquoi: 'This token has ' + decimales + ' decimals — "' + texte + '" has '
+        + frac.length + '. Nothing was rounded: fix the amount.' };
+  }
+  return { etat: 'OK', valeur: BigInt(ent + frac.padEnd(decimales, '0')) };
+}
+
+/**
+ * L inverse : des unites brutes vers un texte lisible et RETAPABLE.
+ * ⛔ L ALLER-RETOUR DOIT ETRE EXACT. Si l affichage rend un nombre que retaper ne redonne pas,
+ *    l utilisateur ne peut pas verifier ce qu il fait — et c est teste dans les deux sens.
+ * ⚠️ On retire les zeros de FIN pour la lisibilite, jamais un chiffre significatif.
+ */
+export function formaterUnites(brut, decimales) {
+  const s = BigInt(brut).toString().padStart(decimales + 1, '0');
+  const ent = s.slice(0, s.length - decimales);
+  const frac = s.slice(s.length - decimales).replace(/0+$/, '');
+  return frac === '' ? ent : ent + '.' + frac;
+}
+
 export function entierStrict(texte) {
   const t = String(texte ?? '').trim();
   if (t === '') return { etat: 'VIDE' };
