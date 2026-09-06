@@ -15,7 +15,24 @@
 // ⚠️ Extrait du HTML pour etre teste. Tant que cette logique vivait dans une balise <script>
 //    inline, aucune de ces regles n etait verifiable autrement qu a l oeil.
 
-export const PASSERELLE_PAR_DEFAUT = 'https://ipfs.io/ipfs/';
+/* ⛔⛔ DEFAUT TROUVE EN PRODUCTION, ET LE SYMPTOME ETAIT TROMPEUR. Sur le site en ligne, lire
+ *    BLOCK 0 affichait « metadata FETCH FAILED », et la console disait CORS. Mesure
+ *    (`sonde-passerelles-ipfs.mjs`, sept passerelles) : `ipfs.io` rend 429 — un RATE LIMIT — et
+ *    sa reponse d erreur ne porte pas l en-tete CORS. Le navigateur signale donc « CORS » la ou
+ *    la cause est le debit. Corriger le CORS n aurait rien corrige.
+ * ⛔ ET LE PIEGE DE LA MESURE : depuis Node, tout marche — Node ignore CORS. Un test fait la
+ *    aurait valide exactement le cas casse. On mesure l EN-TETE, pas le succes du telechargement.
+ *    Resultat du jour : 429 sur ipfs.io, dweb.link, nftstorage.link, w3s.link ;
+ *                       200 + CORS `*` sur gateway.pinata.cloud et 4everland.io.
+ * ⚠️ UNE SEULE PASSERELLE EST UN POINT DE DEFAILLANCE UNIQUE sur la provenance d un jeton. On en
+ *    essaie plusieurs, dans l ordre — et si toutes echouent, on le DIT au lieu d afficher un vide. */
+export const PASSERELLES = [
+  'https://gateway.pinata.cloud/ipfs/',
+  'https://4everland.io/ipfs/',
+  'https://ipfs.io/ipfs/',
+  'https://dweb.link/ipfs/',
+];
+export const PASSERELLE_PAR_DEFAUT = PASSERELLES[0];
 
 /**
  * Echappe une valeur destinee a un ATTRIBUT HTML entre guillemets.
@@ -50,7 +67,10 @@ export function classerUri(u, passerelle = PASSERELLE_PAR_DEFAUT) {
   if (typeof u !== 'string' || u === '') return { type: 'VIDE' };
   if (u.startsWith('data:application/json;base64,')) return { type: 'DATA64', charge: u.slice(29) };
   if (u.startsWith('data:application/json,')) return { type: 'DATA', charge: u.slice(22) };
-  if (u.startsWith('ipfs://')) return { type: 'IPFS', url: passerelle + u.slice(7) };
+  /* ⚠️ `cid` EST RENDU EN PLUS DE `url`, pas a la place : `url` reste ce qu il etait pour les
+   *    18 assertions existantes, et `cid` permet de reconstruire l URL sur une AUTRE passerelle.
+   *    Sans lui, le repli multi-passerelles retomberait en silence sur une seule. */
+  if (u.startsWith('ipfs://')) return { type: 'IPFS', cid: u.slice(7), url: passerelle + u.slice(7) };
   if (u.startsWith('http://') || u.startsWith('https://')) return { type: 'HTTP', url: u };
   return { type: 'INCONNU', brut: u.slice(0, 60) };
 }
@@ -102,9 +122,51 @@ export async function metadonnees(uri, { chercher = fetch, passerelle = PASSEREL
     else {
       /* ⚠️ DEPENDANCE EXTERNE, et elle se dit : une passerelle IPFS peut etre lente, filtree ou
        * absente. « injoignable » n est PAS « le block est vide ». */
-      const r = await chercher(c.url);
-      if (!r.ok) return { etat: 'GATEWAY ' + r.status, note: c.url };
-      texte = await r.text();
+      /* ⛔ ON ESSAIE CHAQUE PASSERELLE, ET ON GARDE LA CAUSE DE CHACUNE. Abandonner a la premiere
+       * confondait « cette passerelle nous limite » avec « ce block n a pas de metadonnees » —
+       * deux faits opposes, et c est le second qui s affichait a l utilisateur.
+       * ⚠️ Seul le type IPFS a des alternatives : une URL http explicite pointe la ou elle
+       *    pointe, et la remplacer serait aller chercher ailleurs ce que le jeton designe. */
+      const candidats = c.type === 'IPFS' && c.cid
+        ? PASSERELLES.map((p) => p + c.cid) : [c.url];
+      const causes = [];
+      let lu = null;
+      /* ⛔⛔ ON GARDE LE PREMIER STATUT HTTP RENCONTRE, ET J AVAIS DETRUIT CETTE DISTINCTION.
+       *    « GATEWAY 404 » dit que le contenu n est PAS LA — le geste est de republier.
+       *    « FETCH FAILED » dit qu on n a pas pu joindre — le geste est de reessayer.
+       *    Ma premiere version ecrasait tout sur le second : elle aurait fait reessayer
+       *    indefiniment un contenu qui n existe pas. C est exactement la confusion que l en-tete
+       *    de ce fichier interdit, et un test l a rattrapee. */
+      let premierStatut = null;
+      for (const url of candidats) {
+        try {
+          const r = await chercher(url);
+          if (!r.ok) {
+            if (premierStatut === null) premierStatut = r.status;
+            /* ⚠️ L URL COMPLETE, PAS SEULEMENT L HOTE — un test l a exige et il avait raison :
+             *    c est le CID qui identifie le contenu, et « pinata 404 » ne dit pas QUOI a
+             *    manque. Quatre URL longues valent mieux qu une cause qu on ne peut pas rejouer. */
+            causes.push(url + ' → ' + r.status);
+            continue;
+          }
+          lu = await r.text();
+          break;
+        } catch (e) { causes.push(url + ' → ' + (e.message || 'echec')); }
+      }
+      if (lu === null && premierStatut !== null) {
+        return { etat: 'GATEWAY ' + premierStatut, note: causes.join(' · '), essayees: candidats.length };
+      }
+      if (lu === null) {
+        /* ⛔ ON GARDE LE NOM D ETAT EXISTANT. J avais invente « GATEWAYS FAILED » : deux tests sont
+         *    tombes, et surtout l interface BRANCHE sur `FETCH FAILED`. Renommer un etat sur
+         *    lequel d autres branches s appuient, c est le motif « un nouvel etat a besoin de sa
+         *    branche PARTOUT » — et ici le gain aurait ete nul. La nouveaute va dans la CAUSE. */
+        return { etat: 'FETCH FAILED', note: causes.join(' · '),
+          /* ⛔ ON NOMME COMBIEN ONT ETE ESSAYEES : « echec » sur une passerelle et sur quatre ne
+           *    disent pas la meme chose sur la disponibilite du contenu. */
+          essayees: candidats.length };
+      }
+      texte = lu;
     }
   } catch (e) {
     return { etat: c.type === 'DATA64' ? 'INVALID BASE64' : c.type === 'DATA' ? 'INVALID ENCODING' : 'FETCH FAILED',
