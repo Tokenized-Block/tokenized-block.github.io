@@ -255,12 +255,32 @@ summary:hover{color:var(--fg)}
     <option value="essaim">Swarm — scattered all around</option>
     <option value="chute">Falling — dropping away below</option>
     <option value="coins">Corners — set down, not moving</option>
+    <option value="spirale">Spiral — winding outwards</option>
+    <option value="colonne">Column — stacked above</option>
+    <option value="ailes">Wings — balanced on both sides</option>
+  </select>
+  <!-- ⛔ NOUVELLE DIMENSION, ET C EST CELLE QUI CHANGE LE PLUS L ALLURE. Toutes les autres
+       reglaient un detail du meme cube de verre ; la matiere change le cube lui-meme. Elle est
+       DESSINEE, comme le reste : aucun asset, donc aucune licence a graver par erreur. -->
+  <label class="avance" for="matiere">Material — what the block is made of</label>
+  <select class="avance" id="matiere">
+    <option value="verre">Glass — translucent, the original</option>
+    <option value="plein">Solid — opaque and heavy</option>
+    <option value="fil">Wireframe — edges only</option>
+    <option value="neon">Neon — glowing outline on dark</option>
   </select>
   <label class="avance" for="facette">Face style</label>
   <select class="avance" id="facette">
     <option value="lettre">Letter — the symbol's initial</option>
     <option value="anneau">Ring — a hollow circle</option>
     <option value="barres">Bars — three stacked bars</option>
+    <option value="disque">Disc — a filled circle</option>
+    <option value="croix">Cross — a thick plus</option>
+    <option value="losange">Diamond — an outlined rhombus</option>
+    <option value="triangle">Triangle — a filled wedge</option>
+    <option value="points">Dots — a three by three grid</option>
+    <option value="chevrons">Chevrons — two arrows</option>
+    <option value="cible">Target — two rings</option>
     <option value="vide">Empty — glass only</option>
   </select>
   <svg id="apercu" viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg"></svg>
@@ -608,6 +628,7 @@ const chaineDe = (h) => { if (!h || h === '0x') return null;
 function paramsLogo(symbole) {
   return { teinte: $('#teinte').value, accent: $('#accent').value, division: $('#division').value,
     eclats: $('#eclats').value, orbite: $('#orbite').value, facette: $('#facette').value,
+    matiere: $('#matiere').value,
     lettre: symbole !== undefined ? symbole : $('#sym').value };
 }
 
@@ -643,9 +664,24 @@ function logoSvg(o) {
    * ou aucun, doit rester representable. */
   const motif = (m, f) => {
     if (o.facette === 'vide') return '';
+    /* ⛔ TOUT EST DESSINE, RIEN N EST IMPORTE. Chaque motif est une forme geometrique tracee ici :
+     *    aucun asset tiers, donc aucune licence a verifier — et c est la seule politique tenable,
+     *    puisque l image est GRAVEE et que personne ne peut la changer ensuite (mesure du
+     *    2026-09-06 : `updateContractURI` refuse au createur, aux tiers et au jeton lui-meme).
+     *    Une licence mal lue serait la seule erreur irreversible du projet. */
     const d = { anneau: `<circle r="17" fill="none" stroke="${f}" stroke-width="9"/>`,
       barres: `<g fill="${f}"><rect x="-19" y="-17" width="38" height="9" rx="2"/>`
         + `<rect x="-19" y="-4" width="38" height="9" rx="2"/><rect x="-19" y="9" width="38" height="9" rx="2"/></g>`,
+      disque: `<circle r="18" fill="${f}"/>`,
+      croix: `<g fill="${f}"><rect x="-6" y="-20" width="12" height="40" rx="3"/>`
+        + `<rect x="-20" y="-6" width="40" height="12" rx="3"/></g>`,
+      losange: `<path d="M0-20 20 0 0 20-20 0Z" fill="none" stroke="${f}" stroke-width="8" stroke-linejoin="round"/>`,
+      triangle: `<path d="M0-19 19 15-19 15Z" fill="${f}"/>`,
+      points: `<g fill="${f}">` + [-13, 0, 13].map((y) => [-13, 0, 13].map((x) =>
+        `<circle cx="${x}" cy="${y}" r="4"/>`).join('')).join('') + `</g>`,
+      chevrons: `<g fill="none" stroke="${f}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">`
+        + `<path d="M-15-14 0-2-15 10"/><path d="M2-14 17-2 2 10"/></g>`,
+      cible: `<g fill="none" stroke="${f}"><circle r="19" stroke-width="6"/><circle r="8" stroke-width="6"/></g>`,
     }[o.facette];
     return `<g transform="matrix(${m})">`
       + (d || `<text x="0" y="14" font-family="ui-sans-serif,sans-serif" font-size="46" font-weight="800" text-anchor="middle" fill="${f}">${L}</text>`)
@@ -677,6 +713,17 @@ function logoSvg(o) {
     /* aux quatre coins : poses, pas en mouvement */
     coins: (i) => { const p = [[26, 26], [174, 26], [26, 196], [174, 196], [100, 14], [100, 208]][i % 6];
       return { x: p[0], y: p[1], s: 0.22 - (i > 3 ? 0.05 : 0), o: 0.9 }; },
+    /* une spirale qui s eloigne : le meme angle d or, mais le rayon croit sans retomber */
+    spirale: (i) => { const a = (i * 137.5) * Math.PI / 180, r = 46 + i * 15;
+      return { x: 100 + Math.cos(a) * r, y: 104 + Math.sin(a) * r * 0.6, s: 0.30 - i * 0.03, o: 1 - i * 0.11 }; },
+    /* une colonne qui monte droit : le bloc se repete vers le haut */
+    colonne: (i) => ({ x: 100, y: 26 - i * 0, s: 0.20 - i * 0.02, o: 0.95 - i * 0.1,
+      /* ⚠️ decale horizontalement en alternance, sinon les eclats se superposent EXACTEMENT et
+       *    « 6 eclats » se dessine comme un seul — un reglage qui ne change rien a l ecran. */
+      ...{ x: 100 + (i % 2 ? 26 : -26) * Math.ceil(i / 2) * 0.7, y: 30 + i * 4 } }),
+    /* deux ailes symetriques : la seule disposition qui se lit comme un objet pose, pas un debris */
+    ailes: (i) => { const cote = i % 2 ? 1 : -1, rang = Math.floor(i / 2);
+      return { x: 100 + cote * (58 + rang * 26), y: 96 + rang * 16, s: 0.26 - rang * 0.05, o: 0.95 - rang * 0.15 }; },
   };
   const place = PLACES[o.orbite] || PLACES.sillage;
   let frag = '';
@@ -690,16 +737,41 @@ function logoSvg(o) {
       + `<path d="M0-40 46-13 46 40 0 66-46 40-46-13Z" fill="none" stroke="${ca(90, 72)}" stroke-width="5" stroke-linejoin="round"/></g>`;
   }
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220"><rect width="200" height="220" fill="${c(80, 8)}"/>`
-    + `<path d="M100 30 170 70 100 110 30 70Z" fill="${c(75, 52, .72)}"/>`
-    + `<path d="M30 70 100 110 100 190 30 150Z" fill="${c(78, 42, .68)}"/>`
-    + `<path d="M170 70 100 110 100 190 170 150Z" fill="${c(80, 30, .7)}"/>`
+  /* ⛔ LA MATIERE CHANGE LE CUBE, PAS UN DETAIL. Les autres reglages ornaient toujours le meme
+   *    verre translucide ; ici les trois faces changent de remplissage et le fond avec.
+   * ⚠️ REPLI SUR « verre » : un choix inconnu — un vieux lien, une valeur tapee a la main — doit
+   *    redonner le dessin d origine, jamais un cube invisible. `MATIERES[x] || MATIERES.verre`.
+   * ⛔ ET LE DEFAUT DOIT RENDRE EXACTEMENT L ANCIEN DESSIN : les blocs deja graves ont ete crees
+   *    sans ce champ, et leur logo ne doit pas se mettre a differer du jour ou on ajoute une
+   *    option. Les valeurs de « verre » sont donc celles d avant, au chiffre pres. */
+  const MATIERES = {
+    /* ⚠️ `epInt` est ECRIT, PAS CALCULE. Je l avais derive (`ep * 0.87`), ce qui donnait 1.31 pour
+     *    le verre la ou l original valait 1.3 — mon commentaire « au chiffre pres » etait alors
+     *    FAUX. Un commentaire faux coute plus cher qu un centieme de pixel : c est lui qu on
+     *    relira dans six mois pour decider si le defaut a bouge. */
+    verre: { haut: c(75, 52, .72), gauche: c(78, 42, .68), droite: c(80, 30, .7), fond: c(80, 8),
+      trait: '#eaf6ff', ep: 1.5, epInt: 1.3, lustre: true },
+    plein: { haut: c(85, 58), gauche: c(88, 40), droite: c(90, 26), fond: c(70, 6),
+      trait: '#0b1020', ep: 2, epInt: 1.6, lustre: false },
+    /* ⛔ « fil » n a AUCUN remplissage : sans lustre, le cube serait recouvert d un voile blanc
+     *    qui le rendrait plein — c est-a-dire exactement ce qu il n est pas. */
+    fil: { haut: 'none', gauche: 'none', droite: 'none', fond: c(85, 5),
+      trait: ca(92, 66), ep: 2, epInt: 1.6, lustre: false },
+    neon: { haut: c(90, 14, .5), gauche: c(90, 10, .5), droite: c(90, 8, .5), fond: 'hsl(0 0% 4%)',
+      trait: ca(100, 62), ep: 3, epInt: 2.2, lustre: false },
+  };
+  const M = MATIERES[o.matiere] || MATIERES.verre;
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220"><rect width="200" height="220" fill="${M.fond}"/>`
+    + `<path d="M100 30 170 70 100 110 30 70Z" fill="${M.haut}"/>`
+    + `<path d="M30 70 100 110 100 190 30 150Z" fill="${M.gauche}"/>`
+    + `<path d="M170 70 100 110 100 190 170 150Z" fill="${M.droite}"/>`
     + (grille ? `<path d="${grille}" fill="none" stroke="#cfe6ff" stroke-width="1" opacity=".32"/>` : '')
     + motif('.866 .5 -.866 .5 100 70', ca(92, 56)) + motif('.866 .5 0 1 65 130', ca(90, 48)) + motif('.866 -.5 0 1 135 130', ca(88, 38))
-    + `<path d="M100 30 170 70 100 110 30 70Z" fill="#fff" opacity=".10"/>`
-    + `<g fill="none" stroke="#eaf6ff" stroke-width="1.5" stroke-linejoin="round">`
+    + (M.lustre ? `<path d="M100 30 170 70 100 110 30 70Z" fill="#fff" opacity=".10"/>` : '')
+    + `<g fill="none" stroke="${M.trait}" stroke-width="${M.ep}" stroke-linejoin="round">`
     + `<path d="M100 30 170 70 170 150 100 190 30 150 30 70Z"/>`
-    + `<path d="M100 110 30 70 M100 110 170 70 M100 110 100 190" stroke-width="1.3" opacity=".85"/></g>`
+    + `<path d="M100 110 30 70 M100 110 170 70 M100 110 100 190" stroke-width="${M.epInt}" opacity=".85"/></g>`
     + frag + `</svg>`;
 }
 const b64 = (s) => btoa(String.fromCharCode(...new TextEncoder().encode(s)));
@@ -1025,7 +1097,14 @@ try { simple = localStorage.getItem('tb-expert') !== '1'; } catch { /* defaut : 
 function appliquerMode() {
   document.body.classList.toggle('simple', simple);
   const b = $('#bascule');
-  b.textContent = simple ? 'Show every setting' : 'Hide the advanced settings';
+  /* ⛔ LE LIBELLE A ECHOUE, ET C EST MESURE PAR UN HUMAIN. « Show every setting » a ete lu comme
+   *    « ces reglages ont ete supprimes » — par quelqu un qui CONNAIT l app. Si l auteur du
+   *    produit croit qu une fonction a disparu, un inconnu le croira aussi. Un bouton doit nommer
+   *    ce qu il contient, pas decrire son mecanisme : « every setting » ne dit rien de ce qu on y
+   *    trouve, alors que « material, shards, colours » se reconnait. */
+  b.textContent = simple
+    ? 'Customise the block — material, face, shards, colours, supply'
+    : 'Hide the advanced settings';
   b.setAttribute('aria-expanded', String(!simple));
 }
 $('#bascule').onclick = () => {
@@ -1035,7 +1114,7 @@ $('#bascule').onclick = () => {
 };
 appliquerMode();
 
-const CHAMPS = ['nom','sym','dec','supply','sel','desc','teinte','accent','division','eclats','orbite','facette','photo'];
+const CHAMPS = ['nom','sym','dec','supply','sel','desc','teinte','accent','division','eclats','orbite','facette','matiere','photo'];
 /* ⛔ `addEventListener` ET NON `n.onchange = …` — LA GARDE VIENT D EVITER LE BUG. `#photo` a deja
  * son propre gestionnaire, assigne plus haut, qui redimensionne et mesure l image. Une affectation
  * de propriete l aurait ECRASE en silence : le champ aurait paru branche, la photo n aurait jamais
