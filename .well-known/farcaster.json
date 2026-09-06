@@ -4,6 +4,8 @@
     "name": "TokenizedBlock",
     "homeUrl": "https://tokenized-block.github.io/",
     "iconUrl": "https://tokenized-block.github.io/icon.png",
+    "imageUrl": "https://tokenized-block.github.io/embed.png",
+    "buttonTitle": "Build a block",
     "splashImageUrl": "https://tokenized-block.github.io/splash.png",
     "splashBackgroundColor": "#000000",
     "subtitle": "Build a block, mint it on Base",
@@ -15,6 +17,7 @@
     "ogDescription": "Build a block. It becomes a B-20 token on Base — with no admin and no minter.",
     "ogImageUrl": "https://tokenized-block.github.io/embed.png",
     "tagline": "Your block, tokenized on Base",
-    "requiredChains": ["eip155:8453"]
+    "requiredChains": ["eip155:8453"],
+    "requiredCapabilities": ["wallet.getEthereumProvider"]
   }
 }
