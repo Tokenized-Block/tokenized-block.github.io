@@ -282,6 +282,8 @@ summary:hover{color:var(--fg)}
     <option value="spirale">Spiral — winding outwards</option>
     <option value="colonne">Column — stacked above</option>
     <option value="ailes">Wings — balanced on both sides</option>
+    <option value="ronde">Ring — circling the block</option>
+    <option value="diagonale">Diagonal — cutting across</option>
   </select>
   <!-- ⛔ NOUVELLE DIMENSION, ET C EST CELLE QUI CHANGE LE PLUS L ALLURE. Toutes les autres
        reglaient un detail du meme cube de verre ; la matiere change le cube lui-meme. Elle est
@@ -292,6 +294,11 @@ summary:hover{color:var(--fg)}
     <option value="plein">Solid — opaque and heavy</option>
     <option value="fil">Wireframe — edges only</option>
     <option value="neon">Neon — glowing outline on dark</option>
+    <option value="papier">Paper — pale and matte</option>
+    <option value="encre">Ink — black lines on white</option>
+    <option value="chrome">Chrome — polished metal</option>
+    <option value="braise">Ember — dark and glowing</option>
+    <option value="givre">Frost — pale translucent</option>
   </select>
   <label class="avance" for="facette">Face style</label>
   <select class="avance" id="facette">
@@ -305,6 +312,14 @@ summary:hover{color:var(--fg)}
     <option value="points">Dots — a three by three grid</option>
     <option value="chevrons">Chevrons — two arrows</option>
     <option value="cible">Target — two rings</option>
+    <option value="etoile">Star — five points</option>
+    <option value="eclair">Bolt — a lightning strike</option>
+    <option value="hexagone">Hexagon — an outlined cell</option>
+    <option value="coche">Check — a tick mark</option>
+    <option value="cle">Key — a plain key</option>
+    <option value="vague">Waves — two ripples</option>
+    <option value="grille">Grid — a hash</option>
+    <option value="fleche">Arrow — pointing up</option>
     <option value="vide">Empty — glass only</option>
   </select>
   <svg id="apercu" viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg"></svg>
@@ -706,6 +721,16 @@ function logoSvg(o) {
       chevrons: `<g fill="none" stroke="${f}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">`
         + `<path d="M-15-14 0-2-15 10"/><path d="M2-14 17-2 2 10"/></g>`,
       cible: `<g fill="none" stroke="${f}"><circle r="19" stroke-width="6"/><circle r="8" stroke-width="6"/></g>`,
+      etoile: `<path d="M0-21 6-7 21-7 9 2 14 17 0 8-14 17-9 2-21-7-6-7Z" fill="${f}"/>`,
+      eclair: `<path d="M4-21-14 3H-2L-4 21 14-4H2Z" fill="${f}"/>`,
+      hexagone: `<path d="M0-20 17-10 17 10 0 20-17 10-17-10Z" fill="none" stroke="${f}" stroke-width="7" stroke-linejoin="round"/>`,
+      coche: `<path d="M-17 1 -5 13 18-13" fill="none" stroke="${f}" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>`,
+      cle: `<g fill="${f}"><circle cx="-8" cy="0" r="11"/><rect x="0" y="-4" width="21" height="8" rx="2"/>`
+        + `<rect x="12" y="0" width="6" height="9" rx="2"/></g>`,
+      vague: `<path d="M-19-6q9-11 19 0t19 0M-19 8q9-11 19 0t19 0" fill="none" stroke="${f}" stroke-width="6" stroke-linecap="round"/>`,
+      grille: `<g fill="none" stroke="${f}" stroke-width="5" stroke-linecap="round">`
+        + `<path d="M-18-7H18M-18 7H18M-7-18V18M7-18V18"/></g>`,
+      fleche: `<path d="M0-20 0 20M-12-8 0-20 12-8" fill="none" stroke="${f}" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>`,
     }[o.facette];
     return `<g transform="matrix(${m})">`
       + (d || `<text x="0" y="14" font-family="ui-sans-serif,sans-serif" font-size="46" font-weight="800" text-anchor="middle" fill="${f}">${L}</text>`)
@@ -748,6 +773,11 @@ function logoSvg(o) {
     /* deux ailes symetriques : la seule disposition qui se lit comme un objet pose, pas un debris */
     ailes: (i) => { const cote = i % 2 ? 1 : -1, rang = Math.floor(i / 2);
       return { x: 100 + cote * (58 + rang * 26), y: 96 + rang * 16, s: 0.26 - rang * 0.05, o: 0.95 - rang * 0.15 }; },
+    /* un anneau ferme autour du bloc : les eclats ne fuient pas, ils tournent */
+    ronde: (i, n) => { const a = (i / Math.max(1, n)) * Math.PI * 2 - Math.PI / 2;
+      return { x: 100 + Math.cos(a) * 80, y: 106 + Math.sin(a) * 52, s: 0.22, o: 0.92 }; },
+    /* une diagonale qui traverse : le seul trace qui coupe le cadre de part en part */
+    diagonale: (i) => ({ x: 22 + i * 28, y: 200 - i * 30, s: 0.24 - i * 0.02, o: 0.95 - i * 0.09 }),
   };
   const place = PLACES[o.orbite] || PLACES.sillage;
   let frag = '';
@@ -783,6 +813,19 @@ function logoSvg(o) {
       trait: ca(92, 66), ep: 2, epInt: 1.6, lustre: false },
     neon: { haut: c(90, 14, .5), gauche: c(90, 10, .5), droite: c(90, 8, .5), fond: 'hsl(0 0% 4%)',
       trait: ca(100, 62), ep: 3, epInt: 2.2, lustre: false },
+    /* ⚠️ Chaque matiere ci-dessous change les TROIS faces ET le fond : une matiere qui ne
+     *    toucherait qu un detail serait un doublon deguise, et le menu grossirait sans que les
+     *    dessins se distinguent. Verifie par comparaison des SVG, pas a l oeil. */
+    papier: { haut: c(18, 92), gauche: c(20, 82), droite: c(22, 72), fond: c(15, 96),
+      trait: c(45, 28), ep: 1.6, epInt: 1.2, lustre: false },
+    encre: { haut: 'hsl(0 0% 96%)', gauche: 'hsl(0 0% 88%)', droite: 'hsl(0 0% 78%)', fond: 'hsl(0 0% 100%)',
+      trait: 'hsl(0 0% 6%)', ep: 3.4, epInt: 2.4, lustre: false },
+    chrome: { haut: c(6, 88), gauche: c(8, 62), droite: c(10, 40), fond: c(10, 12),
+      trait: c(4, 98), ep: 2, epInt: 1.5, lustre: true },
+    braise: { haut: c(95, 46), gauche: c(98, 26), droite: c(100, 16), fond: c(90, 4),
+      trait: ca(100, 70), ep: 2.4, epInt: 1.8, lustre: false },
+    givre: { haut: c(30, 78, .55), gauche: c(34, 66, .5), droite: c(38, 54, .5), fond: c(40, 14),
+      trait: c(20, 96), ep: 1.4, epInt: 1.1, lustre: true },
   };
   const M = MATIERES[o.matiere] || MATIERES.verre;
 
