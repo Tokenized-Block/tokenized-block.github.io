@@ -285,6 +285,25 @@ animation:trace .3s .18s ease-out forwards}
   token is a precompile rather than a deployed contract. Its address always starts with
   <code>0xb200</code>, and its code is exactly one byte: <code>0xef</code>.</p>
 
+  <!-- ⛔ CETTE PHRASE EXISTE PARCE QUE L ABSENCE D UNE PHRASE FAIT AUSSI UNE SURPRISE.
+       Sur le recu d un swap, Basescan etiquette le transfert « ERC-20: Tokenized Bl… (TBLOCK) »,
+       et on se demande legitimement ce que vaut la revendication B20. La page decrivait le
+       marqueur sans jamais dire ce qu on VERRAIT ailleurs — et un utilisateur decouvre alors la
+       contradiction apparente tout seul, devant un explorateur, sans personne pour l expliquer.
+       ⚠️ ON NE DIT PAS « ce n est pas un ERC-20 » : le block en expose l interface et les
+       evenements, DELIBEREMENT, et c est ce qui le rend utilisable par Uniswap et les wallets
+       sans qu ils sachent quoi que ce soit de B20. Les deux faits sont vrais ensemble ; n en
+       publier qu un serait trompeur dans un sens ou dans l autre.
+       Mesure du 2026-09-06 : BLOCK 0 porte 1 octet de code, USDC en porte 1852. -->
+  <p class="expl"><b>Explorers will call it an ERC-20, and they are not wrong.</b> A block emits the
+  same <code>Transfer</code> events as any token, on purpose — that is what lets Uniswap, wallets
+  and explorers handle it without knowing anything about B-20. What sets it apart is not the
+  interface but the code behind it: a deployed contract carries thousands of bytes and can be put
+  behind a proxy, while <a href="https://eips.ethereum.org/EIPS/eip-3541" target="_blank"
+  rel="noopener">EIP-3541</a> forbids any deployed contract from starting with <code>0xEF</code>.
+  A block's one byte cannot be produced by a deployment at all — measured today: this block carries
+  1 byte, USDC carries 1852.</p>
+
   <p class="expl"><b>It is born finished.</b> In the same single transaction, the block is created,
   its supply cap is set, and the whole supply is minted to you. There is no window in between.
   <b>No account holds <code>DEFAULT_ADMIN_ROLE</code> or <code>MINT_ROLE</code> — not you, not us,
@@ -1692,6 +1711,34 @@ async function etatSwap() {
 const MAINNET = 8453;
 
 /**
+ * Crible une adresse contre la liste publique embarquee, et rend une phrase — ou `null`.
+ * ================================================================================================
+ * ⛔ TROIS ETATS, ET LE PLUS IMPORTANT EST CELUI QU ON NE DIT PAS. « Absente de la liste » n est
+ *    PAS « sûre » : la liste est finie, le monde ne l est pas. Presenter l absence comme une
+ *    innocence donnerait une garantie a quelqu un qui prendrait un risque en la croyant — c est
+ *    pourquoi ce cas ne produit AUCUN message. Se taire est plus honnete que rassurer.
+ * ⛔ ET ON RAPPORTE UNE STRUCTURE, JAMAIS UNE INTENTION. « Cette adresse figure sur une liste
+ *    publique » est un fait verifiable ; « cette personne est malhonnete » est une inference, et
+ *    on n en fait pas. Les SOURCES sont nommees pour que l utilisateur juge lui-meme.
+ * ⚠️ LA FRAICHEUR EST DITE. Une liste perimee presentee comme autoritaire est pire que pas de
+ *    liste : elle donne une confiance que rien ne soutient.
+ * ⚠️ ECHEC SILENCIEUX SUR LE CHARGEMENT — mais alors on ne dit RIEN, on n affirme pas « rien
+ *    trouve ». Ne pas avoir regarde n est pas avoir regarde sans rien voir.
+ */
+let jeuCriblage = null;
+async function cribler_(adresse) {
+  try {
+    if (jeuCriblage === null) jeuCriblage = await (await fetch('known-bad.json')).json();
+    const { cribler } = await import('./criblage.js');
+    const r = cribler(adresse, jeuCriblage);
+    if (r.etat !== 'SIGNALEE') return null;
+    return '⛔ This address appears on a public watchlist (' + (r.sources || []).join(' · ')
+      + '), snapshot of ' + r.asOf + (r.ageJours !== null ? ' — ' + r.ageJours + ' days old' : '')
+      + '.\nThat is a listing, not a judgement. Nothing is blocked; you decide.';
+  } catch { return null; }
+}
+
+/**
  * ⛔⛔ LE WALLET EST-IL SUR LE RESEAU QUE LA PAGE AFFICHE ? A APPELER AVANT CHAQUE ENVOI.
  * ================================================================================================
  * DEFAUT REEL, OBSERVE LE 2026-09-04, ET IL A COUTE DU GAS. Cette page lisait mainnet (BLOCK 0,
@@ -1896,7 +1943,18 @@ $('#poolAgir').onclick = async () => {
 $('#agir').onclick = async () => {
   if (!window.ethereum) return dire("No wallet detected.\nOpen this page in your wallet's built-in browser.", 'bad');
   try {
-    if (!compte) { [compte] = await window.ethereum.request({ method: 'eth_requestAccounts' }); $('#agir').textContent = 'Create the block'; await rafraichir(); return dire('Connected: ' + compte, 'ok'); }
+    if (!compte) {
+      [compte] = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      $('#agir').textContent = 'Create the block';
+      await rafraichir();
+      /* ⛔ ON CRIBLE ICI, ET LOCALEMENT. 812 adresses publiques embarquees (OFAC SDN, eth-labels,
+       * trouvailles forensiques MainStreet). L adresse n est envoyee A PERSONNE : le jeu de
+       * donnees vient au navigateur, pas l inverse. Un criblage qui interrogerait un service
+       * transformerait une verification en collecte, sur une page vendue sur le fait qu elle ne
+       * detient et n envoie rien. */
+      const c = await cribler_(compte);
+      return dire('Connected: ' + compte + (c ? '\n' + c : ''), c && c.startsWith('⛔') ? 'bad' : 'ok');
+    }
     let id = parseInt(await window.ethereum.request({ method: 'eth_chainId' }), 16);
     if (id !== chaine) {
       dire('Switching to ' + RESEAUX[chaine].nom + '…', 'warn');
