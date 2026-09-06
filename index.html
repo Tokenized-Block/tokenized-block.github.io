@@ -39,6 +39,31 @@ input,textarea,select{width:100%;background:var(--bg2);color:var(--fg);border:1p
 border-radius:10px;padding:12px;font-size:16px;font-family:inherit}
 textarea{min-height:74px;resize:vertical}
 .duo{display:flex;gap:10px}.duo>div{flex:1}
+/* ══ MODE SIMPLE ═══════════════════════════════════════════════════════════════════════════════
+ * ⛔ MESURE AVANT REDESIGN, le 2026-09-06 sur le site en ligne, en 375x812 : 24 champs a decider,
+ *    9 sections visibles d un coup, 11 termes de jargon, 5,3 ecrans a defiler. Quelqu un venu
+ *    CREER un block devait defiler devant la machinerie de pool et de swap.
+ * ⛔ ON REPLIE, ON NE SUPPRIME RIEN. Chaque champ garde son identifiant, sa valeur et son
+ *    gestionnaire : le plan signe reste identique au caractere pres, et un seul clic rend tout
+ *    visible. Cacher une capacite serait la retirer a ceux qui savent s en servir.
+ * ⚠️ `visibility` et `opacity` laisseraient les champs TABULABLES : un utilisateur au clavier
+ *    tomberait dans des reglages invisibles. `display:none` est ici le comportement correct. */
+/* ⛔ ON MARQUE LES ELEMENTS, PAS LES CONTENEURS. Ma premiere version masquait `.duo` en entier —
+ *    or `Symbol` partage son `.duo` avec `Decimals`. La regle aurait donc cache le SYMBOLE, l un
+ *    des deux seuls champs qu un debutant doit remplir. Un selecteur trop large ne se voit pas
+ *    dans le code : il se voit a l ecran, et seulement si on regarde. */
+body.simple .avance{display:none}
+.bascule{width:100%;margin:10px 0 2px;background:transparent;border:1px dashed var(--line);
+  color:var(--dim);padding:12px;border-radius:10px;font:inherit;cursor:pointer;min-height:44px}
+.bascule:hover{color:var(--fg);border-color:var(--fg)}
+/* ⛔ CIBLES TACTILES : 8 elements mesures sous 44 px — la borne au-dessous de laquelle un doigt
+ *    rate sa cible. Les onglets etaient a 37 px, les curseurs a 42. */
+@media (max-width:640px){
+  .duo{flex-direction:column}          /* mesure : debordait de 319 px dans 315 disponibles */
+  .tabs button{min-height:44px}
+  input[type=range]{height:44px}
+  select,input,textarea{max-width:100%;box-sizing:border-box}  /* #poolDevise : 329 dans 313 */
+}
 .row{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);align-items:baseline}
 .row:last-child{border-bottom:0}
 .k{color:var(--dim);flex:0 0 100px;font-size:12.5px}
@@ -164,9 +189,17 @@ summary:hover{color:var(--fg)}
 </header>
 
 <div class="tabs">
-  <button id="t84532" aria-selected="true">Base Sepolia</button>
-  <button id="t8453" aria-selected="false">Base mainnet</button>
+  <!-- ⛔ « Sepolia » ET « mainnet » NE VEULENT RIEN DIRE pour qui debute, et c est le tout premier
+       choix de la page. On AJOUTE la consequence en clair ; on n efface pas le nom technique, qui
+       reste ce que le portefeuille affichera. Renommer sans montrer l original ferait diverger
+       l app et le portefeuille au moment de signer — la ou la confusion coute le plus cher. -->
+  <button id="t84532" aria-selected="true">Practice · free<span class="k"> · Base Sepolia</span></button>
+  <button id="t8453" aria-selected="false">Real · costs ETH<span class="k"> · Base mainnet</span></button>
 </div>
+<!-- ⛔ MESURE, PAS INTUITION : 24 champs, 9 sections, 11 termes de jargon, 5,3 ecrans. Le mode
+     simple ne RETIRE rien — il replie. Un clic rend tout visible, et le plan signe est identique
+     au caractere pres dans les deux modes. -->
+<button class="bascule" id="bascule" aria-expanded="false">Show every setting</button>
 
 <div id="gardeMainnet">
   <div class="t">⚠ Base mainnet — real money</div>
@@ -181,18 +214,18 @@ summary:hover{color:var(--fg)}
   <label for="nom">Name</label><input id="nom" value="Tokenized Block" maxlength="32">
   <div class="duo">
     <div><label for="sym">Symbol</label><input id="sym" value="TBLOCK" maxlength="11"></div>
-    <div><label for="dec">Decimals</label><input id="dec" type="number" min="6" max="18" value="18"></div>
+    <div class="avance"><label for="dec">Decimals</label><input id="dec" type="number" min="6" max="18" value="18"></div>
   </div>
-  <label for="supply">Total supply (whole units)</label><input id="supply" value="1000000000" inputmode="numeric">
-  <label for="sel">Salt — it fixes the address. Two blocks cannot share the same one.</label>
-  <input id="sel" value="tblock-v1">
+  <label class="avance" for="supply">Total supply (whole units)</label><input class="avance" id="supply" value="1000000000" inputmode="numeric">
+  <label class="avance" for="sel">Salt — it fixes the address. Two blocks cannot share the same one.</label>
+  <input class="avance" id="sel" value="tblock-v1">
   <!-- ⛔ « change the salt » sans dire LEQUEL laisse deviner ce que seule la factory sait : le
        couple (ton adresse, ce sel) est pris ou non, et personne ne peut le savoir de tete. Le
        bouton DEMANDE a la chaine, essaie un nombre BORNE de variantes, et le dit si aucune ne
        passe plutot que d en inventer une. -->
-  <button class="act sec" id="selLibre" style="margin-top:8px">Find a free salt</button>
-  <label for="desc">Description (engraved in the metadata, permanent)</label>
-  <textarea id="desc"></textarea>
+  <button class="act sec avance" id="selLibre" style="margin-top:8px">Find a free salt</button>
+  <label class="avance" for="desc">Description (engraved in the metadata, permanent)</label>
+  <textarea class="avance" id="desc"></textarea>
   <!-- ⛔ LA PHOTO REMPLACE LE LOGO GENERE, ET C EST DEFINITIF. Pas d admin, pas de reprise : une
        image ratee est aussi permanente que le nom. On montre donc le poids obtenu AVANT la
        signature, jamais apres.
@@ -203,10 +236,10 @@ summary:hover{color:var(--fg)}
   <input id="photo" type="file" accept="image/*">
   <div id="photoEtat" class="fiche" style="margin-top:8px"></div>
   <button class="act sec" id="photoRetirer" style="margin-top:8px;display:none">Remove the photo, go back to the generated logo</button>
-  <label for="teinte">Block colour</label><input id="teinte" type="range" min="0" max="360" value="222">
-  <label for="accent">Accent colour — the letters and the shards</label>
-  <input id="accent" type="range" min="0" max="360" value="38">
-  <div class="duo">
+  <label class="avance" for="teinte">Block colour</label><input class="avance" id="teinte" type="range" min="0" max="360" value="222">
+  <label class="avance" for="accent">Accent colour — the letters and the shards</label>
+  <input class="avance" id="accent" type="range" min="0" max="360" value="38">
+  <div class="duo avance">
     <div><label for="division">Division — how finely the block splits</label>
       <input id="division" type="range" min="1" max="5" value="3"></div>
     <div><label for="eclats">Shards — how many break away</label>
@@ -215,16 +248,16 @@ summary:hover{color:var(--fg)}
   <!-- ⛔ La disposition des eclats etait FIGEE : un seul sillage possible, et le seul reglage
        etait combien. C est la partie la plus visible du logo, et c etait la plus impersonnelle —
        deux blocs differents rendaient la meme trainee. Le choix se fait ici. -->
-  <label for="orbite">Where the shards go</label>
-  <select id="orbite">
+  <label class="avance" for="orbite">Where the shards go</label>
+  <select class="avance" id="orbite">
     <option value="sillage">Trail — rising to one side</option>
     <option value="couronne">Crown — an arc above the block</option>
     <option value="essaim">Swarm — scattered all around</option>
     <option value="chute">Falling — dropping away below</option>
     <option value="coins">Corners — set down, not moving</option>
   </select>
-  <label for="facette">Face style</label>
-  <select id="facette">
+  <label class="avance" for="facette">Face style</label>
+  <select class="avance" id="facette">
     <option value="lettre">Letter — the symbol's initial</option>
     <option value="anneau">Ring — a hollow circle</option>
     <option value="barres">Bars — three stacked bars</option>
@@ -243,7 +276,7 @@ summary:hover{color:var(--fg)}
   <div id="etatToken"></div>
 </div>
 
-<div class="card">
+<div class="card avance">
   <h2>Your blocks</h2>
   <label for="idxAdresse">Creator address — leave empty to list every recent block</label>
   <input id="idxAdresse" placeholder="0x… (defaults to your connected wallet)" spellcheck="false" autocapitalize="off">
@@ -257,7 +290,7 @@ summary:hover{color:var(--fg)}
   <div id="idxVue"></div>
 </div>
 
-<div class="card">
+<div class="card avance">
   <h2>Read a block</h2>
   <label for="lecture">Block address</label>
   <input id="lecture" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
@@ -265,7 +298,7 @@ summary:hover{color:var(--fg)}
   <div id="rendu"></div>
 </div>
 
-<div class="card">
+<div class="card avance">
   <h2>Liquidity</h2>
   <label for="poolToken">Block to pool</label>
   <input id="poolToken" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
@@ -293,7 +326,7 @@ summary:hover{color:var(--fg)}
   <button class="act" id="poolAgir" disabled>Run the next step</button>
 </div>
 
-<div class="card">
+<div class="card avance">
   <h2>Swap</h2>
   <label for="swapToken">Block</label>
   <input id="swapToken" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
@@ -979,6 +1012,29 @@ async function relireJeton(adr) {
 /* ⛔ TOUT champ qui entre dans le logo ou le calldata doit declencher un recalcul. En oublier un
  * afficherait un apercu qui ne correspond PLUS aux octets a signer — et l ecart ne se verrait
  * qu apres la transaction, quand plus rien n est modifiable. */
+/* ══ MODE SIMPLE ═══════════════════════════════════════════════════════════════════════════════
+ * ⛔ REPLIER N EST PAS RETIRER, et la difference est verifiable : les champs restent dans le DOM,
+ *    gardent leur valeur et leurs gestionnaires. Le calldata produit est donc IDENTIQUE dans les
+ *    deux modes — ce qu on cache, c est la decision, pas la capacite.
+ * ⚠️ L etat est retenu par navigateur : quelqu un qui a ouvert les reglages une fois ne veut pas
+ *    les rouvrir a chaque visite. Lecture et ecriture sous try/catch — `localStorage` LEVE dans
+ *    certains contextes (navigation privee, site data bloque), et une exception ici empecherait
+ *    le reste du script de se cabler. */
+let simple = true;
+try { simple = localStorage.getItem('tb-expert') !== '1'; } catch { /* defaut : simple */ }
+function appliquerMode() {
+  document.body.classList.toggle('simple', simple);
+  const b = $('#bascule');
+  b.textContent = simple ? 'Show every setting' : 'Hide the advanced settings';
+  b.setAttribute('aria-expanded', String(!simple));
+}
+$('#bascule').onclick = () => {
+  simple = !simple;
+  try { localStorage.setItem('tb-expert', simple ? '0' : '1'); } catch { /* sans memoire, tant pis */ }
+  appliquerMode();
+};
+appliquerMode();
+
 const CHAMPS = ['nom','sym','dec','supply','sel','desc','teinte','accent','division','eclats','orbite','facette','photo'];
 /* ⛔ `addEventListener` ET NON `n.onchange = …` — LA GARDE VIENT D EVITER LE BUG. `#photo` a deja
  * son propre gestionnaire, assigne plus haut, qui redimensionne et mesure l image. Une affectation
