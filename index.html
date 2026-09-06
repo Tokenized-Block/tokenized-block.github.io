@@ -165,6 +165,16 @@ animation:trace .3s .18s ease-out forwards}
   <button class="act sec" id="selLibre" style="margin-top:8px">Find a free salt</button>
   <label for="desc">Description (engraved in the metadata, permanent)</label>
   <textarea id="desc"></textarea>
+  <!-- ⛔ LA PHOTO REMPLACE LE LOGO GENERE, ET C EST DEFINITIF. Pas d admin, pas de reprise : une
+       image ratee est aussi permanente que le nom. On montre donc le poids obtenu AVANT la
+       signature, jamais apres.
+       ⚠️ Le plafond n est pas une preference : la factory B-20 REFUSE au-dela d environ 12 Ko
+       (mesure : 12 Ko passe, 13 refuse, et offrir 100 000 000 de gaz n y change rien). Le
+       navigateur redimensionne et recompresse donc pour tenir, et le dit s il n y arrive pas. -->
+  <label for="photo">Photo — replaces the generated logo (optional, permanent)</label>
+  <input id="photo" type="file" accept="image/*">
+  <div id="photoEtat" class="fiche" style="margin-top:8px"></div>
+  <button class="act sec" id="photoRetirer" style="margin-top:8px;display:none">Remove the photo, go back to the generated logo</button>
   <label for="teinte">Block colour</label><input id="teinte" type="range" min="0" max="360" value="222">
   <label for="accent">Accent colour — the letters and the shards</label>
   <input id="accent" type="range" min="0" max="360" value="38">
@@ -374,6 +384,7 @@ import { cleDePool, etatPool, encodeInitialize, encodeApprove, encodePermit2Appr
   encodeSwapExactInSingle, encodeQuote, formeAcceptee, AVEC_MINHOP, selecteur as sel4,
   essaiEtape, valeurOuRefus, raisonDeBloquer, poolId, liquiditePourDepot } from './pool.js';
 import { consentementValide, marquerConsentement } from './consentement.js';
+import { verdictPhoto, chercherQualite, octetsUri, PHOTO_MAX } from './photo.js';
 
 const $ = (s) => document.querySelector(s);
 const etat = $('#etat');
@@ -638,9 +649,14 @@ function lire() {
   const unites = eSup.etat === 'OK' ? eSup.valeur : 0n;
   const supply = unites * 10n ** BigInt(dec);
   const svg = logoSvg(paramsLogo(sym));
+  /* ⛔ LA PHOTO SE SUBSTITUE AU LOGO GENERE, ET SEULEMENT SI ELLE A ETE ACCEPTEE. `photoChoisie`
+   * ne vaut jamais autre chose qu un data: URI deja MESURE sous le plafond — la validation vit
+   * dans le gestionnaire du champ, pas ici. Une valeur non verifiee qui arriverait jusqu a
+   * `calldata()` ferait echouer la creation APRES la signature. */
+  const image = photoChoisie || ('data:image/svg+xml;base64,' + b64(svg));
   const meta = { name: nom, symbol: sym, description: $('#desc').value.trim()
       || `Block created with no administrator: no account holds DEFAULT_ADMIN_ROLE or MINT_ROLE, at any point, including at creation. The supply of ${unites} ${sym} is minted in the creation transaction itself and equals the cap. No further unit can ever exist.`,
-    image: 'data:image/svg+xml;base64,' + b64(svg) };
+    image };
   const uri = 'data:application/json;base64,' + b64(JSON.stringify(meta));
   /* ⛔ LE REFUS VOYAGE AVEC LE RESULTAT. Le laisser ici en silence rendrait une supply de 0 sans
    * que rien a l ecran ne dise pourquoi — un zero muet sur le chiffre le plus definitif de la page. */
@@ -650,6 +666,104 @@ function lire() {
      * le code pour une valeur choisie par l utilisateur — sur un chiffre grave a la creation. */
     noteDec: eDec.etat === 'REFUSE' || eDec.etat === 'BORNE' ? eDec : null };
 }
+
+/* ══ PHOTO ═════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ TOUT CE BLOC EXISTE PARCE QUE LE REFUS ARRIVERAIT SINON APRES LA SIGNATURE. La factory B-20
+ *    refuse un contractURI au-dela d environ 12 Ko — mesure du 2026-09-06 : 12 Ko passe, 13 est
+ *    refuse, et offrir 100 000 000 de gaz ne deplace pas le mur (limite INTRINSEQUE du
+ *    precompile, pas un plafond d estimation). Une photo de telephone fait 2 a 5 Mo : proposer le
+ *    champ sans redimensionner, ce serait offrir un bouton qui echoue toujours.
+ * ⚠️ ET LE COUT N EST PAS CELUI QU ON CROIT : 712 gas par octet ajoute, la ou 16 est le maximum
+ *    theorique d un octet de calldata. Le precompile STOCKE l URI. D ou le poids affiche en clair.
+ */
+let photoChoisie = null;
+
+/** Redessine la photo a `cote` px de large au plus, puis cherche la qualite qui tient. */
+async function preparerPhoto(fichier) {
+  const v = verdictPhoto({ octets: fichier.size, type: fichier.type, plafond: Infinity });
+  /* ⛔ ON NE JUGE PAS LA TAILLE DU FICHIER D ORIGINE (plafond Infinity) : elle ne decide rien,
+   *    puisqu on va le recompresser. Seul le TYPE compte a ce stade. Refuser une photo de 3 Mo
+   *    ici rejetterait des images qui tiendront tres bien apres redimensionnement. */
+  if (v.etat !== 'ACCEPTEE') return v;
+
+  const bitmap = await createImageBitmap(fichier);
+  const cote = Math.min(512, bitmap.width, bitmap.height);
+  /* ⚠️ Carre et centre : un avatar non carre se fait rogner n importe comment par les afficheurs,
+   *    et on ne controle pas les afficheurs. Autant choisir le cadrage nous-memes et le MONTRER. */
+  const c = document.createElement('canvas');
+  c.width = c.height = cote;
+  const g = c.getContext('2d');
+  const src = Math.min(bitmap.width, bitmap.height);
+  g.drawImage(bitmap, (bitmap.width - src) / 2, (bitmap.height - src) / 2, src, src, 0, 0, cote, cote);
+
+  /* ⛔⛔ LE BUDGET DOIT COMPTER TOUT LE JSON, PAS SEULEMENT L IMAGE. Ma premiere version mesurait
+   *    `octetsUri(0, longueur de l image)` — en ignorant le nom, le symbole et la DESCRIPTION, qui
+   *    voyagent dans le MEME contractURI. Mesure en conditions reelles : un block sans photo pese
+   *    deja 7 268 octets de calldata (description par defaut + logo SVG), la ou ma mesure mainnet
+   *    partait de 1 252 avec des metadonnees minimales. Une description longue plus une photo au
+   *    maximum pouvaient donc depasser le mur, et le refus serait tombe A LA SIGNATURE.
+   * ⚠️ RESIDU ASSUME : si l utilisateur RALLONGE sa description APRES avoir choisi la photo, le
+   *    total peut repasser au-dessus. Le filet est alors l estimation de gaz affichee dans le plan,
+   *    qui echoue AVANT que le portefeuille ne s ouvre. On ne pretend pas couvrir ce cas ici. */
+  const f0 = lire();
+  const enrobage = JSON.stringify({ name: f0.nom, symbol: f0.sym,
+    description: $('#desc').value.trim() || '' }).length;
+
+  let dernierUri = null;
+  const r = await chercherQualite(async (q) => {
+    dernierUri = c.toDataURL('image/jpeg', q);
+    /* ⛔ ON MESURE L URI COMPLET, PAS LE FICHIER. C est l URI qui part dans la calldata, et il
+     *    subit une SECONDE inflation base64 quand il entre dans le JSON. Mesurer le blob
+     *    sous-estimerait d un tiers — et le refus tomberait a la signature. */
+    return octetsUri(0, JSON.stringify({ image: dernierUri }).length + enrobage);
+  }, PHOTO_MAX);
+
+  if (!r) return { etat: 'TROP_GROSSE',
+    pourquoi: 'even at the lowest quality this image will not fit — a shorter description would leave it more room' };
+  /* ⛔ ON RE-ENCODE UNE DERNIERE FOIS A LA QUALITE RETENUE. `dernierUri` porte le resultat du
+   *    DERNIER essai de la dichotomie, qui n est pas forcement celui qu on a retenu — retourner
+   *    l un pour l autre graverait une image plus lourde que celle qu on a validee. */
+  const uri = c.toDataURL('image/jpeg', r.qualite);
+  return { etat: 'ACCEPTEE', uri, cote,
+    octets: octetsUri(0, JSON.stringify({ image: uri }).length + enrobage) };
+}
+
+function montrerPhoto(r) {
+  const box = $('#photoEtat');
+  if (!r) { box.innerHTML = ''; $('#photoRetirer').style.display = 'none'; return; }
+  if (r.etat === 'ACCEPTEE') {
+    photoChoisie = r.uri;
+    box.innerHTML = ligne('photo', pastille('READY', 'ok'))
+      + ligne('size', r.cote + '×' + r.cote + ' px · ' + Math.round(r.octets / 1024 * 10) / 10
+        + ' Ko in the block <span class="k">(limit ' + Math.round(PHOTO_MAX / 1024 * 10) / 10 + ' Ko)</span>')
+      + '<div class="row"><span class="k">preview</span><span class="v"><img src="' + enAttribut(r.uri)
+      + '" alt="" style="width:96px;height:96px;border-radius:12px;display:block"></span></div>'
+      + ligne('warning', 'this image is engraved for ever — there is no admin to change it later');
+    $('#photoRetirer').style.display = '';
+  } else {
+    /* ⛔ CHAQUE ETAT GARDE SON MOT. « TROP_GROSSE » (recadre) et « PAS_UNE_IMAGE » (change de
+     *    fichier) demandent deux gestes differents ; un seul message les confondrait. */
+    photoChoisie = null;
+    box.innerHTML = ligne('photo', pastille(r.etat === 'TROP_GROSSE' ? 'TOO LARGE'
+      : r.etat === 'PAS_UNE_IMAGE' ? 'NOT AN IMAGE' : 'NOT MEASURED', 'warn'))
+      + ligne('why', enTexte(r.pourquoi || ''));
+    $('#photoRetirer').style.display = 'none';
+  }
+  rafraichir();
+}
+
+$('#photo').onchange = async (e) => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return montrerPhoto(null);
+  $('#photoEtat').innerHTML = ligne('photo', 'resizing…');
+  try { montrerPhoto(await preparerPhoto(f)); }
+  catch (err) {
+    /* ⛔ FAIL-CLOSED : un navigateur qui ne sait pas lire ce fichier ne doit RIEN graver. On dit
+     *    « je n ai pas pu mesurer », jamais « c est bon ». */
+    montrerPhoto({ etat: 'NON_MESURE', pourquoi: 'this file could not be read — ' + (err.message || err) });
+  }
+};
+$('#photoRetirer').onclick = () => { $('#photo').value = ''; photoChoisie = null; montrerPhoto(null); rafraichir(); };
 
 function calldata(f, porteur) {
   return encodeCreateB20({
@@ -827,8 +941,16 @@ async function relireJeton(adr) {
 /* ⛔ TOUT champ qui entre dans le logo ou le calldata doit declencher un recalcul. En oublier un
  * afficherait un apercu qui ne correspond PLUS aux octets a signer — et l ecart ne se verrait
  * qu apres la transaction, quand plus rien n est modifiable. */
-const CHAMPS = ['nom','sym','dec','supply','sel','desc','teinte','accent','division','eclats','orbite','facette'];
-for (const el of CHAMPS) { const n = $('#' + el); n.oninput = rafraichir; n.onchange = rafraichir; }
+const CHAMPS = ['nom','sym','dec','supply','sel','desc','teinte','accent','division','eclats','orbite','facette','photo'];
+/* ⛔ `addEventListener` ET NON `n.onchange = …` — LA GARDE VIENT D EVITER LE BUG. `#photo` a deja
+ * son propre gestionnaire, assigne plus haut, qui redimensionne et mesure l image. Une affectation
+ * de propriete l aurait ECRASE en silence : le champ aurait paru branche, la photo n aurait jamais
+ * ete preparee, et rien a l ecran ne l aurait dit. Les deux gestionnaires coexistent maintenant. */
+for (const el of CHAMPS) {
+  const n = $('#' + el);
+  n.addEventListener('input', rafraichir);
+  n.addEventListener('change', rafraichir);
+}
 for (const id of [84532, 8453]) $('#t' + id).onclick = () => {
   chaine = id; $('#t84532').setAttribute('aria-selected', String(id === 84532));
   $('#t8453').setAttribute('aria-selected', String(id === 8453));
