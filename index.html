@@ -448,6 +448,11 @@ border-radius:13px;background:var(--card)}
 border:1px solid var(--line);background:var(--bg2);color:var(--dim);font:inherit;
 font-size:13px;font-weight:600;cursor:pointer}
 #nextSteps .nsTab[aria-selected="true"]{color:var(--fg);border-color:#4d8cff;background:#132038}
+#nextSteps .swapDir{display:flex;gap:6px;margin:6px 0 10px}
+#nextSteps .swapDirBtn{flex:1;min-height:40px;padding:8px 10px;border-radius:10px;
+border:1px solid var(--line);background:var(--bg2);color:var(--dim);font:inherit;
+font-size:13px;font-weight:600;cursor:pointer}
+#nextSteps .swapDirBtn[aria-pressed="true"]{color:var(--fg);border-color:#4d8cff;background:#132038}
 #nextSteps .nsPanel{display:none;padding-top:2px}
 #nextSteps .nsPanel.on{display:block}
 #nextSteps.nsReady{border-color:#3a5a9a;box-shadow:0 0 0 1px rgba(77,140,255,.12)}
@@ -806,8 +811,15 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
   <div class="nsPanel" id="ns-swap" role="tabpanel" data-ns="swap">
     <label for="swapToken">Block</label>
     <input id="swapToken" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
-    <label for="swapMontant">How many blocks to sell</label>
-    <input id="swapMontant" value="0.2" inputmode="decimal" placeholder="0.2">
+    <label>Direction</label>
+    <div class="swapDir" role="group" aria-label="Buy or sell">
+      <button type="button" class="swapDirBtn" id="swapBuy" aria-pressed="true">Buy</button>
+      <button type="button" class="swapDirBtn" id="swapSell" aria-pressed="false">Sell</button>
+    </div>
+    <!-- ⛔ Apres Launch unilateral : la pool a des blocks, ~0 ETH. Buy (ETH→block) cote ;
+         Sell (block→ETH) echoue jusqu a ce que des achats mettent de l ETH. Defaut = Buy. -->
+    <label for="swapMontant" id="swapMontantLab">ETH to spend</label>
+    <input id="swapMontant" value="0.0001" inputmode="decimal" placeholder="0.0001">
     <button class="act sec" id="swapEtat" style="margin-top:10px">Quote it</button>
     <div id="swapVue"></div>
     <button class="act" id="swapAgir" disabled>Run the next step</button>
@@ -2908,14 +2920,11 @@ async function etatSwap() {
   const v = dS ? { ...V4[chaine], quote: dS.adr, quoteNom: dS.nom } : null;
   const ur = ROUTEUR[chaine], q = QUOTER[chaine];
   if (!v || !ur) { box.innerHTML = ligne('state', pastille('CHAIN NOT SUPPORTED', 'bad')); return null; }
-  /* ⛔⛔ CE CHAMP SE COMPTE DESORMAIS EN JETONS, PAS EN UNITES BRUTES. Pour vendre l equivalent
-   * de 0,50 $ il fallait taper `200436811106540992`. Personne ne tape ca, et surtout personne ne
-   * le RELIT : un zero de trop passe inapercu et vend mille fois plus. Le champ accepte « 0,2 ».
-   * ⚠️ Les decimales sont LUES sur la chaine, jamais supposees — un jeton nomme autrement pourrait
-   *    en avoir 6, et coder 18 en dur transformerait une aide en piege. */
-  /* ⛔ `lire` vit dans `construirePlan`, pas ici, et `appel` est declare PLUS BAS : l utiliser
-   * serait une zone morte temporelle — la faute exacte que la regle 7 traque. On passe par `rpc`,
-   * qui est au niveau du module, et on garde la cause au lieu de l avaler. */
+  /* ⛔ Buy = depenser la devise (ETH/WETH/…) → recevoir des blocks. Sell = l inverse.
+   *    Mesure 2026-09-07 : Launch unilateral met presque toute la supply en LP token-only ;
+   *    la pool a des blocks et ~0 ETH. Sell (block→ETH) reverte / NO QUOTE ; Buy cote. */
+  const acheter = $('#swapBuy')?.getAttribute('aria-pressed') === 'true';
+
   let decB = null, causeDec = null;
   try { decB = Number(BigInt(await rpc('eth_call', [{ to: b20, data: abi.selecteurs['decimals()'] }, 'latest']))); }
   catch (e) { causeDec = e && e.message ? e.message : String(e); }
@@ -2925,9 +2934,7 @@ async function etatSwap() {
       + ligne('what to do', 'Click "Quote it" again in a few seconds.');
     return null;
   }
-  /* ⛔ LES DECIMALES DE LA DEVISE AUSSI, et pour la meme raison : afficher « tu recois 170736… »
-   * sans unite est illisible, et les supposer a 18 mentirait sur USDC, qui en a 6.
-   * ⛔ ETH natif : pas de decimals() sur 0x0 — 18 est la definition EVM, pas une hypothese. */
+  /* ⛔ ETH natif : pas de decimals() sur 0x0 — 18 est la definition EVM, pas une hypothese. */
   let decQuote = null;
   if (estEthNatif(v.quote)) decQuote = 18;
   else {
@@ -2939,7 +2946,11 @@ async function etatSwap() {
       + ligne('what to do', 'Click "Quote it" again in a few seconds.');
     return null;
   }
-  const eM = montantHumain($('#swapMontant').value, decB);
+  /* ⛔ L unite du champ SUIT LE SENS : Buy = devise depensée, Sell = blocks vendus. */
+  const decIn = acheter ? decQuote : decB;
+  const decOut = acheter ? decB : decQuote;
+  const nomOut = acheter ? 'blocks' : v.quoteNom;
+  const eM = montantHumain($('#swapMontant').value, decIn);
   if (eM.etat === 'REFUSE') {
     box.innerHTML = ligne('state', pastille('THAT IS NOT AN AMOUNT', 'bad'))
       + ligne('you typed', enTexte(eM.tape)) + ligne('why', enTexte(eM.pourquoi));
@@ -2950,52 +2961,53 @@ async function etatSwap() {
 
   /* ⛔⛔ MEME CLE QUE LAUNCH pour ETH natif — sinon Quoter lit une pool vide (NO QUOTE). */
   const cle = cleDePool(v.quote, b20, paramsClePourQuote(v.quote));
-  /* On vend le block : zeroForOne = true seulement si le block est currency0. */
-  const zeroForOne = cle.currency0.toLowerCase() === b20.toLowerCase();
+  /* Sell : zeroForOne si block = currency0. Buy : sens inverse (ETH→block = quote est currency0). */
+  const zeroForOne = acheter
+    ? cle.currency0.toLowerCase() === v.quote.toLowerCase()
+    : cle.currency0.toLowerCase() === b20.toLowerCase();
+  const quoteNatif = estEthNatif(v.quote);
+  const entreeEstNatif = acheter && quoteNatif;
+  const jetonEntree = acheter ? v.quote : b20;
   const proprietaire = compte || '0x0000000000000000000000000000000000000001';
   const appel = (to, data) => rpc('eth_call', [{ to, data }, 'latest']);
+  const valeurHex = entreeEstNatif ? ('0x' + montant.toString(16)) : null;
 
-  /* ⛔ DIRE QUELLE POOL ON COTE — apres Launch, pointer WETH en silence etait le bug. Le
-   * selecteur vit dans Liquidity ; on le NOMME et on affiche fee/spacing pour que l ecart
-   * avec Launch (0 / 200) se voie avant le « NO QUOTE ». */
-  let vue = ligne('selling', enTexte(b20))
-    + ligne('for', enTexte(v.quoteNom)
-      + (estEthNatif(v.quote)
-        ? '  <span class="dim">(native — same as Launch)</span>'
-        : '  <span class="dim">(set by « Quote currency » in Liquidity, above)</span>'))
+  let vue = ligne(acheter ? 'buying with' : 'selling',
+      acheter
+        ? (enTexte(formaterUnites(montant, decIn) + ' ' + v.quoteNom)
+          + (quoteNatif ? '  <span class="dim">(native ETH → blocks)</span>' : ''))
+        : enTexte(b20))
+    + (acheter
+      ? ligne('for blocks', enTexte(b20))
+      : ligne('for', enTexte(v.quoteNom)
+        + (quoteNatif
+          ? '  <span class="dim">(native — same as Launch)</span>'
+          : '  <span class="dim">(set by « Quote currency » in Liquidity, above)</span>')))
     + ligne('pool', 'fee ' + (cle.fee / 10000) + '% · spacing ' + cle.tickSpacing
       + ' · ' + enTexte(v.quoteNom) + ' / block'
-      + (estEthNatif(v.quote)
+      + (quoteNatif
         ? '  <span class="dim">(Launch PoolKey)</span>'
         : '  <span class="dim">(not the Launch pool unless you launched with this quote)</span>'));
 
   /* ── le quote : gratuit, et il dit si la pool est cotable AVANT tout le reste ── */
   let sortie = null;
+  let quoteCause = null;
   try {
     const r = await appel(q, encodeQuote({ cle, zeroForOne, montant }));
     sortie = BigInt('0x' + r.slice(2, 66));
-    /* ⛔⛔ L ANCIENNE LIGNE DE PERTE COMPARAIT DEUX UNITES DIFFERENTES.
-     *    Elle calculait `(montant - sortie) / montant` — or `montant` est en BLOCKS et `sortie`
-     *    en WETH. Soustraire l un de l autre n a aucun sens : le pourcentage affiche etait un
-     *    nombre sans signification, et il ressemblait a une mesure. Avec 0,2 block vendu il
-     *    annoncait ~99,9 % de perte quelle que soit la profondeur reelle.
-     *    C est « l instrument repond pour une autre mesure » : juste dans sa forme, faux dans son
-     *    objet, et donc invisible tant qu on ne demande pas CE QU IL COMPARE.
-     * ⇒ La perte se mesure contre ce que le PRIX AFFICHE aurait donne, pas contre l entree. */
     let refPrix = null;
     try {
       const s0 = await appel(v.stateView, '0x' + sel4('getSlot0(bytes32)') + poolId(cle).slice(2));
       const sq = BigInt('0x' + String(s0).slice(2, 66));
       if (sq > 0n) {
-        /* ratio currency1/currency0 en unites de BASE ; on veut « devise recue par block vendu » */
+        /* ratio currency1/currency0 ; sortie attendue = montant × (out/in) selon zeroForOne */
         const r2 = (Number(sq) / Number(2n ** 96n)) ** 2;
         refPrix = zeroForOne ? r2 : 1 / r2;
       }
     } catch { refPrix = null; }
     const attendu = refPrix === null ? null : Number(montant) * refPrix;
-    /* ⚠️ TROIS ETATS : une perte non calculable ne s affiche pas comme zero. */
     const perte = attendu === null || attendu === 0 ? null : (1 - Number(sortie) / attendu) * 100;
-    vue += ligne('you receive', formaterUnites(sortie, decQuote) + ' ' + enTexte(v.quoteNom)
+    vue += ligne('you receive', formaterUnites(sortie, decOut) + ' ' + enTexte(nomOut)
       + '  <span class="dim">(' + sortie.toString() + ' raw)</span>');
     vue += ligne('cost vs displayed price', perte === null
       ? pastille('NOT MEASURED', 'warn')
@@ -3006,46 +3018,80 @@ async function etatSwap() {
         + ' % on this trade, and a bigger one loses more.');
     }
   } catch (e) {
-    /* ⛔ « pas de quote » n est pas « pas de pool » : ce peut etre un montant hors bornes. */
-    vue += ligne('quote', pastille('NO QUOTE', 'warn')) + ligne('why', enTexte(e.message));
+    quoteCause = e && e.message ? e.message : String(e);
+    vue += ligne('quote', pastille('NO QUOTE', 'warn')) + ligne('why', enTexte(quoteCause));
+    /* ⛔ Sell sur Launch frais : pool initialisee + Buy cote → pas d ETH cote devise.
+     *    Mesure 2026-09-07 (retest apres PR #11) : « execution reverted » / NO QUOTE sur sell
+     *    frais ; Buy tiny ETH→blocks passe. Dire la cause mesuree, pas un vague revert. */
+    if (!acheter) {
+      let poolInit = null;
+      try {
+        const s0 = await appel(v.stateView, '0x' + sel4('getSlot0(bytes32)') + poolId(cle).slice(2));
+        poolInit = BigInt('0x' + String(s0).slice(2, 66)) > 0n;
+      } catch { poolInit = null; }
+      if (poolInit === true) {
+        const zBuy = cle.currency0.toLowerCase() === v.quote.toLowerCase();
+        const tiny = 10n ** BigInt(Math.max(0, decQuote - 6)); /* ~0.000001 en unite devise */
+        try {
+          await appel(q, encodeQuote({ cle, zeroForOne: zBuy, montant: tiny }));
+          vue += ligne('what this means',
+            'This pool exists and has blocks, but almost no ' + enTexte(v.quoteNom)
+            + ' depth yet (typical right after a unilateral Launch).'
+            + '<br>Selling needs ' + enTexte(v.quoteNom) + ' on the other side — the <b>first trade must Buy</b>'
+            + ' (spend ' + enTexte(v.quoteNom) + ' → receive blocks).'
+            + '<br>Sell works after buys add ' + enTexte(v.quoteNom) + '. Switch to <b>Buy</b> above.');
+        } catch { /* les deux sens echouent : on garde le NO QUOTE generique */ }
+      } else if (poolInit === false) {
+        vue += ligne('what this means', 'This PoolKey is not initialized yet — Launch first, or check Quote currency.');
+      }
+    }
   }
 
-  /* ⛔ SELECTEUR DERIVE, pas lu dans une table. La table abi.json ne contient que ce que j y ai
-   * mis un jour ; une signature absente rend `undefined`, l appel part malforme, et le revert se
-   * lit comme un probleme de chaine. Le deriveur, lui, ne peut pas manquer une cle. */
-  /* ⛔ MEME REGLE QUE DANS LA SECTION LIQUIDITE : sans connexion on ne lit le solde de PERSONNE.
-   * L adresse de substitution sert a deriver, pas a repondre a la place de l utilisateur. */
+  /* Solde de l ENTREE (blocks a vendre, ou ETH/WETH a depenser). */
   let solde = null, causeSolde = null;
   if (compte) {
-    try { solde = BigInt(await appel(b20, sel4('balanceOf(address)') + pad(compte))); }
-    catch (e) { causeSolde = e.message; }
+    try {
+      if (entreeEstNatif) solde = BigInt(await rpc('eth_getBalance', [compte, 'latest']));
+      else solde = BigInt(await appel(jetonEntree, sel4('balanceOf(address)') + pad(compte)));
+    } catch (e) { causeSolde = e.message; }
   }
-  vue += ligne('your block', !compte ? pastille('CONNECT TO SEE YOURS', 'dim')
+  const libSolde = acheter ? ('your ' + v.quoteNom) : 'your block';
+  vue += ligne(libSolde, !compte ? pastille('CONNECT TO SEE YOURS', 'dim')
     : solde === null ? pastille('NOT MEASURED', 'warn') + ' ' + enTexte(causeSolde || '')
-    : solde.toString() + (solde < montant ? '  ⛔ < amount' : ''));
+    : (entreeEstNatif || acheter
+      ? formaterUnites(solde, decIn) + (solde < montant ? '  ⛔ < amount' : '')
+      : solde.toString() + (solde < montant ? '  ⛔ < amount' : '')));
 
-  /* ⚠️ C EST ICI QUE LE DEFAUT AVAIT MORDU : `allowance(address,address,address)` n etait PAS
-   * dans abi.json, donc le selecteur valait `undefined` et l appel revertait. Le `.catch(() => null)`
-   * affichait alors NOT MEASURED -- un etat honnete servi pour une raison malhonnete. */
-  let perm = null, causePerm = null;
-  try { perm = BigInt('0x' + (await appel(PERMIT2, sel4('allowance(address,address,address)')
-    + pad(proprietaire) + pad(b20) + pad(ur))).slice(2, 66)); }
-  catch (e) { causePerm = e.message; }
-  const autorise = perm !== null && perm >= montant;
-  vue += ligne('1. Permit2 → Router', autorise ? pastille('DONE', 'ok')
-    : perm === null ? pastille('NOT MEASURED', 'dim') + ' ' + enTexte(causePerm || '')
-    : pastille('TO DO', 'warn'));
+  /* ⛔ Achat ETH natif : pas de Permit2 — le routeur recoit msg.value. ERC20 (WETH/USDC/block) :
+   *    Permit2 sur le jeton D ENTREE vers le routeur. */
+  let autorise = false, perm = null, causePerm = null;
+  if (entreeEstNatif) {
+    autorise = true;
+    vue += ligne('1. Permit2 → Router', pastille('NOT NEEDED', 'ok')
+      + '  <span class="dim">(native ETH settles via msg.value)</span>');
+  } else {
+    try { perm = BigInt('0x' + (await appel(PERMIT2, sel4('allowance(address,address,address)')
+      + pad(proprietaire) + pad(jetonEntree) + pad(ur))).slice(2, 66)); }
+    catch (e) { causePerm = e.message; }
+    autorise = perm !== null && perm >= montant;
+    vue += ligne('1. Permit2 → Router', autorise ? pastille('DONE', 'ok')
+      : perm === null ? pastille('NOT MEASURED', 'dim') + ' ' + enTexte(causePerm || '')
+      : pastille('TO DO', 'warn'));
+  }
 
   let forme = null, causes = null;
-  if (autorise && compte) {
+  if (autorise && compte && sortie !== null) {
     const bloc0 = await rpc('eth_getBlockByNumber', ['latest', false]);
     const deadline = BigInt(bloc0.timestamp) + 600n;
-    /* ⛔ La copie locale d appelBrut est retiree : deux definitions de la meme chose finissent par
-     * diverger, et celle-ci masquait la globale sans rien apporter. */
-    ({ forme, causes } = await formeAcceptee({ appelBrut, ur, de: compte, cle, zeroForOne, montant, deadline }));
+    ({ forme, causes } = await formeAcceptee({
+      appelBrut, ur, de: compte, cle, zeroForOne, montant, deadline,
+      value: valeurHex || undefined,
+    }));
     vue += ligne('2. swap', forme === null ? pastille('BOTH SHAPES REJECTED', 'bad')
       : pastille('READY · ' + (forme === AVEC_MINHOP ? 'with minHopPriceX36' : 'legacy shape'), 'ok'));
     if (forme === null) for (const [k, c] of Object.entries(causes || {})) vue += ligne(k, enTexte(String(c).slice(0, 120)));
+  } else if (autorise && compte && sortie === null) {
+    vue += ligne('2. swap', pastille('NO QUOTE — NOTHING TO SEND', 'dim'));
   } else {
     vue += ligne('2. swap', pastille(autorise ? 'CONNECT WALLET' : 'AFTER STEP 1', 'dim'));
   }
@@ -3054,14 +3100,22 @@ async function etatSwap() {
   const b = $('#swapAgir');
   let empeche = null;
   if (!compte) empeche = 'Connect your wallet first (button below)';
-  else if (manque) empeche = 'Not enough block for that amount';
+  else if (manque) empeche = acheter
+    ? ('Not enough ' + v.quoteNom + ' for that amount')
+    : 'Not enough block for that amount';
+  else if (sortie === null) empeche = acheter ? 'No quote — nothing to send' : 'No quote — try Buy first if pool has no ETH';
   else if (autorise && forme === null) empeche = 'The router rejected both encodings';
   b.disabled = empeche !== null;
-  b.textContent = empeche ? empeche : (autorise ? 'Run: 2. swap' : 'Run: 1. approve Permit2 → Router');
+  b.textContent = empeche ? empeche
+    : (autorise ? 'Run: 2. swap' : 'Run: 1. approve Permit2 → Router');
   box.innerHTML = vue;
   gardeMainnet();
-  return { b20, cle, zeroForOne, montant, ur, autorise, forme, sortie };
+  return {
+    b20, cle, zeroForOne, montant, ur, autorise, forme, sortie,
+    acheter, entreeEstNatif, jetonEntree, valeur: valeurHex || '0x0',
+  };
 }
+
 
 /* ══ RETOUR VISUEL ════════════════════════════════════════════════════════════════════════════
  * ⛔ LE VERT N EST PAS UN ENCOURAGEMENT, C EST UN CONSTAT. Il ne s allume que sur un recu de
@@ -3663,6 +3717,28 @@ const cacherTx = () => { ov.hidden = true; };
 ov.querySelector('.ovFermer').onclick = cacherTx;
 ov.onclick = (e) => { if (e.target === ov && ov.querySelector('.ovFermer').hidden === false) cacherTx(); };
 
+function appliquerLabelSwap() {
+  const buy = $('#swapBuy')?.getAttribute('aria-pressed') === 'true';
+  const lab = $('#swapMontantLab');
+  const dS = devise(chaine);
+  const nom = dS ? dS.nom : 'ETH';
+  if (lab) lab.textContent = buy ? (nom + ' to spend') : 'How many blocks to sell';
+}
+document.querySelectorAll('.swapDirBtn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const buy = btn.id === 'swapBuy';
+    $('#swapBuy')?.setAttribute('aria-pressed', buy ? 'true' : 'false');
+    $('#swapSell')?.setAttribute('aria-pressed', buy ? 'false' : 'true');
+    appliquerLabelSwap();
+    planSwap = null;
+    const box = $('#swapVue');
+    if (box) box.innerHTML = '';
+    const b = $('#swapAgir');
+    if (b) { b.disabled = true; b.textContent = 'Run the next step'; }
+  });
+});
+appliquerLabelSwap();
+
 $('#swapEtat').onclick = async () => { dire('Quoting on ' + RESEAUX[chaine].nom + '…'); planSwap = await etatSwap(); if (planSwap) dire('Read.', 'ok'); };
 
 $('#swapAgir').onclick = async () => {
@@ -3670,22 +3746,28 @@ $('#swapAgir').onclick = async () => {
   if (!planSwap) { planSwap = await etatSwap(); if (!planSwap) return; }
   const p = planSwap;
   try {
-    let to, data, quoi;
+    let to, data, quoi, valeur = '0x0';
     if (!p.autorise) {
       to = PERMIT2; quoi = 'approve Permit2 → Router';
-      data = encodePermit2Approve(p.b20, p.ur, MAX_UINT160, MAX_UINT48);
+      /* ⛔ Jeton D ENTREE : block en Sell, devise (WETH/USDC) en Buy ERC20 — jamais le block en Buy. */
+      data = encodePermit2Approve(p.jetonEntree || p.b20, p.ur, MAX_UINT160, MAX_UINT48);
     } else {
       if (p.forme === null) return dire('The router rejected both encodings — nothing to sign.', 'bad');
+      if (p.sortie === null) return dire('No quote — nothing to send.', 'bad');
       const bloc0 = await rpc('eth_getBlockByNumber', ['latest', false]);
       /* ⛔ sortie minimale = 99 % du quote. Zero accepterait N IMPORTE QUEL prix, y compris zero. */
-      const min = p.sortie === null ? 0n : (p.sortie * 99n) / 100n;
-      to = p.ur; quoi = 'swap';
+      const min = (p.sortie * 99n) / 100n;
+      to = p.ur; quoi = p.acheter ? 'swap buy' : 'swap sell';
       data = encodeSwapExactInSingle({ cle: p.cle, zeroForOne: p.zeroForOne, montant: p.montant,
         sortieMin: min, deadline: BigInt(bloc0.timestamp) + 600n, forme: p.forme });
+      /* ⛔ Buy ETH natif : SETTLE_ALL lit msg.value. Sans value, estimate/send reverte. */
+      if (p.entreeEstNatif) valeur = p.valeur || ('0x' + p.montant.toString(16));
     }
     afficherTx('wallet', quoi);
+    if (valeur !== '0x0') dire('This swap SENDS ' + (Number(BigInt(valeur)) / 1e18).toFixed(9)
+      + ' ETH with the transaction (native settle).', 'warn');
     /* Gas + chain guard live in envoyerTx (parity with Create / Launch / Liquidity). */
-    const r = await envoyerTx({ to, data, value: '0x0', nom: quoi });
+    const r = await envoyerTx({ to, data, value: valeur, nom: quoi });
     if (!r) { afficherTx('fail', quoi); return; }
     if (!r.receipt) {
       afficherTx('pending', quoi, r.hash);
