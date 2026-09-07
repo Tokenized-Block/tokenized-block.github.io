@@ -19,10 +19,10 @@
 //    est pre-cochee pour un compte qui a deja accepte. Masquer l avertissement serait une autre
 //    decision, bien plus lourde, et personne ne l a prise.
 //
-// ⛔ ET CE N EST PAS UN ACK POUR LAUNCH / LP / SWAP (2026-09-07). Pre-cocher `#gardeCase` debloque
-//    Create ; les envois irrevocables exigent un re-ack de session dans `index.html`
-//    (`consentArgentOk` / `#gardeCaseArgent`). Un souvenir ≤30j ne doit pas autoriser un habit-click
-//    sur mint ou swap.
+// ⛔ ET CE N EST PAS UN ACK ARGENT (2026-09-07, étendu Create). Pre-cocher `#gardeCase` n est
+//    qu un souvenir UI ; Create / Launch / LP / Swap exigent un re-ack de session dans `index.html`
+//    (`consentArgentOk` / `#gardeCaseArgent`, ou un tick frais de `#gardeCase`). Un souvenir ≤30j
+//    ne doit pas autoriser un habit-click sur Create (frais), mint ou swap.
 
 const CLE = 'tblock.consentement.mainnet';
 const JOURS = 30;
