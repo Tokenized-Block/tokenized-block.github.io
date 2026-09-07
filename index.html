@@ -765,6 +765,7 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
     <input id="lancBlock" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
     <label for="lancValo">What the whole supply is worth at the start — in ETH</label>
     <input id="lancValo" value="10" inputmode="decimal">
+    <p class="expl" style="margin:6px 0 0;color:#f0c674">Fee is NONE forever — cannot be raised later. This valuation sets the irreversible start price.</p>
     <div id="lancPlan" class="fiche" style="margin-top:10px"></div>
     <button class="act sec" id="lancCalculer" style="margin-top:10px">Work out the launch</button>
     <!-- ⛔ PERMIT2 AVANT LE LANCEMENT — MESURE 2026-09-07. Le mint tire les blocks via Permit2 :
@@ -792,6 +793,7 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
     <select id="poolDevise" style="width:100%;padding:10px;border-radius:9px;background:#0d1220;color:#dce6f5;border:1px solid #1c2740;font-size:14px"></select>
     <label for="poolValeur">Starting value of the whole supply</label>
     <input id="poolValeur" value="10000" inputmode="numeric">
+    <p class="expl" style="margin:6px 0 0;color:#f0c674">If the pool is empty, this starting value engraves the price forever — it cannot be reinitialized.</p>
     <!-- ⛔ LE PRIX DE DEPART SE CHOISIT. Il etait code en dur a `PRIX_1_POUR_1` = 2^96, un ratio
          d UNITES DE BASE qui ignore les decimales : sur une paire USDC(6)/block(18) cela signifie
          1 block = 1e12 USDC, et la pool nait morte. Le prix d une pool ne se reinitialise pas.
@@ -2718,6 +2720,7 @@ async function construirePlan() {
         + (Number(valeurVoulue) / Number(jetons)).toExponential(3) + ' ' + v.quoteNom
         + '  <span class="dim">(' + jetons.toLocaleString('en-US') + ' whole blocks)</span>')
       + ligne('sqrtPriceX96', '<span class="dim">' + sqrtPrix + '</span>')
+      + ligne('locked forever', '<b>Starting value sets the irreversible pool price</b> — step 1 engraves it; it cannot be reinitialized.')
     /* ⛔ « CANNOT PRICE — decimals or supply not measured » etait VRAI et INUTILISABLE : il ne
      * disait ni LAQUELLE des trois lectures manquait, ni POURQUOI, donc pas quoi faire. Une
      * limite de debit appelle « reessaie » ; une adresse sans jeton appelle « change d adresse ».
@@ -3300,6 +3303,9 @@ $('#lancCalculer').onclick = async () => {
         ? 'NONE — buyers pay nothing extra, and the pool earns you nothing either'
         : (cle.fee / 10000) + '% to the position owner')
       + ligne('valuation', valo + ' ETH for the whole supply')
+      /* ⛔ MAINNET DISCLOSE 2026-09-07 : fee 0% et valo gravent pour de bon. Une ligne douce
+       *    (« NONE ») ne suffisait pas — Real doit lire l irreversible AVANT #lancLancer. */
+      + ligne('locked forever', '<b>Fee cannot be raised later.</b> Valuation sets the <b>irreversible</b> start price.')
       + ligne('range', '[' + p.tickBas + ', ' + p.tickHaut + ']' + (p.prixImpose ? '  ⚠️ upper tick forced by the existing pool' : ''))
       + ligne('this places', formaterUnites(blocksRequis, dec) + ' blocks')
       + ligne('you hold', formaterUnites(solde, dec) + ' blocks')
@@ -3320,7 +3326,8 @@ $('#lancCalculer').onclick = async () => {
     /* ⚠️ LE MOT SUIT LA MESURE. Il disait « your ENTIRE supply » alors que la marge de 0,1 % en
      *    laisse une part dehors : sur un geste definitif, une phrase inexacte est un defaut, pas
      *    un raccourci. */
-    vue += ligne('warning', 'this places almost all of your supply, and it cannot be taken back out by this app');
+    vue += ligne('warning', 'this places almost all of your supply, and it cannot be taken back out by this app')
+      + ligne('before Launch', 'Read again: fee is locked at NONE — cannot be raised later; the valuation above sets the irreversible start price.');
 
     /* ══ PERMIT2 — MESURE AVANT TOUTE SIMULATION DU MINT ═══════════════════════════════════════
      * ⛔⛔ OBSERVE 2026-09-07 SUR BASE SEPOLIA. Create OK, Launch → eth_simulateV1 →
