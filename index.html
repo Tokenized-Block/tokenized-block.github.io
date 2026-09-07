@@ -970,7 +970,7 @@ import { cleDePool, etatPool, encodeInitialize, encodeApprove, encodePermit2Appr
   /* ⛔ LES DEUX QUI PERMETTENT LA TRANSACTION UNIQUE. Sans elles, creer la pool et y placer la
    *    supply restent deux signatures — donc un etat intermediaire ou une pool vide survit. */
   encodeInitializePool, encodeMulticall } from './pool.js';
-import { parametresLancement } from './lancement.js';
+import { parametresLancement, tickMinAligne } from './lancement.js';
 import { apparenceDepuisAdresse } from './apparence.js';
 import { consentementValide, marquerConsentement } from './consentement.js';
 import { verdictPhoto, chercherQualite, octetsUri, PHOTO_MAX } from './photo.js';
@@ -2070,7 +2070,9 @@ function peuplerDevises() {
   const avant = sel.value;
   const liste = DEVISES[chaine] || [];
   sel.innerHTML = liste.map((d) => `<option value="${d.adr}">${d.nom}`
-    + (d.enveloppable ? ' — wrap your own ETH, no exchange needed' : ' — you must already hold it')
+    + (estEthNatif(d.adr) ? ' — native, same pool as Launch (no wrap)'
+      : d.enveloppable ? ' — wrap your own ETH, no exchange needed'
+      : ' — you must already hold it')
     + '</option>').join('');
   if (liste.some((d) => d.adr.toLowerCase() === String(avant).toLowerCase())) sel.value = avant;
   /* ⛔⛔ L ETIQUETTE PORTE SON UNITE, ET C EST UNE CORRECTION. « Starting value of the whole
@@ -2388,11 +2390,30 @@ $('#idxChercher').onclick = async () => {
  * ⚠️ WETH s obtient en enveloppant SON PROPRE ETH — une transaction, aucun echange, aucun tiers.
  *    USDC exige un swap ou un virement. Ce n est pas la meme barriere, et l app doit laisser
  *    choisir plutot que decider. */
+/* ⛔⛔ ETH NATIF EN TETE — MEME CLE QUE LAUNCH. Mesure 2026-09-07 : apres un Launch unilateral
+ *    (currency0=0x0, fee=0, tickSpacing=200), Liquidity/Swap ne proposaient QUE du WETH et
+ *    appelaient cleDePool avec fee=3000/spacing=60 → AUTRE poolId, vide → « NO QUOTE » /
+ *    « Not enough WETH ». Ce n est pas un manque de liquidite : c est une PoolKey differente.
+ * ⚠️ `enveloppable: false` : l ETH natif N EST PAS du WETH a envelopper. Un wrap silencieux
+ *    renverrait encore sur la mauvaise pool. */
+const ETH_NATIF = '0x0000000000000000000000000000000000000000';
 const DEVISES = {
-  84532: [{ adr: '0x4200000000000000000000000000000000000006', nom: 'WETH', enveloppable: true }],
-  8453:  [{ adr: '0x4200000000000000000000000000000000000006', nom: 'WETH', enveloppable: true },
+  84532: [{ adr: ETH_NATIF, nom: 'ETH', enveloppable: false },
+          { adr: '0x4200000000000000000000000000000000000006', nom: 'WETH', enveloppable: true }],
+  8453:  [{ adr: ETH_NATIF, nom: 'ETH', enveloppable: false },
+          { adr: '0x4200000000000000000000000000000000000006', nom: 'WETH', enveloppable: true },
           { adr: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', nom: 'USDC', enveloppable: false }],
 };
+/** ⛔ Une seule definition : deux endroits qui testeraient « === 0x0 » autrement divergeraient. */
+function estEthNatif(adr) {
+  return String(adr || '').toLowerCase() === ETH_NATIF;
+}
+/** ⛔ LA POOLKEY SUIT LA DEVISE, PAS UN DEFAUT MUET. Launch grave fee=0 / spacing=200 sur ETH
+ *    natif ; les defauts de cleDePool (3000/60) designent une AUTRE pool. WETH/USDC gardent
+ *    3000/60 — pools manuelles, distinctes du Launch. */
+function paramsClePourQuote(adr) {
+  return estEthNatif(adr) ? { fee: 0, tickSpacing: 200 } : { fee: 3000, tickSpacing: 60 };
+}
 const V4 = {
   84532: { poolm: '0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408', posm: '0x4B2C77d209D3405F41a037Ec6c77F7F5b8e2ca80',
            stateView: '0x571291b572ed32ce6751a2Cb2486EbEe8DEfB9B4' },
@@ -2454,7 +2475,11 @@ async function construirePlan() {
     return null;
   }
 
-  const cle = cleDePool(v.quote, b20);
+  /* ⛔⛔ MEME CLE QUE LAUNCH QUAND LA DEVISE EST ETH NATIF. Sans paramsClePourQuote, fee/spacing
+   *    restaient a 3000/60 et l ecran demandait du WETH sur une pool vide — alors que Launch
+   *    venait de remplir ETH/fee0/spacing200. Mesure 2026-09-07, block 0xb200…c681a016… */
+  const cle = cleDePool(v.quote, b20, paramsClePourQuote(v.quote));
+  const quoteNatif = estEthNatif(v.quote);
   /* ⛔ UN SEUL APPEL PAR LECTURE DISTINCTE, LE TEMPS D UN PLAN. Mesure du 2026-09-04 : construire
    * le plan declenche 9 requetes dont 3 DOUBLONS (33 %) — `etatPool` boucle sur les deux jetons
    * et relit `decimals`/`allowance` deja lus. Ce n est pas de la vitesse : le RPC public de Base
@@ -2477,7 +2502,10 @@ async function construirePlan() {
     catch (e) { return { v: null, pourquoi: e && e.message ? e.message : String(e) }; }
   };
   const proprietaire = compte || '0x0000000000000000000000000000000000000001';
-  const e = await etatPool({ appel, cle, jetons: [b20, v.quote], proprietaire, posm: v.posm, permit2: PERMIT2, stateView: v.stateView });
+  /* ⛔ ETH natif n a PAS d allowance ERC20 : le passer a etatPool lit address(0) et renvoie
+   *    NOT MEASURED sur des etapes qui n existent pas. On ne demande que le block. */
+  const e = await etatPool({ appel, cle, jetons: quoteNatif ? [b20] : [b20, v.quote],
+    proprietaire, posm: v.posm, permit2: PERMIT2, stateView: v.stateView });
 
   /* ⛔ ON NE LIT LE SOLDE DE PERSONNE D AUTRE. L adresse de substitution `0x…0001` existe pour
    * DERIVER une adresse quand aucun wallet n est la — pas pour REPONDRE a la place de
@@ -2487,10 +2515,19 @@ async function construirePlan() {
    * ⇒ Sans connexion, on rend `null` — « non mesure », qui s affiche et ne se confond pas. */
   const solde = async (t) => {
     if (!compte) return null;
+    /* ⛔ balanceOf(address(0)) n existe pas : l ETH natif se lit au solde de compte. */
+    if (estEthNatif(t)) {
+      try { return BigInt(await rpc('eth_getBalance', [compte, 'latest'])); } catch { return null; }
+    }
     try { return BigInt(await appel(t, abi.selecteurs['balanceOf(address)'] + pad(compte))); } catch { return null; }
   };
   const sB = await solde(b20), sQ = await solde(v.quote);
-  const pB = e.permissions[b20.toLowerCase()], pQ = e.permissions[v.quote.toLowerCase()];
+  const pB = e.permissions[b20.toLowerCase()];
+  /* ⛔ Approvals quote = N/A pour ETH natif (comme Launch l affiche). Un faux « TO DO » ferait
+   *    signer un approve(0x0) absurde. */
+  const pQ = quoteNatif
+    ? { versPermit2: 1n, versPosm: 1n }
+    : e.permissions[v.quote.toLowerCase()];
   const fait = (x) => typeof x === 'bigint' ? x > 0n : null;
 
   /* ⛔ LE PRIX SE CALCULE AVANT LES ETAPES, parce que l etape 1 en depend. Ma premiere version
@@ -2501,7 +2538,8 @@ async function construirePlan() {
    * initialization`. Deplacer du code qui depend d autre chose deplace le probleme tant qu on ne
    * remonte pas TOUTE la dependance. Et aucune des 6 regles de coherence ne voit ca : elles
    * verifient que les noms EXISTENT, pas qu ils sont initialises au moment ou on les lit. */
-  const lQ = await lire(v.quote, abi.selecteurs['decimals()'], (h) => Number(BigInt(h)));
+  /* ⛔ decimals() sur 0x0 revert : ETH natif a 18 decimales par definition EVM. */
+  const lQ = quoteNatif ? { v: 18 } : await lire(v.quote, abi.selecteurs['decimals()'], (h) => Number(BigInt(h)));
   const lB = await lire(b20, abi.selecteurs['decimals()'], (h) => Number(BigInt(h)));
   const lS = await lire(b20, abi.selecteurs['totalSupply()'], BigInt);
   const decQ = lQ.v, decB = lB.v, supply = lS.v;
@@ -2605,6 +2643,9 @@ async function construirePlan() {
   const manqueBrut = (sQ !== null && besoinQ !== null && sQ < besoinQ) ? besoinQ - sQ : 0n;
   const manqueDevise = (plafondEnveloppe !== null && manqueBrut > plafondEnveloppe)
     ? plafondEnveloppe : manqueBrut;
+  /* ⛔ Bornes alignees sur LE tickSpacing de CETTE cle — TICK_BAS/HAUT (60) revertent sur 200. */
+  const tickBasLiq = tickMinAligne(cle.tickSpacing);
+  const tickHautLiq = Math.floor(887272 / cle.tickSpacing) * cle.tickSpacing;
   const etapes = [
     ...(v.enveloppable && manqueDevise > 0n ? [{
       nom: '0. wrap ' + (Number(manqueDevise) / 1e18).toFixed(9) + ' ETH → WETH',
@@ -2616,12 +2657,20 @@ async function construirePlan() {
     { nom: '1. initialize pool', ok: e.initialisee, to: v.poolm,
       data: sqrtPrix === null ? null : encodeInitialize(cle, sqrtPrix) },
     { nom: '2. approve block → Permit2', ok: fait(pB.versPermit2), to: b20, data: encodeApprove(PERMIT2, MAX_UINT256) },
-    { nom: '3. approve ' + v.quoteNom + ' → Permit2', ok: fait(pQ.versPermit2), to: v.quote, data: encodeApprove(PERMIT2, MAX_UINT256) },
+    /* ⛔ Pas d approve quote pour ETH natif — Launch le dit deja : native ETH has no ERC20 allowance. */
+    ...(!quoteNatif ? [
+      { nom: '3. approve ' + v.quoteNom + ' → Permit2', ok: fait(pQ.versPermit2), to: v.quote, data: encodeApprove(PERMIT2, MAX_UINT256) },
+    ] : []),
     { nom: '4. Permit2 → PositionManager (block)', ok: fait(pB.versPosm), to: PERMIT2, data: encodePermit2Approve(b20, v.posm, MAX_UINT160, MAX_UINT48) },
-    { nom: '5. Permit2 → PositionManager (' + v.quoteNom + ')', ok: fait(pQ.versPosm), to: PERMIT2, data: encodePermit2Approve(v.quote, v.posm, MAX_UINT160, MAX_UINT48) },
+    ...(!quoteNatif ? [
+      { nom: '5. Permit2 → PositionManager (' + v.quoteNom + ')', ok: fait(pQ.versPosm), to: PERMIT2, data: encodePermit2Approve(v.quote, v.posm, MAX_UINT160, MAX_UINT48) },
+    ] : []),
     /* ⛔ Le mint n a pas d etat « deja fait » lisible : on peut minter plusieurs positions. Il
-     * reste donc toujours a faire — c est honnete, et c est different d une etape sautee. */
-    { nom: '6. mint position', ok: false, to: v.posm, mint: true },
+     * reste donc toujours a faire — c est honnete, et c est different d une etape sautee.
+     * ⚠️ ETH natif : SETTLE_PAIR tire le msg.value — sans valeur le mint revert apres Launch. */
+    { nom: '6. mint position', ok: false, to: v.posm, mint: true,
+      ...(quoteNatif && besoinQ !== null && besoinQ > 0n
+        ? { valeur: '0x' + ((besoinQ * 102n) / 100n).toString(16) } : {}) },
   ];
 
   /* ⛔ LE MEME NOMBRE NE VEUT PAS DIRE LA MEME CHOSE SELON LA CHAINE. La devise de cotation est
@@ -2678,6 +2727,9 @@ async function construirePlan() {
             : '') + '</span>'
         : ''));
   let vue = ligne('pair', enTexte(v.quoteNom) + ' / block')
+    + ligne('pool', 'fee ' + (cle.fee / 10000) + '% · spacing ' + cle.tickSpacing
+      + (quoteNatif ? '  <span class="dim">(same key as Launch — native ETH)</span>'
+        : '  <span class="dim">(WETH/USDC path — distinct from Launch)</span>'))
     + prixVue
     /* ⛔ AFFICHER CE QUE LA POSITION EXIGE, pas seulement la liquidite demandee. `L` ne se
      * compare a aucun solde ; les deux montants ci-dessous, si. */
@@ -2826,7 +2878,8 @@ async function construirePlan() {
   /* ⛔ LE PLAN PORTE LES BESOINS, pour que le mint pose de VRAIES bornes plutot que MAX_UINT128.
    * Les recalculer au moment de signer les recalculerait sur un etat relu plus tard : ce qui a
    * ete MONTRE a l utilisateur doit etre ce qui est SIGNE. */
-  return { etapes, suivante, cle, v, liq, b20, besoinB, besoinQ, quoteEst0 };
+  return { etapes, suivante, cle, v, liq, b20, besoinB, besoinQ, quoteEst0,
+    tickBas: tickBasLiq, tickHaut: tickHautLiq, quoteNatif };
 }
 
 $('#poolEtat').onclick = async () => {
@@ -2873,10 +2926,14 @@ async function etatSwap() {
     return null;
   }
   /* ⛔ LES DECIMALES DE LA DEVISE AUSSI, et pour la meme raison : afficher « tu recois 170736… »
-   * sans unite est illisible, et les supposer a 18 mentirait sur USDC, qui en a 6. */
+   * sans unite est illisible, et les supposer a 18 mentirait sur USDC, qui en a 6.
+   * ⛔ ETH natif : pas de decimals() sur 0x0 — 18 est la definition EVM, pas une hypothese. */
   let decQuote = null;
-  try { decQuote = Number(BigInt(await rpc('eth_call', [{ to: v.quote, data: abi.selecteurs['decimals()'] }, 'latest']))); }
-  catch { decQuote = null; }
+  if (estEthNatif(v.quote)) decQuote = 18;
+  else {
+    try { decQuote = Number(BigInt(await rpc('eth_call', [{ to: v.quote, data: abi.selecteurs['decimals()'] }, 'latest']))); }
+    catch { decQuote = null; }
+  }
   if (decQuote === null) {
     box.innerHTML = ligne('state', pastille('COULD NOT READ THE CURRENCY DECIMALS', 'warn'))
       + ligne('what to do', 'Click "Quote it" again in a few seconds.');
@@ -2891,20 +2948,26 @@ async function etatSwap() {
   const montant = eM.etat === 'OK' ? eM.valeur : 0n;
   if (montant === 0n) { box.innerHTML = ligne('state', pastille('AMOUNT MUST BE > 0', 'bad')); return null; }
 
-  const cle = cleDePool(v.quote, b20);
+  /* ⛔⛔ MEME CLE QUE LAUNCH pour ETH natif — sinon Quoter lit une pool vide (NO QUOTE). */
+  const cle = cleDePool(v.quote, b20, paramsClePourQuote(v.quote));
   /* On vend le block : zeroForOne = true seulement si le block est currency0. */
   const zeroForOne = cle.currency0.toLowerCase() === b20.toLowerCase();
   const proprietaire = compte || '0x0000000000000000000000000000000000000001';
   const appel = (to, data) => rpc('eth_call', [{ to, data }, 'latest']);
 
-  /* ⛔ DIRE D OU VIENT LA DEVISE, PAS LA DUPLIQUER. Le selecteur vit dans la section Liquidity et
-   * le swap le suivait en silence : on lisait « for: USDC » sans aucun controle a portee, ni
-   * moyen de comprendre pourquoi.
-   * ⚠️ Un SECOND selecteur serait pire : deux endroits qui lisent la devise separement finiraient
-   *    par diverger, et une `PoolKey` differente n est pas la meme pool vue autrement — c est une
-   *    AUTRE pool, dont une vide. Un seul point de verite, et on le NOMME. */
+  /* ⛔ DIRE QUELLE POOL ON COTE — apres Launch, pointer WETH en silence etait le bug. Le
+   * selecteur vit dans Liquidity ; on le NOMME et on affiche fee/spacing pour que l ecart
+   * avec Launch (0 / 200) se voie avant le « NO QUOTE ». */
   let vue = ligne('selling', enTexte(b20))
-    + ligne('for', enTexte(v.quoteNom) + '  <span class="dim">(set by « Quote currency » in Liquidity, above)</span>');
+    + ligne('for', enTexte(v.quoteNom)
+      + (estEthNatif(v.quote)
+        ? '  <span class="dim">(native — same as Launch)</span>'
+        : '  <span class="dim">(set by « Quote currency » in Liquidity, above)</span>'))
+    + ligne('pool', 'fee ' + (cle.fee / 10000) + '% · spacing ' + cle.tickSpacing
+      + ' · ' + enTexte(v.quoteNom) + ' / block'
+      + (estEthNatif(v.quote)
+        ? '  <span class="dim">(Launch PoolKey)</span>'
+        : '  <span class="dim">(not the Launch pool unless you launched with this quote)</span>'));
 
   /* ── le quote : gratuit, et il dit si la pool est cotable AVANT tout le reste ── */
   let sortie = null;
@@ -2937,7 +3000,7 @@ async function etatSwap() {
     vue += ligne('cost vs displayed price', perte === null
       ? pastille('NOT MEASURED', 'warn')
       : (perte > 5 ? '<b style="color:#ff9f6b">−' + perte.toFixed(1) + ' %</b>' : '−' + perte.toFixed(2) + ' %')
-        + '  <span class="dim">— 0.30 % is the pool fee, the rest is depth</span>');
+        + '  <span class="dim">— ' + (cle.fee / 10000) + ' % is the pool fee, the rest is depth</span>');
     if (perte !== null && perte > 5) {
       vue += ligne('⚠️', 'This pool is thin. You lose ' + perte.toFixed(1)
         + ' % on this trade, and a bigger one loses more.');
@@ -3113,7 +3176,7 @@ $('#lancCalculer').onclick = async () => {
      *    economie IDENTIQUE au dernier chiffre. Le seul ecart est la friction pour l acheteur.
      * ⚠️ On imprime les deux poolId dans l instrument precisement parce que des chiffres
      *    identiques ne distinguent pas « correct » de « je n ai rien fait varier ». */
-    const d0 = { adr: '0x0000000000000000000000000000000000000000', nom: 'ETH' };
+    const d0 = { adr: ETH_NATIF, nom: 'ETH' };
     if (!compte) return box.innerHTML = ligne('state', pastille('CONNECT FIRST', 'dim'));
     const V = V4[chaine];
     const lire4 = async (to, data) => {
@@ -3645,7 +3708,10 @@ $('#poolAgir').onclick = async () => {
        * de temps. */
       const bloc = await rpc('eth_getBlockByNumber', ['latest', false]);
       const deadline = BigInt(bloc.timestamp) + 600n;
-      data = encodeMintPosition({ cle: plan.cle, tickBas: TICK_BAS, tickHaut: TICK_HAUT, liquidite: plan.liq,
+      /* ⛔ Ticks depuis LE spacing de la cle (200 apres Launch ETH, 60 sinon). TICK_BAS/HAUT
+       *    (alignes 60) revertent sans parler d alignement sur une pool Launch. */
+      data = encodeMintPosition({ cle: plan.cle,
+        tickBas: plan.tickBas ?? TICK_BAS, tickHaut: plan.tickHaut ?? TICK_HAUT, liquidite: plan.liq,
         /* ⛔ DE VRAIES BORNES, PLUS MAX_UINT128. Sans plafond, le mint prend ce que la pool
          * demande QUEL QU IL SOIT — et si elle a ete initialisee par quelqu un d autre, c est
          * son prix qui decide. Mesure : a un prix 10x deplace, 3,16 fois plus de devise que
@@ -3664,7 +3730,8 @@ $('#poolAgir').onclick = async () => {
      * Le defaut reste zero : une etape qui enverrait de l ETH par accident serait une perte
      * silencieuse, et rien dans l interface ne l aurait annoncee. */
     const valeur = s.valeur || '0x0';
-    if (valeur !== '0x0') dire('This step SENDS ' + (Number(BigInt(valeur)) / 1e18).toFixed(9) + ' ETH, to wrap it into WETH.', 'warn');
+    if (valeur !== '0x0') dire('This step SENDS ' + (Number(BigInt(valeur)) / 1e18).toFixed(9)
+      + ' ETH' + (plan.quoteNatif && s.mint ? ' as native settle for the Launch pool.' : ', to wrap it into WETH.'), 'warn');
     /* Gas + chain guard in envoyerTx; value preserved for wrap-ETH step. */
     const r = await envoyerTx({ to: s.to, data, value: valeur, nom: s.nom });
     if (!r) { afficherTx('fail', s.nom); return; }
