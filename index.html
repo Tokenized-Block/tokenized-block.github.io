@@ -50,45 +50,56 @@ main{max-width:560px;margin:0 auto}
  *    5,4 ecrans a defiler pour un travail qui tient sur un ecran.
  * ⛔ ET LA COLONNE ETROITE N EST PAS UN CHOIX DE LISIBILITE ICI : ce n est pas du texte long,
  *    ce sont des formulaires et des tableaux de valeurs, qui gagnent a etre COTE A COTE.
- * ⚠️ EN DESSOUS DE 1100 px ON NE TOUCHE A RIEN cote multi-colonnes. Le telephone (max-width
- *    640) etait deja mesure bon (3,1 ecrans, 0 cible sous 44 px) ; elargir la ou il n y a pas
- *    de place casserait ce qui marche. */
+ * ⚠️ EN DESSOUS DE 1000 px ON NE TOUCHE A RIEN. Le telephone etait deja mesure bon (3,1 ecrans,
+ *    0 cible sous 44 px) ; elargir la ou il n y a pas de place casserait ce qui marche. */
 /* ⛔⛔ MULTI-COLONNES ET NON GRILLE, ET C EST UNE MESURE QUI L IMPOSE. Ma premiere version
  *    utilisait `display:grid` : deux colonnes obtenues, 82 % de largeur — mais TOUJOURS 4,1
  *    ecrans. En grille, une rangee fait la hauteur de sa PLUS GRANDE carte : « Your block »
  *    (1 272 px) laissait donc 1 200 px de vide a cote d elle. J avais deplace le vide, pas
  *    supprime. Le multi-colonnes EMPILE sans rangees : chaque colonne se remplit jusqu en bas. */
-/* ══ MODE SIMPLE : PAS DE MULTI-COLONNES ═══════════════════════════════════════════════════════
- * ⛔ MESURES (2026-09-07) : en `body.simple` les cartes `.avance` sont `display:none`. Or les
- *    media queries elargissaient `main` a 1180 px (2 col) / 1680 px (3 col) comme s il y avait
- *    encore dix cartes a packer. Resultat : Create s etirait sur du VIDE — ecran « stretch »,
- *    pas un CTA de site a 10 k$. Cartes cachees ≠ besoin de largeur.
- * ⚠️ ON GARDE UNE COLONNE FOCALE dynamique (`clamp`) : largeur confortable, paddings lateraux
- *    via le 92vw, plafond 640 px aligne sur le telephone. Les colonnes restent pour le mode
- *    avance SEULEMENT, et adoucies (2 col ~1100+, max ~1040 — plus de 3 col a 1680). */
-body.simple main{
-  max-width:clamp(300px,92vw,640px);
-  columns:1;
-  column-gap:normal;
-}
-@media (min-width: 1100px) {
-  /* Advanced only: useful 2-col without sparse fields */
-  body:not(.simple) main { max-width: 1040px; columns: 2; column-gap: 14px; }
+/* ⛔ dig multi-col conserve : gain de scroll mesure ; Create traverse toute la largeur
+ *    (bande focale) — les cartes block remplissent les colonnes a cote / en dessous. */
+@media (min-width: 1000px) {
+  main { max-width: 1180px; columns: 2; column-gap: 12px; }
   /* ⛔ UNE CARTE NE DOIT JAMAIS ETRE COUPEE EN DEUX COLONNES : un formulaire dont la moitie des
    *    champs saute a droite est illisible, et rien ne le signalerait. */
-  body:not(.simple) main > .card { break-inside: avoid; }
-  /* ⛔ CE QUI TRAVERSE TOUTE LA LARGEUR : l en-tete, le choix de reseau, la bascule et
-   *    l avertissement mainnet. Les mettre en colonne les rendrait secondaires — or ce sont les
-   *    choses qu on doit voir AVANT de toucher a quoi que ce soit. */
-  body:not(.simple) main > header,
-  body:not(.simple) main > .tabs,
-  body:not(.simple) main > #funnel,
-  body:not(.simple) main > .bascule,
-  body:not(.simple) main > #gardeMainnet { column-span: all; }
+  main > .card { break-inside: avoid; }
+  /* Instant Create primary path: full-width band — Create must not stretch into sparse columns.
+   *    Palette/funnel stay on this path (visual-2 kept). Other cards masonry into dig columns. */
+  main > header,
+  main > .tabs,
+  main > #funnel,
+  main > #gardeMainnet,
+  main > #createZone,
+  main > #carteLook,
+  main > #ctaPacket,
+  main > #agir,
+  main > #relire,
+  main > #ouvrirLancement,
+  main > #etat,
+  main > .bascule,
+  main > #warningsStrip { column-span: all; }
+  /* Soften Create fields only: focused band inside the full-width span (≈640). Look grid can
+   *    use the full band; multi-col is for the block cards below, not for sparse Name/Symbol. */
+  main > #createZone,
+  main > #ctaPacket,
+  main > #agir,
+  main > #relire,
+  main > #ouvrirLancement,
+  main > #etat {
+    max-width: 640px;
+    margin-left: auto;
+    margin-right: auto;
+    width: 100%;
+    box-sizing: border-box;
+  }
 }
-/* ⛔ PAS DE 3 COLONNES A 1680. Mesure visuelle : a cette largeur les champs deviennent
- *    epars (sensation « formulaire abandonne »), alors que le gain de hauteur n est utile
- *    qu en mode avance densement rempli — et meme la, 2 col a ~1040 restent lisibles. */
+@media (min-width: 1500px) {
+  /* ⚠️ Trois colonnes seulement quand il y a VRAIMENT la place : plus tot, une troisieme colonne
+   *    tomberait sous 380 px et les champs deviendraient etroits — on aurait gagne de la hauteur
+   *    en rendant la saisie penible. */
+  main { max-width: 1680px; columns: 3; }
+}
 header{display:flex;align-items:center;gap:13px;margin-bottom:14px}
 header svg{width:52px;height:57px;flex:0 0 auto;border-radius:10px}
 h1{font-size:21px;margin:0}.sub{color:var(--dim);font-size:13px;margin:2px 0 0}
@@ -395,19 +406,9 @@ button.act.sec:hover{opacity:1;color:var(--fg)}
   #photoDetails>summary{font-size:12.5px}
   .note{font-size:11.5px}
 }
-@media (min-width:1100px){
-  /* column-span only when advanced multi-col is active */
-  body:not(.simple) main > header, body:not(.simple) main > .tabs,
-  body:not(.simple) main > #funnel, body:not(.simple) main > #gardeMainnet,
-  body:not(.simple) main > #ctaPacket, body:not(.simple) main > #agir,
-  body:not(.simple) main > #relire, body:not(.simple) main > #ouvrirLancement,
-  body:not(.simple) main > #etat, body:not(.simple) main > .note,
-  body:not(.simple) main > .bascule, body:not(.simple) main > #carteGalerieWrap,
-  body:not(.simple) main > #warningsStrip, body:not(.simple) main > #nextSteps,
-  body:not(.simple) main > #lookupCard, body:not(.simple) main > #commentCaMarche,
-  body:not(.simple) main > #carteLook, body:not(.simple) main > #createZone
-  {column-span:all}
-}
+/* dig restore: do NOT force every Instant Create card to column-span:all — that nuked the
+ * masonry scroll win. Primary path spans live in the 1000px dig block above; #nextSteps,
+ * #lookupCard, #carteGalerieWrap, #commentCaMarche, #carteASigner, #carteEtat fill columns. */
 
 /* ══ VISUAL PASS 2 (feat/tblock-visual-2) — progressive disclosure after Name/Symbol ══ */
 .secHead{font-size:15px;font-weight:700;letter-spacing:0;text-transform:none;color:var(--fg);
