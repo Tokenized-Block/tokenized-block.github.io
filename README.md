@@ -56,3 +56,16 @@ without empty row height beside a tall neighbour. Measured on the live site **20
 (branch that introduced it: multi-colonnes, ~5.4 screens → ~2.8 on 1440×900; phone unchanged).
 This branch does **not** remeasure that layout; Instant Create / Launch handoff keep the same
 multi-column rules on purpose.
+
+## Instant Create — dig-adapted UX (2026-09-07)
+
+Mechanics only from the Zero 1 dig (no scoreboards, no invented revenue):
+
+| Pattern | UX on this page |
+|---|---|
+| **P11** status funnel | Strip above Create: Idle → Signing → Pending → Re-read → Ready-to-Launch → Blocked. Labels follow wallet/chain state. |
+| **P1 / P4** Create CTA packet | Network (Practice/Real), irreversibility one-liner, link to **What you will sign** (gas already there). |
+| **P2** bounded re-read | After create: max **3** eth_getCode re-reads; same empty fingerprint twice → **Blocked** (honest message, no RPC spam). |
+
+Status is never inferred from broadcast alone — green / Ready-to-Launch only after chain re-read sees code. No platform fee, no custody. METHODE: no undated ARR/MRR claims.
+

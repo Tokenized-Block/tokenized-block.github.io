@@ -158,6 +158,23 @@ button.act:disabled{opacity:.4}
 #photoDetails .photoCorps{padding-bottom:10px}
 /* Post-create handoff CTA — secondary to Create, only after chain re-read confirms. */
 #ouvrirLancement{display:none;margin-top:8px}
+/* P11 dig-adapt: status funnel — labels wire to real create/re-read states, never fake success. */
+#funnel{margin:14px 0 8px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;
+background:var(--bg2)}
+#funnel .flab{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);margin:0 0 8px}
+#funnel ol{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+#funnel li{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid var(--line);
+color:var(--dim);background:transparent}
+#funnel li.on{color:var(--fg);border-color:#4d8cff;background:#132038;font-weight:700}
+#funnel li.done{color:var(--ok);border-color:#1e5a3a}
+#funnel li.bad{color:var(--bad);border-color:#7a2a2a;background:#2a1212;font-weight:700}
+/* P1/P4 dig-adapt: Create CTA packet — network + irreversibility + pointer to signed plan. */
+#ctaPacket{margin:0 0 10px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;
+background:var(--card);font-size:13.5px;line-height:1.55}
+#ctaPacket .ctaNet{font-weight:800;margin:0 0 4px}
+#ctaPacket .ctaIrr{color:var(--warn);margin:0 0 6px}
+#ctaPacket .ctaPtr{margin:0;color:var(--dim)}
+#ctaPacket a{color:#7fb0ff}
 #etat{margin-top:12px;padding:12px 14px;border-radius:10px;border:1px solid var(--line);
 background:var(--bg2);font-size:14px;white-space:pre-wrap;word-break:break-word}
 .ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
@@ -402,7 +419,7 @@ summary:hover{color:var(--fg)}
   <svg id="apercu" viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg"></svg>
 </div>
 
-<div class="card">
+<div class="card" id="carteASigner">
   <h2>What you will sign</h2>
   <div id="fiche"></div>
 </div>
@@ -499,6 +516,26 @@ summary:hover{color:var(--fg)}
   <button class="act" id="swapAgir" disabled>Run the next step</button>
 </div>
 
+<!-- ⛔ P11 dig-adapt (X-DIG 2026-09-07): status funnel for Instant Create.
+     Labels map to real wallet/chain states. Never invent a green « Instant » success. -->
+<nav id="funnel" aria-label="Create status">
+  <p class="flab">Create status</p>
+  <ol>
+    <li data-step="Idle" class="on">Idle</li>
+    <li data-step="Signing">Signing</li>
+    <li data-step="Pending">Pending</li>
+    <li data-step="Re-read">Re-read</li>
+    <li data-step="Ready-to-Launch">Ready-to-Launch</li>
+    <li data-step="Blocked">Blocked</li>
+  </ol>
+</nav>
+<!-- ⛔ P1/P4 dig-adapt: evidence packet on the Create CTA — network, irreversibility, link to
+     existing « What you will sign » (gas lives there). Strengthen visibility; do not bury in Advanced. -->
+<div id="ctaPacket">
+  <p class="ctaNet" id="ctaNet">Network: Practice · Base Sepolia</p>
+  <p class="ctaIrr">Permanent on-chain: no admin, no minter, no edit after create. Gas only — no platform fee, no custody.</p>
+  <p class="ctaPtr">Before you press Create, read <a href="#carteASigner">What you will sign</a> (destination, data head, gas).</p>
+</div>
 <button class="act" id="agir">Connect wallet</button>
 <button class="act sec" id="relire">Re-read the chain</button>
 <!-- ⛔ HANDOFF APRES CREATION CONFIRMEE (relecture code ≠ tx-success). Prefill Launch/LP/Swap;
@@ -637,6 +674,32 @@ const etat = $('#etat');
 const dire = (m, c = '') => { etat.className = c; etat.textContent = m; };
 const ligne = (k, v) => `<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`;
 const pastille = (t, c) => `<span class="pill p-${c}">${t}</span>`;
+
+/* ══ DIG-ADAPT Instant Create (P11 / P1 / P4 / P2) — 2026-09-07 ══════════════════════════════
+ * Status comes from wallet + chain re-read only. No flattering « Instant » green without code. */
+const FUNNEL_STEPS = ['Idle', 'Signing', 'Pending', 'Re-read', 'Ready-to-Launch', 'Blocked'];
+function setFunnel(step) {
+  const nav = $('#funnel');
+  if (!nav) return;
+  const i = FUNNEL_STEPS.indexOf(step);
+  if (i < 0) return;
+  for (const li of nav.querySelectorAll('li')) {
+    const s = li.getAttribute('data-step');
+    const j = FUNNEL_STEPS.indexOf(s);
+    li.classList.remove('on', 'done', 'bad');
+    if (s === 'Blocked' && step === 'Blocked') li.classList.add('bad', 'on');
+    else if (j === i) li.classList.add('on');
+    else if (j >= 0 && j < i && step !== 'Blocked') li.classList.add('done');
+  }
+}
+function majCtaPacket() {
+  const el = $('#ctaNet');
+  if (!el) return;
+  const practice = chaine === 84532;
+  el.textContent = practice
+    ? 'Network: Practice · Base Sepolia (free test ETH)'
+    : 'Network: Real · Base mainnet (real ETH)';
+}
 
 const abi = await (await fetch('./abi.json')).json();
 /**
@@ -1467,7 +1530,7 @@ for (const id of [84532, 8453]) $('#t' + id).onclick = () => {
    *    sous une note qui nommerait le nouveau — un mensonge pire que l absence de note. */
   $('#carteGalerie').style.display = 'none';
   remplirGalerie();
-  dire('Network: ' + RESEAUX[id].nom + '.'); rafraichir();
+  majCtaPacket(); dire('Network: ' + RESEAUX[id].nom + '.'); rafraichir();
 };
 
 /**
@@ -1555,6 +1618,7 @@ function apresCreationConfirmee(adr) {
     cta.style.display = '';
     cta.dataset.block = adr;
   }
+  setFunnel('Ready-to-Launch');
 }
 
 /** Open advanced settings if needed, scroll to unilateral Launch, keep prefilled address. */
@@ -3010,30 +3074,59 @@ $('#agir').onclick = async () => {
      * a la MEME adresse ailleurs — l adresse derive de (variant, createur, sel), pas de la chaine
      * — et l utilisateur croirait avoir cree sur mainnet. */
     if (!(await memeChaineQueLaPage())) return;
+    setFunnel('Signing');
     dire("Your wallet will open.\nRe-read the destination and the start of `data` before accepting.", 'warn');
     afficherTx("wallet", "Confirm the creation in your wallet.");
     const hash = await window.ethereum.request({ method: 'eth_sendTransaction',
       params: [{ from: compte, to: FACTORY, value: '0x0', data: dernier.data }] });
+    setFunnel('Pending');
     dire('Sent.\n' + hash + '\n\nRe-reading the chain…', 'ok');
     afficherTx('pending', 'Waiting for the block…', hash);
-    /* ⛔ On ne declare rien cree parce que l envoi a reussi : on RELIT jusqu a voir le code. */
-    for (let i = 0; i < 40; i++) {
-      await new Promise((r) => setTimeout(r, 2000));
-      if ((await rpc('eth_getCode', [adr, 'latest'])) !== '0x') {
+    /* ⛔ P2 dig-adapt: bounded re-read — max 3; same empty fingerprint twice → Blocked (no RPC spam).
+     *    Success only when eth_getCode ≠ 0x. Never infer from broadcast alone. */
+    let prevEmptyFp = null;
+    let seenCode = false;
+    for (let i = 0; i < 3; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      setFunnel('Re-read');
+      const code = await rpc('eth_getCode', [adr, 'latest']);
+      if (code !== '0x') {
+        seenCode = true;
         await relireJeton(adr);
         apresCreationConfirmee(adr);
         afficherTx('ok', 'Your block lives at\n' + adr, hash);
         return dire('Created and VERIFIED on-chain.\n' + adr + '\n' + hash
           + '\n\nLaunch / Liquidity / Swap are prefilled. Use « Launch this block » below for unilateral launch.', 'ok');
       }
+      const fp = 'empty:' + String(adr).toLowerCase() + ':' + String(code);
+      if (prevEmptyFp !== null && fp === prevEmptyFp) {
+        setFunnel('Blocked');
+        afficherTx('fail', 'Blocked — empty on-chain state repeated\n' + adr, hash);
+        return dire('Blocked: re-read saw the same empty code at this address twice.\n'
+          + 'Not retrying RPC further (max 3, stop on repeated empty fingerprint).\n'
+          + 'This is not a silent success — press « Re-read the chain » later, or check the explorer.\n'
+          + adr + '\n' + hash, 'bad');
+      }
+      prevEmptyFp = fp;
     }
-    dire("Sent, but the code has not appeared yet.\nThis is not a failure — press « Re-read the chain ».\n" + hash, 'warn');
-  } catch (e) { dire(refusUtilisateur(e) ? 'You declined the transaction.' : 'Failed: ' + (e.message || e), 'bad'); }
+    if (!seenCode) {
+      setFunnel('Blocked');
+      afficherTx('fail', 'Blocked — code not visible after 3 re-reads\n' + adr, hash);
+      return dire('Blocked: sent, but code still absent after 3 bounded re-reads.\n'
+        + 'Not spam-retrying. Press « Re-read the chain » later, or check the explorer.\n'
+        + adr + '\n' + hash, 'bad');
+    }
+  } catch (e) {
+    if (refusUtilisateur(e)) { setFunnel('Idle'); dire('You declined the transaction.', 'bad'); }
+    else { setFunnel('Blocked'); dire('Failed: ' + (e.message || e), 'bad'); }
+  }
 };
 
 /* ⛔ L INITIALISATION VIT EN BAS, apres TOUTES les declarations qu elle lit. Un appel place plus
  * haut s executait avant `const DEVISES` et vidait la page entiere. */
 peuplerDevises();
+setFunnel('Idle');
+majCtaPacket();
 await rafraichir();
 
 /* ══ MINI APP : RETIRER L ECRAN DE CHARGEMENT DE L HOTE ═════════════════════════════════════════
