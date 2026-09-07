@@ -3387,13 +3387,14 @@ $('#lancCalculer').onclick = async () => {
 
     const appels = sim?.[0]?.calls || [];
     if (simIndispo || appels.length < 1) {
-      /* ⛔⛔ « JE N AI PAS PU VERIFIER » N EST PAS « C EST REFUSE ». Fermer les boutons parce que
-       *    la simulation est indisponible bloquerait un lancement parfaitement valide le jour ou
-       *    le noeud cesse d exposer la methode. On le DIT, et on laisse la decision a l humain —
-       *    mais on ne fait jamais passer une absence de mesure pour un feu vert. */
+      /* ⛔⛔ FAIL-CLOSED : « JE N AI PAS PU VERIFIER » N EST PAS « C EST ACCEPTE ». Absence de
+       *    mesure (simIndispo / trop peu d appels) ne doit JAMAIS poser `plancement` ni reveler
+       *    #lancLancer — sinon Real/mainnet peut blind-signer. On le DIT, et Launch reste FERME.
+       *    Seul « THE CHAIN ACCEPTS THIS » ouvre le bouton (comme le refus mesure le laisse ferme). */
       box.innerHTML = vue + ligne('chain check', pastille('NOT MEASURED', 'warn'))
         + ligne('why', enTexte(simIndispo || 'the node returned fewer results than steps'))
-        + ligne('meaning', 'the chain was NOT asked. The plan above may still be right — nothing checked it.');
+        + ligne('meaning', 'the chain was NOT asked — Launch stays closed until a measured accept.');
+      return;
     } else {
       if (appels[0].status !== '0x1') {
         /* ⛔ REFUS MESURE : le bouton reste FERME, et on rend la cause telle quelle. */
