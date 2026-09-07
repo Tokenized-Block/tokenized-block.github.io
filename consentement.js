@@ -18,6 +18,11 @@
 // ⚠️ CE QUE CA NE FAIT PAS : dispenser de la banniere. Le texte reste affiche ; c est la CASE qui
 //    est pre-cochee pour un compte qui a deja accepte. Masquer l avertissement serait une autre
 //    decision, bien plus lourde, et personne ne l a prise.
+//
+// ⛔ ET CE N EST PAS UN ACK POUR LAUNCH / LP / SWAP (2026-09-07). Pre-cocher `#gardeCase` debloque
+//    Create ; les envois irrevocables exigent un re-ack de session dans `index.html`
+//    (`consentArgentOk` / `#gardeCaseArgent`). Un souvenir ≤30j ne doit pas autoriser un habit-click
+//    sur mint ou swap.
 
 const CLE = 'tblock.consentement.mainnet';
 const JOURS = 30;
