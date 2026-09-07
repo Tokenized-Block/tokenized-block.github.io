@@ -3551,9 +3551,11 @@ $('#agir').onclick = async () => {
      *    Toujours demande a la factory (chercherSelLibre), jamais invente.
      * ⚠️ On ne declenche PAS sur un autre refus (nom trop long, etc.) : seul TokenAlreadyExists /
      *    code deja present signale un sel occupe. */
+    /* ⛔ Code vide : certains noeuds rendent `0x`, d autres `0x0` — les deux veulent dire « rien ». */
+    const codeEstVide = (c) => !c || c === '0x' || c === '0x0';
     const dejaPris = adresseDejaPrise(vu.donnees);
     const refusSel = !!(vu.refus && /salt is already used/i.test(vu.refus));
-    const codePresent = !!(adr && (await rpc('eth_getCode', [adr, 'latest'])) !== '0x');
+    const codePresent = !!(adr && !codeEstVide(await rpc('eth_getCode', [adr, 'latest'])));
     if (dejaPris || refusSel || codePresent) {
       dire('That salt is taken — asking the chain for a free one…', 'warn');
       const libre = await chercherSelLibre({ direEtat: true });
@@ -3561,7 +3563,7 @@ $('#agir').onclick = async () => {
       vu = await adresseOuRefus(appelBrut, compte, dernier.data);
       adr = vu.adresse;
       if (!adr) return dire('The chain still refuses this block:\n' + vu.refus + (vu.brut ? '\n(' + vu.brut + ')' : ''), 'bad');
-      if ((await rpc('eth_getCode', [adr, 'latest'])) !== '0x') {
+      if (!codeEstVide(await rpc('eth_getCode', [adr, 'latest']))) {
         return dire('Still taken after search: ' + adr + '\nType a salt of your own in advanced settings.', 'warn');
       }
     } else if (!adr) {
@@ -3572,23 +3574,57 @@ $('#agir').onclick = async () => {
      * a la MEME adresse ailleurs — l adresse derive de (variant, createur, sel), pas de la chaine
      * — et l utilisateur croirait avoir cree sur mainnet. */
     if (!(await memeChaineQueLaPage())) return;
+    /* ⛔ CREATE SANS `gas` : le wallet plafonne a 1M. Mesure 2026-09-07 mainnet : eth_estimateGas
+     *    ≈ 4_841_781 pour le meme calldata ; tx 0xf750081d… status 0x0, gasUsed=gasLimit=1_000_000 (OOG).
+     *    On estime AVANT d envoyer (meme motif que `estimerCout`), marge ≥20 %, `gas` explicite.
+     *    Sans estimation fiable : on N ENVOIE PAS — un plafond wallet sous-estime brule les frais. */
     setFunnel('Signing');
-    dire("Your wallet will open.\nRe-read the destination and the start of `data` before accepting.", 'warn');
-    afficherTx("wallet", "Confirm the creation in your wallet.");
+    dire('Estimating gas for creation (will not send without a limit)…', 'warn');
+    const mesure = await estimerCout(dernier.data, compte);
+    if (mesure.gaz == null) {
+      setFunnel('Blocked');
+      afficherTx('fail', 'Gas estimate failed — nothing sent');
+      return dire('⛔ Could not estimate gas — creation was NOT sent.\n'
+        + 'Sending without an explicit gas limit lets the wallet under-cap (e.g. 1M) and OOG on-chain.\n'
+        + (mesure.texte ? ('Detail: ' + String(mesure.texte).replace(/<[^>]+>/g, ' ')) : ''), 'bad');
+    }
+    const gaz = mesure.gaz * 125n / 100n;
+    dire('Your wallet will open.\nGas limit from estimate + 25% margin: ' + gaz.toString()
+      + ' (estimate ' + mesure.gaz.toString() + ').\nRe-read the destination and the start of `data` before accepting.', 'warn');
+    afficherTx('wallet', 'Confirm the creation in your wallet.');
     const hash = await window.ethereum.request({ method: 'eth_sendTransaction',
-      params: [{ from: compte, to: FACTORY, value: '0x0', data: dernier.data }] });
+      params: [{ from: compte, to: FACTORY, value: '0x0', data: dernier.data, gas: '0x' + gaz.toString(16) }] });
     setFunnel('Pending');
-    dire('Sent.\n' + hash + '\n\nRe-reading the chain…', 'ok');
+    dire('Sent.\n' + hash + '\n\nWaiting for receipt…', 'ok');
     afficherTx('pending', 'Waiting for the block…', hash);
+    /* Receipt first: status 0x0 is a real on-chain failure (often OOG), not « empty fingerprint ». */
+    let receipt = null;
+    for (let i = 0; i < 15; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      receipt = await rpc('eth_getTransactionReceipt', [hash]).catch(() => null);
+      if (receipt) break;
+    }
+    if (receipt && receipt.status === '0x0') {
+      const used = receipt.gasUsed != null ? BigInt(receipt.gasUsed) : null;
+      const oog = used !== null && used === gaz;
+      setFunnel('Blocked');
+      afficherTx('fail', 'Creation FAILED on-chain (status 0x0)\n' + adr, hash);
+      return dire('⛔ Creation FAILED on-chain (receipt status 0x0).\n'
+        + 'gasUsed=' + (used !== null ? used.toString() : '?')
+        + ' vs gas limit=' + gaz.toString()
+        + (oog ? ' — looks like out-of-gas (OOG).' : '.')
+        + '\nThis is not merely an empty fingerprint — the create transaction failed.\n'
+        + adr + '\n' + hash, 'bad');
+    }
     /* ⛔ P2 dig-adapt: bounded re-read — max 3; same empty fingerprint twice → Blocked (no RPC spam).
-     *    Success only when eth_getCode ≠ 0x. Never infer from broadcast alone. */
+     *    Success only when eth_getCode is non-empty (`0x` / `0x0` = empty). Never infer from broadcast alone. */
     let prevEmptyFp = null;
     let seenCode = false;
     for (let i = 0; i < 3; i++) {
       await new Promise((r) => setTimeout(r, 3000));
       setFunnel('Re-read');
       const code = await rpc('eth_getCode', [adr, 'latest']);
-      if (code !== '0x') {
+      if (!codeEstVide(code)) {
         seenCode = true;
         await relireJeton(adr);
         apresCreationConfirmee(adr);
