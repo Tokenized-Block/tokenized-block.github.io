@@ -44,8 +44,20 @@ export function cribler(adresse, jeu, maintenant = new Date()) {
    * une majuscule. */
   const cherchee = adresse.toLowerCase();
   const trouvee = jeu.addresses.some((a) => String(a).toLowerCase() === cherchee);
+  /* ⛔⛔ LE CHAMP S APPELLE `sourcesDuJeu`, ET LE NOM EST LA CORRECTION. Il s appelait `sources`,
+   * sur un resultat qui parle d UNE adresse : tout appelant le lisait comme « les listes ou CETTE
+   * adresse figure ». C est faux et ce ne peut pas etre autre chose — `known-bad.json` ne contient
+   * que des CHAINES NUES, sans provenance par entree. La donnee n existe pas ; ce n est donc pas
+   * une valeur jetee, c est une valeur qui n a jamais ete la.
+   * ⛔ CE QUE CA COUTAIT : l ecran ecrivait « appears on a public watchlist (OFAC SDN · eth-labels
+   * · MainStreet) » pour une adresse peut-etre listee par un seul des trois — il affirmait une
+   * DESIGNATION DE SANCTIONS sur une donnee que nous n avons pas. Un faux publie au detriment d un
+   * tiers est la pire categorie, et celui-la se declenche a la connexion, donc sur l adresse de
+   * l utilisateur lui-meme.
+   * ⚠️ Le test le portait aussi : il s intitulait « avec SES sources ». Un test peut encoder la
+   * meme erreur de lecture que le code et la confirmer a chaque passage. */
   return trouvee
-    ? { etat: 'SIGNALEE', sources: jeu.sources || [], asOf, ageJours }
+    ? { etat: 'SIGNALEE', sourcesDuJeu: jeu.sources || [], asOf, ageJours }
     /* ⛔ « ABSENTE », jamais « SURE ». Le nom de l etat est la premiere chose qu on lira. */
-    : { etat: 'ABSENTE', sources: jeu.sources || [], asOf, ageJours };
+    : { etat: 'ABSENTE', sourcesDuJeu: jeu.sources || [], asOf, ageJours };
 }

@@ -2416,9 +2416,20 @@ async function cribler_(adresse) {
     const { cribler } = await import('./criblage.js');
     const r = cribler(adresse, jeuCriblage);
     if (r.etat !== 'SIGNALEE') return null;
-    return '⛔ This address appears on a public watchlist (' + (r.sources || []).join(' · ')
-      + '), snapshot of ' + r.asOf + (r.ageJours !== null ? ' — ' + r.ageJours + ' days old' : '')
-      + '.\nThat is a listing, not a judgement. Nothing is blocked; you decide.';
+    /* ⛔⛔ CETTE PHRASE AFFIRMAIT UNE DESIGNATION DE SANCTIONS QUE NOUS N AVONS PAS. Elle disait
+     * « appears on a public watchlist (OFAC SDN · eth-labels · MainStreet) » — un lecteur comprend
+     * « elle figure sur ces trois listes ». Or `known-bad.json` ne contient que des CHAINES NUES :
+     * laquelle des trois a liste CETTE adresse n est ecrit nulle part. Pour une adresse listee par
+     * un seul, l ecran affirmait qu elle etait sous sanctions OFAC. Un faux publie au detriment
+     * d un tiers est la pire categorie — et celui-ci se declenche A LA CONNEXION, donc sur
+     * l adresse de l utilisateur lui-meme.
+     * ⇒ On dit d ou vient LE JEU, et on dit explicitement qu on ne sait pas laquelle designe. */
+    return '⛔ This address is in a bundled watchlist set — snapshot of ' + r.asOf
+      + (r.ageJours !== null ? ', ' + r.ageJours + ' days old' : '') + '.'
+      + '\nThat set is compiled from: ' + (r.sourcesDuJeu || []).join(' · ') + '.'
+      + '\n⚠️ Which of those listed this address is NOT recorded in the data. Do not read this as an'
+      + ' OFAC designation — it may come from any one of them.'
+      + '\nThat is a listing, not a judgement. Nothing is blocked; you decide.';
   } catch { return null; }
 }
 
