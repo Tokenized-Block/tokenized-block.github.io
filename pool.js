@@ -421,11 +421,15 @@ export function encodeQuote({ cle, zeroForOne, montant }) {
  *    les deux formes a l identique : dans ce cas on rend `null` et on le DIT, au lieu de choisir
  *    au hasard celle qui « semble » bonne.
  */
-export async function formeAcceptee({ appelBrut, ur, de, cle, zeroForOne, montant, deadline }) {
+export async function formeAcceptee({ appelBrut, ur, de, cle, zeroForOne, montant, deadline, value }) {
+  /* ⛔ `value` : achat en ETH natif. Sans msg.value, SETTLE_ALL reverte et les DEUX formes
+   *    echouent a l identique — on croirait alors a une mauvaise encoding, pas a ETH manquant. */
   const causes = {};
   for (const forme of [AVEC_MINHOP, SANS_MINHOP]) {
     const data = encodeSwapExactInSingle({ cle, zeroForOne, montant, sortieMin: 0n, deadline, forme });
-    const r = await appelBrut({ from: de, to: ur, data });
+    const tx = { from: de, to: ur, data };
+    if (value) tx.value = value;
+    const r = await appelBrut(tx);
     if (!r.error) return { forme, causes };
     causes[forme ? 'avecMinHop' : 'sansMinHop'] = (r.error.message || '') + (r.error.data ? ' data=' + r.error.data : '');
   }
