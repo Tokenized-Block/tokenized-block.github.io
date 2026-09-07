@@ -32,6 +32,12 @@ export const ORBITES = ['sillage', 'couronne', 'essaim', 'chute', 'coins', 'spir
 export const FACETTES = ['lettre', 'anneau', 'barres', 'disque', 'croix', 'losange', 'triangle',
   'points', 'chevrons', 'cible', 'etoile', 'eclair', 'hexagone', 'coche', 'cle', 'vague', 'grille', 'fleche', 'vide'];
 export const MATIERES = ['verre', 'plein', 'fil', 'neon', 'papier', 'encre', 'chrome', 'braise', 'givre'];
+/* ⛔ LES COINS ETAIENT VIDES, ET C EST LA MOITIE DE L IMAGE. Le bloc occupe le centre ; tout autour
+ *    ne portait rien. Deux blocs de meme teinte se ressemblaient donc bien plus que le compte de
+ *    combinaisons ne le laissait croire — le catalogue etait grand, la SILHOUETTE etait unique.
+ * ⚠️ « aucun » est une valeur PLEINE, pas un defaut : un bloc nu est un choix, et il doit rester
+ *    atteignable, sinon on force un ornement a qui n en veut pas. */
+export const ORNEMENTS = ['aucun', 'points', 'equerres', 'griffes', 'arcs', 'croix', 'chevrons', 'etoiles'];
 
 /**
  * L apparence d une adresse. Rend `null` si l entree n est pas une adresse — jamais un defaut.
@@ -56,6 +62,15 @@ export function apparenceDepuisAdresse(adresse) {
     orbite: ORBITES[o(6) % ORBITES.length],
     facette: FACETTES[o(7) % FACETTES.length],
     matiere: MATIERES[o(8) % MATIERES.length],
+    /* ⛔ OCTETS 9 ET 10 : NEUFS, JAMAIS DEJA LUS. Reutiliser l octet 6 lierait l ornement a
+     * l orbite — « toujours ces coins avec cette trainee » — et le catalogue apparent se
+     * reduirait pendant que `combinaisons()` continuerait d annoncer le produit complet. Le
+     * chiffre deviendrait une sur-vente sans qu aucun test ne bouge. */
+    ornement: ORNEMENTS[o(9) % ORNEMENTS.length],
+    /* ⛔ L ECART EST CE QUE PHIL A DEMANDE : « la distance des elements ». 0 = les eclats collent
+     * au bloc, 4 = ils s en detachent franchement. C est le reglage qui change le plus la
+     * silhouette a nombre d eclats EGAL — donc celui qui distingue deux blocs de loin. */
+    ecart: o(10) % 5,
   };
 }
 
@@ -67,5 +82,9 @@ export function apparenceDepuisAdresse(adresse) {
  *    nombre, pas l adjectif.
  */
 export function combinaisons() {
-  return 361 * 361 * 5 * 7 * ORBITES.length * FACETTES.length * MATIERES.length;
+  /* ⚠️ 5 = les valeurs d ecart (0..4). Ecrit ici et nulle part ailleurs : si le champ change de
+   *    borne sans que ce facteur suive, le chiffre publie devient faux en silence. Un test compare
+   *    donc ce produit au nombre d apparences REELLEMENT distinctes tirees d un echantillon. */
+  return 361 * 361 * 5 * 7 * ORBITES.length * FACETTES.length * MATIERES.length
+    * ORNEMENTS.length * 5;
 }

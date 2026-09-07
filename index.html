@@ -158,23 +158,6 @@ button.act:disabled{opacity:.4}
 #photoDetails .photoCorps{padding-bottom:10px}
 /* Post-create handoff CTA — secondary to Create, only after chain re-read confirms. */
 #ouvrirLancement{display:none;margin-top:8px}
-/* P11 dig-adapt: status funnel — labels wire to real create/re-read states, never fake success. */
-#funnel{margin:14px 0 8px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;
-background:var(--bg2)}
-#funnel .flab{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);margin:0 0 8px}
-#funnel ol{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
-#funnel li{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid var(--line);
-color:var(--dim);background:transparent}
-#funnel li.on{color:var(--fg);border-color:#4d8cff;background:#132038;font-weight:700}
-#funnel li.done{color:var(--ok);border-color:#1e5a3a}
-#funnel li.bad{color:var(--bad);border-color:#7a2a2a;background:#2a1212;font-weight:700}
-/* P1/P4 dig-adapt: Create CTA packet — network + irreversibility + pointer to signed plan. */
-#ctaPacket{margin:0 0 10px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;
-background:var(--card);font-size:13.5px;line-height:1.55}
-#ctaPacket .ctaNet{font-weight:800;margin:0 0 4px}
-#ctaPacket .ctaIrr{color:var(--warn);margin:0 0 6px}
-#ctaPacket .ctaPtr{margin:0;color:var(--dim)}
-#ctaPacket a{color:#7fb0ff}
 #etat{margin-top:12px;padding:12px 14px;border-radius:10px;border:1px solid var(--line);
 background:var(--bg2);font-size:14px;white-space:pre-wrap;word-break:break-word}
 .ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
@@ -363,6 +346,26 @@ summary:hover{color:var(--fg)}
     <div><label for="eclats">Shards — how many break away</label>
       <input id="eclats" type="range" min="0" max="6" value="3"></div>
   </div>
+  <!-- ⛔ L ECART : « la distance des elements ». A nombre d eclats EGAL, c est ce qui change le
+       plus la silhouette — donc ce qui distingue deux blocs vus de loin, dans une galerie. -->
+  <div class="duo avance">
+    <div><label for="ecart">Spread — how far the shards sit from the block</label>
+      <input id="ecart" type="range" min="0" max="4" value="2"></div>
+    <div><label for="ornement">Corners</label>
+      <!-- ⛔ LES COINS ETAIENT VIDES, ET C EST LA MOITIE DE L IMAGE. Le catalogue etait grand,
+           la silhouette restait unique : deux blocs de meme teinte se ressemblaient bien plus que
+           le compte de combinaisons ne le laissait croire. -->
+      <select id="ornement">
+        <option value="aucun">Bare — nothing in the corners</option>
+        <option value="points">Dots — four quiet marks</option>
+        <option value="equerres">Brackets — a frame that does not close</option>
+        <option value="griffes">Claws — short strokes turning inward</option>
+        <option value="arcs">Arcs — the corners rounded off</option>
+        <option value="croix">Crosses — four small crosses</option>
+        <option value="chevrons">Chevrons — pointing out of the frame</option>
+        <option value="etoiles">Stars — four sparks</option>
+      </select></div>
+  </div>
   <!-- ⛔ La disposition des eclats etait FIGEE : un seul sillage possible, et le seul reglage
        etait combien. C est la partie la plus visible du logo, et c etait la plus impersonnelle —
        deux blocs differents rendaient la meme trainee. Le choix se fait ici. -->
@@ -419,7 +422,7 @@ summary:hover{color:var(--fg)}
   <svg id="apercu" viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg"></svg>
 </div>
 
-<div class="card" id="carteASigner">
+<div class="card">
   <h2>What you will sign</h2>
   <div id="fiche"></div>
 </div>
@@ -516,26 +519,6 @@ summary:hover{color:var(--fg)}
   <button class="act" id="swapAgir" disabled>Run the next step</button>
 </div>
 
-<!-- ⛔ P11 dig-adapt (X-DIG 2026-09-07): status funnel for Instant Create.
-     Labels map to real wallet/chain states. Never invent a green « Instant » success. -->
-<nav id="funnel" aria-label="Create status">
-  <p class="flab">Create status</p>
-  <ol>
-    <li data-step="Idle" class="on">Idle</li>
-    <li data-step="Signing">Signing</li>
-    <li data-step="Pending">Pending</li>
-    <li data-step="Re-read">Re-read</li>
-    <li data-step="Ready-to-Launch">Ready-to-Launch</li>
-    <li data-step="Blocked">Blocked</li>
-  </ol>
-</nav>
-<!-- ⛔ P1/P4 dig-adapt: evidence packet on the Create CTA — network, irreversibility, link to
-     existing « What you will sign » (gas lives there). Strengthen visibility; do not bury in Advanced. -->
-<div id="ctaPacket">
-  <p class="ctaNet" id="ctaNet">Network: Practice · Base Sepolia</p>
-  <p class="ctaIrr">Permanent on-chain: no admin, no minter, no edit after create. Gas only — no platform fee, no custody.</p>
-  <p class="ctaPtr">Before you press Create, read <a href="#carteASigner">What you will sign</a> (destination, data head, gas).</p>
-</div>
 <button class="act" id="agir">Connect wallet</button>
 <button class="act sec" id="relire">Re-read the chain</button>
 <!-- ⛔ HANDOFF APRES CREATION CONFIRMEE (relecture code ≠ tx-success). Prefill Launch/LP/Swap;
@@ -674,32 +657,6 @@ const etat = $('#etat');
 const dire = (m, c = '') => { etat.className = c; etat.textContent = m; };
 const ligne = (k, v) => `<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`;
 const pastille = (t, c) => `<span class="pill p-${c}">${t}</span>`;
-
-/* ══ DIG-ADAPT Instant Create (P11 / P1 / P4 / P2) — 2026-09-07 ══════════════════════════════
- * Status comes from wallet + chain re-read only. No flattering « Instant » green without code. */
-const FUNNEL_STEPS = ['Idle', 'Signing', 'Pending', 'Re-read', 'Ready-to-Launch', 'Blocked'];
-function setFunnel(step) {
-  const nav = $('#funnel');
-  if (!nav) return;
-  const i = FUNNEL_STEPS.indexOf(step);
-  if (i < 0) return;
-  for (const li of nav.querySelectorAll('li')) {
-    const s = li.getAttribute('data-step');
-    const j = FUNNEL_STEPS.indexOf(s);
-    li.classList.remove('on', 'done', 'bad');
-    if (s === 'Blocked' && step === 'Blocked') li.classList.add('bad', 'on');
-    else if (j === i) li.classList.add('on');
-    else if (j >= 0 && j < i && step !== 'Blocked') li.classList.add('done');
-  }
-}
-function majCtaPacket() {
-  const el = $('#ctaNet');
-  if (!el) return;
-  const practice = chaine === 84532;
-  el.textContent = practice
-    ? 'Network: Practice · Base Sepolia (free test ETH)'
-    : 'Network: Real · Base mainnet (real ETH)';
-}
 
 const abi = await (await fetch('./abi.json')).json();
 /**
@@ -862,7 +819,7 @@ const chaineDe = (h) => { if (!h || h === '0x') return null;
 function paramsLogo(symbole) {
   return { teinte: $('#teinte').value, accent: $('#accent').value, division: $('#division').value,
     eclats: $('#eclats').value, orbite: $('#orbite').value, facette: $('#facette').value,
-    matiere: $('#matiere').value,
+    matiere: $('#matiere').value, ornement: $('#ornement').value, ecart: $('#ecart').value,
     lettre: symbole !== undefined ? symbole : $('#sym').value };
 }
 
@@ -975,9 +932,31 @@ function logoSvg(o) {
     diagonale: (i) => ({ x: 22 + i * 28, y: 200 - i * 30, s: 0.24 - i * 0.02, o: 0.95 - i * 0.09 }),
   };
   const place = PLACES[o.orbite] || PLACES.sillage;
+  /* ⛔ L ECART S APPLIQUE A UN SEUL ENDROIT : le vecteur qui va du CENTRE DU BLOC vers l eclat.
+   *    Le mettre dans chacune des dix dispositions aurait demande dix modifications, dix occasions
+   *    de diverger, et la onzieme disposition ajoutee l aurait oublie sans que rien ne le dise.
+   * ⚠️ 2 EST LE MULTIPLICATEUR NEUTRE (1.0), et ce n est pas un hasard : c est la valeur par
+   *    defaut, donc un block grave AVANT ce reglage se redessine au pixel pres comme il l a ete.
+   *    Ses metadonnees sont sur la chaine ; elles ne changeront jamais, le dessin non plus. */
+  const ECARTS = [0.55, 0.78, 1, 1.28, 1.6];
+  const k = ECARTS[Math.max(0, Math.min(4, Number(o.ecart) ?? 2))] ?? 1;
   let frag = '';
   for (let i = 0; i < eclats; i++) {
-    const p = place(i, eclats);
+    const p0 = place(i, eclats);
+    /* ⚠️ Le centre du bloc est (100, 104) — la meme constante que les orbites circulaires
+     *    utilisent deja. Ecarter depuis le coin de l image aurait pousse les eclats en diagonale
+     *    au lieu de les eloigner du bloc. */
+    /* ⛔ BORNE DANS LE CADRE, MESUREE ET NON SUPPOSEE. A l ecart maximal, 4 eclats sur 6 sortaient
+     *    du viewBox 200x220 et se faisaient COUPER : un reglage qui fait disparaitre des elements
+     *    n en est pas un. Les marges (12 / 188 / 12 / 208) laissent la place au rayon d un eclat
+     *    a son echelle habituelle (~9 px).
+     * ⚠️ ET LE RISQUE DU CORRECTIF EST L INVERSE : trop borner ferait retomber plusieurs ecarts
+     *    sur le MEME dessin — « cinq reglages, trois images », un curseur qui ment. Verifie apres
+     *    coup dans le navigateur : les cinq valeurs rendent bien cinq positions distinctes. */
+    const dans = (v, min, max) => Math.max(min, Math.min(max, v));
+    const p = k === 1 ? p0 : { ...p0,
+      x: dans(100 + (p0.x - 100) * k, 12, 188),
+      y: dans(104 + (p0.y - 104) * k, 12, 208) };
     const s = p.s, x = p.x, y = p.y;
     frag += `<g transform="translate(${x.toFixed(1)} ${Math.max(4, y).toFixed(1)}) scale(${Math.max(0.08, s).toFixed(3)})" opacity="${Math.max(0.15, p.o).toFixed(2)}">`
       + `<path d="M0-40 46-13 0 13-46-13Z" fill="${c(70, 62)}"/>`
@@ -985,6 +964,38 @@ function logoSvg(o) {
       + `<path d="M46-13 0 13 0 66 46 40Z" fill="${c(78, 32)}"/>`
       + `<path d="M0-40 46-13 46 40 0 66-46 40-46-13Z" fill="none" stroke="${ca(90, 72)}" stroke-width="5" stroke-linejoin="round"/></g>`;
   }
+
+  /* ── LES COINS ────────────────────────────────────────────────────────────────────────────────
+   * ⛔ ILS ETAIENT VIDES, ET C EST LA MOITIE DE L IMAGE. Le bloc occupe le centre ; tout autour ne
+   *    portait rien. Deux blocs de meme teinte se ressemblaient donc bien plus que le compte de
+   *    combinaisons ne le laissait croire : le CATALOGUE etait grand, la SILHOUETTE etait unique.
+   * ⚠️ UN SEUL MOTIF, QUATRE FOIS, MIROITE. Dessiner les quatre coins a la main aurait fait quatre
+   *    occasions de se tromper de signe — et un coin decale d un pixel se voit immediatement,
+   *    parce que l oeil compare les symetries avant les formes.
+   * ⚠️ « aucun » rend une chaine VIDE, pas un dessin transparent : un ornement invisible pese
+   *    quand meme dans le contractURI, qui est GRAVE et se paie au gas. */
+  /* ⛔ NOMMEE `COINS` ET PAS `ORNEMENTS`, ET LA VALEUR `motifCoin` ET PAS `motif` : il existe DEJA
+   *    un `const motif` dans cette meme fonction (ligne ~856), la fabrique des motifs de FACE.
+   *    Deux `const` du meme nom dans la meme portee, c est une SyntaxError — la page entiere
+   *    n aurait pas demarre, pas seulement les coins. Attrape avant deploiement, par relecture du
+   *    point d assemblage et non par le test : aucun test ne charge le HTML. */
+  const COINS = {
+    aucun: '',
+    points: '<circle cx="0" cy="0" r="5"/>',
+    equerres: '<path d="M0 22 L0 0 L22 0" fill="none" stroke-width="5" stroke-linecap="round"/>',
+    griffes: '<path d="M2 26 L2 2 L26 2" fill="none" stroke-width="4" stroke-linecap="round"/><circle cx="2" cy="2" r="3.5" stroke="none"/>',
+    arcs: '<path d="M0 26 A26 26 0 0 1 26 0" fill="none" stroke-width="5" stroke-linecap="round"/>',
+    croix: '<path d="M-8 0 H8 M0 -8 V8" fill="none" stroke-width="5" stroke-linecap="round"/>',
+    chevrons: '<path d="M18 4 L4 4 L4 18" fill="none" stroke-width="5" stroke-linecap="round"/><path d="M26 12 L12 12 L12 26" fill="none" stroke-width="4" stroke-linecap="round" opacity="0.55"/>',
+    etoiles: '<path d="M0-11 3-3 11 0 3 3 0 11-3 3-11 0-3-3Z"/>',
+  };
+  const motifCoin = COINS[o.ornement] ?? '';
+  /* ⚠️ Les quatre ancrages sont a l INTERIEUR du cadre 200x220 : un motif pose sur le bord sortirait
+   *    du viewBox et se ferait couper differemment selon la taille d affichage. */
+  const coins = !motifCoin ? '' : '<g fill="' + ca(85, 66) + '" stroke="' + ca(85, 66) + '" opacity="0.85">'
+    + [[16, 16, 1, 1], [184, 16, -1, 1], [16, 204, 1, -1], [184, 204, -1, -1]]
+      .map(([x, y, sx, sy]) => `<g transform="translate(${x} ${y}) scale(${sx} ${sy})">${motifCoin}</g>`).join('')
+    + '</g>';
 
   /* ⛔ LA MATIERE CHANGE LE CUBE, PAS UN DETAIL. Les autres reglages ornaient toujours le meme
    *    verre translucide ; ici les trois faces changent de remplissage et le fond avec.
@@ -1025,6 +1036,9 @@ function logoSvg(o) {
   const M = MATIERES[o.matiere] || MATIERES.verre;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220"><rect width="200" height="220" fill="${M.fond}"/>`
+    /* ⚠️ LES COINS PASSENT AVANT LE BLOC, donc DERRIERE lui : un ornement qui recouvrirait une
+     *    face changerait la lecture de la matiere, qui est le reglage le plus structurant. */
+    + coins
     + `<path d="M100 30 170 70 100 110 30 70Z" fill="${M.haut}"/>`
     + `<path d="M30 70 100 110 100 190 30 150Z" fill="${M.gauche}"/>`
     + `<path d="M170 70 100 110 100 190 170 150Z" fill="${M.droite}"/>`
@@ -1412,7 +1426,11 @@ appliquerMode();
  *    de ne rien proposer — c est le defaut qu on reproche a toutes les interfaces « intelligentes ».
  * ⚠️ Elle ne s applique qu UNE FOIS par session : se reconnecter ne doit pas defaire ce qu on
  *    vient de regler. */
-const APPARENCE = ['teinte', 'accent', 'division', 'eclats', 'orbite', 'facette', 'matiere'];
+/* ⛔ ET CELLE-CI GARDE UNE AUTRE CHOSE : elle dit ce qui compte comme « l utilisateur a touche ».
+ * Un reglage absent d ici serait ECRASE par l apparence derivee de l adresse a la connexion —
+ * quelqu un choisirait ses coins, brancherait son wallet, et les verrait changer sans comprendre.
+ * Ecraser un choix explicite est pire que ne rien proposer. */
+const APPARENCE = ['teinte', 'accent', 'division', 'eclats', 'orbite', 'facette', 'matiere', 'ornement', 'ecart'];
 let aTouche = false, personnelApplique = false;
 for (const el of APPARENCE) {
   const n = $('#' + el);
@@ -1455,7 +1473,11 @@ function paramsLogoDepuisApparence(a, lettre) {
     teinte: d.teinte ?? 222, accent: d.accent ?? 38,
     division: d.division ?? 3, eclats: d.eclats ?? 3,
     orbite: d.orbite ?? 'sillage', facette: d.facette ?? 'lettre',
-    matiere: d.matiere ?? 'verre', lettre,
+    matiere: d.matiere ?? 'verre',
+    /* ⚠️ Les defauts reproduisent EXACTEMENT le dessin d avant ces deux axes : coins nus et
+     * ecart 2 (le multiplicateur neutre, 1.0). Un block deja grave doit continuer de se dessiner
+     * comme il a ete grave — ses metadonnees sont sur la chaine et ne changeront jamais. */
+    ornement: d.ornement ?? 'aucun', ecart: d.ecart ?? 2, lettre,
   };
 }
 
@@ -1526,7 +1548,14 @@ async function remplirGalerie() {
 /* ⚠️ Apres le premier rendu, jamais avant. */
 setTimeout(remplirGalerie, 400);
 
-const CHAMPS = ['nom','sym','dec','supply','sel','desc','teinte','accent','division','eclats','orbite','facette','matiere','photo'];
+/* ⛔ TROIS LISTES DOIVENT BOUGER ENSEMBLE QUAND UN REGLAGE EST AJOUTE, ET J EN AI OUBLIE DEUX.
+ * Le 2026-09-07, `ornement` et `ecart` ont ete ajoutes au formulaire, a `paramsLogo` et au
+ * tirage — mais pas ici ni dans `APPARENCE`. Resultat mesure dans le navigateur : les huit
+ * ornements rendaient le MEME SVG de 3 313 octets, les cinq ecarts le meme `translate`. Le
+ * controle existait, paraissait branche, et ne changeait RIEN. Aucune erreur, rien a l ecran —
+ * la classe exacte du module non declare dans `serveur.js`.
+ * ⇒ La regle 13 de `verifie-coherence.mjs` compare desormais les trois listes a `paramsLogo`. */
+const CHAMPS = ['nom','sym','dec','supply','sel','desc','teinte','accent','division','eclats','orbite','facette','matiere','ornement','ecart','photo'];
 /* ⛔ `addEventListener` ET NON `n.onchange = …` — LA GARDE VIENT D EVITER LE BUG. `#photo` a deja
  * son propre gestionnaire, assigne plus haut, qui redimensionne et mesure l image. Une affectation
  * de propriete l aurait ECRASE en silence : le champ aurait paru branche, la photo n aurait jamais
@@ -1546,7 +1575,7 @@ for (const id of [84532, 8453]) $('#t' + id).onclick = () => {
    *    sous une note qui nommerait le nouveau — un mensonge pire que l absence de note. */
   $('#carteGalerie').style.display = 'none';
   remplirGalerie();
-  majCtaPacket(); dire('Network: ' + RESEAUX[id].nom + '.'); rafraichir();
+  dire('Network: ' + RESEAUX[id].nom + '.'); rafraichir();
 };
 
 /**
@@ -1634,7 +1663,6 @@ function apresCreationConfirmee(adr) {
     cta.style.display = '';
     cta.dataset.block = adr;
   }
-  setFunnel('Ready-to-Launch');
 }
 
 /** Open advanced settings if needed, scroll to unilateral Launch, keep prefilled address. */
@@ -3090,59 +3118,30 @@ $('#agir').onclick = async () => {
      * a la MEME adresse ailleurs — l adresse derive de (variant, createur, sel), pas de la chaine
      * — et l utilisateur croirait avoir cree sur mainnet. */
     if (!(await memeChaineQueLaPage())) return;
-    setFunnel('Signing');
     dire("Your wallet will open.\nRe-read the destination and the start of `data` before accepting.", 'warn');
     afficherTx("wallet", "Confirm the creation in your wallet.");
     const hash = await window.ethereum.request({ method: 'eth_sendTransaction',
       params: [{ from: compte, to: FACTORY, value: '0x0', data: dernier.data }] });
-    setFunnel('Pending');
     dire('Sent.\n' + hash + '\n\nRe-reading the chain…', 'ok');
     afficherTx('pending', 'Waiting for the block…', hash);
-    /* ⛔ P2 dig-adapt: bounded re-read — max 3; same empty fingerprint twice → Blocked (no RPC spam).
-     *    Success only when eth_getCode ≠ 0x. Never infer from broadcast alone. */
-    let prevEmptyFp = null;
-    let seenCode = false;
-    for (let i = 0; i < 3; i++) {
-      await new Promise((r) => setTimeout(r, 3000));
-      setFunnel('Re-read');
-      const code = await rpc('eth_getCode', [adr, 'latest']);
-      if (code !== '0x') {
-        seenCode = true;
+    /* ⛔ On ne declare rien cree parce que l envoi a reussi : on RELIT jusqu a voir le code. */
+    for (let i = 0; i < 40; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      if ((await rpc('eth_getCode', [adr, 'latest'])) !== '0x') {
         await relireJeton(adr);
         apresCreationConfirmee(adr);
         afficherTx('ok', 'Your block lives at\n' + adr, hash);
         return dire('Created and VERIFIED on-chain.\n' + adr + '\n' + hash
           + '\n\nLaunch / Liquidity / Swap are prefilled. Use « Launch this block » below for unilateral launch.', 'ok');
       }
-      const fp = 'empty:' + String(adr).toLowerCase() + ':' + String(code);
-      if (prevEmptyFp !== null && fp === prevEmptyFp) {
-        setFunnel('Blocked');
-        afficherTx('fail', 'Blocked — empty on-chain state repeated\n' + adr, hash);
-        return dire('Blocked: re-read saw the same empty code at this address twice.\n'
-          + 'Not retrying RPC further (max 3, stop on repeated empty fingerprint).\n'
-          + 'This is not a silent success — press « Re-read the chain » later, or check the explorer.\n'
-          + adr + '\n' + hash, 'bad');
-      }
-      prevEmptyFp = fp;
     }
-    if (!seenCode) {
-      setFunnel('Blocked');
-      afficherTx('fail', 'Blocked — code not visible after 3 re-reads\n' + adr, hash);
-      return dire('Blocked: sent, but code still absent after 3 bounded re-reads.\n'
-        + 'Not spam-retrying. Press « Re-read the chain » later, or check the explorer.\n'
-        + adr + '\n' + hash, 'bad');
-    }
-  } catch (e) {
-    if (refusUtilisateur(e)) { setFunnel('Idle'); dire('You declined the transaction.', 'bad'); }
-    else { setFunnel('Blocked'); dire('Failed: ' + (e.message || e), 'bad'); }
-  }
+    dire("Sent, but the code has not appeared yet.\nThis is not a failure — press « Re-read the chain ».\n" + hash, 'warn');
+  } catch (e) { dire(refusUtilisateur(e) ? 'You declined the transaction.' : 'Failed: ' + (e.message || e), 'bad'); }
 };
 
 /* ⛔ L INITIALISATION VIT EN BAS, apres TOUTES les declarations qu elle lit. Un appel place plus
  * haut s executait avant `const DEVISES` et vidait la page entiere. */
 peuplerDevises();
-setFunnel('Idle');
-majCtaPacket();
 await rafraichir();
 
 /* ══ MINI APP : RETIRER L ECRAN DE CHARGEMENT DE L HOTE ═════════════════════════════════════════
