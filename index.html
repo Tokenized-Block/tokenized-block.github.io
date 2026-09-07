@@ -735,7 +735,7 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
 
 <!-- Next steps: Launch / Liquidity / Swap — one panel at a time; collapsed by default
      Quick audit: tabs Launch/Liq/Swap → #ns-launch/#ns-liq/#ns-swap;
-     Work out → #lancCalculer then #lancLancer (one tx); Check 6 steps → #poolEtat then #poolAgir;
+     Work out → #lancCalculer (Permit2 checks) then #lancApprouver / #lancLancer; Check 6 steps → #poolEtat then #poolAgir;
      Quote → #swapEtat then #swapAgir; prefill via apresCreationConfirmee (lancBlock/poolToken/swapToken).
      All three send paths use envoyerTx (eth_estimateGas + 25% + explicit gas + OOG on fail receipt). -->
 <details class="card" id="nextSteps">
@@ -762,9 +762,15 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
     <input id="lancValo" value="10" inputmode="decimal">
     <div id="lancPlan" class="fiche" style="margin-top:10px"></div>
     <button class="act sec" id="lancCalculer" style="margin-top:10px">Work out the launch</button>
-    <!-- ⛔ UN SEUL BOUTON, ET C EST L ATOMICITE QUI COMPTE PLUS QUE LE CONFORT. En deux etapes,
-         quelqu un pouvait creer la pool puis refuser le mint : il restait une pool VIDE au bon prix
-         que rien ne rattrape. `multicall` sur le PositionManager fait les deux ou aucun.
+    <!-- ⛔ PERMIT2 AVANT LE LANCEMENT — MESURE 2026-09-07. Le mint tire les blocks via Permit2 :
+         ERC20 allowance owner→Permit2 = 0 ET Permit2→POSM = 0 ⇒ TRANSFER_FROM_FAILED apres
+         eth_simulateV1, affiche comme « THE CHAIN REFUSES THIS / execution reverted ». La liquidite
+         a deja les etapes 2+4 ; le Launch (ETH natif) n a besoin QUE du block — pas d approve quote.
+         ⇒ On MESURE, on NOMME, on offre Run, et on garde Launch FERME tant que ce n est pas pose. -->
+    <button class="act" id="lancApprouver" style="margin-top:8px;display:none" disabled>Run the next approval</button>
+    <!-- ⛔ UN SEUL BOUTON DE LANCEMENT, ET C EST L ATOMICITE QUI COMPTE PLUS QUE LE CONFORT. En deux
+         etapes, quelqu un pouvait creer la pool puis refuser le mint : il restait une pool VIDE au
+         bon prix que rien ne rattrape. `multicall` sur le PositionManager fait les deux ou aucun.
          Mesure : 336 719 gas contre 352 756 en deux transactions — le gaz est un bonus, pas la
          raison. -->
     <button class="act" id="lancLancer" style="margin-top:8px;display:none">Launch — one transaction</button>
@@ -3078,11 +3084,16 @@ async function cribler_(adresse) {
  *    pretend pas les enchainer tout seul — le portefeuille signe l une, puis l autre, et l app
  *    RELIT la chaine entre les deux au lieu de supposer que la premiere a pris. */
 let plancement = null;
+/* ⛔ Approvals manquantes pour le Launch (block→Permit2 puis Permit2→POSM). Null = rien a faire. */
+let plancementAppro = null;
 
 $('#lancCalculer').onclick = async () => {
   const box = $('#lancPlan');
   $('#lancLancer').style.display = 'none';
+  $('#lancApprouver').style.display = 'none';
+  $('#lancApprouver').disabled = true;
   plancement = null;
+  plancementAppro = null;
   const jeton = $('#lancBlock').value.trim();
   if (!/^0x[0-9a-fA-F]{40}$/.test(jeton)) return box.innerHTML = ligne('state', pastille('NOT AN ADDRESS', 'warn'));
   const valo = Number($('#lancValo').value);
@@ -3193,6 +3204,87 @@ $('#lancCalculer').onclick = async () => {
      *    laisse une part dehors : sur un geste definitif, une phrase inexacte est un defaut, pas
      *    un raccourci. */
     vue += ligne('warning', 'this places almost all of your supply, and it cannot be taken back out by this app');
+
+    /* ══ PERMIT2 — MESURE AVANT TOUTE SIMULATION DU MINT ═══════════════════════════════════════
+     * ⛔⛔ OBSERVE 2026-09-07 SUR BASE SEPOLIA. Create OK, Launch → eth_simulateV1 →
+     *    « THE CHAIN REFUSES THIS / execution reverted » (TRANSFER_FROM_FAILED). Cause MESUREE :
+     *    ERC20 allowance owner→Permit2 = 0 ET Permit2 allowance → POSM = 0. La section Liquidity
+     *    pose deja ces gestes (etapes 2+4) ; le Launch les sautait et simulait le mint nu.
+     * ⚠️ ETH NATIF = PAS D APPROVE QUOTE. currency0 est l adresse zero : aucune allowance quote.
+     *    Seuls block→Permit2 et Permit2→PositionManager manquent. Ne pas exiger d approve WETH.
+     * ⛔ ON MESURE ICI, AVANT eth_simulateV1. Sinon le refus vague (« execution reverted »)
+     *    masque la vraie cause — et l utilisateur n a aucun bouton pour la poser. */
+    const faitAll = (x) => typeof x === 'bigint' ? x > 0n : null;
+    let allP2 = null, allPosm = null, causeAllP2 = null, causeAllPosm = null;
+    try {
+      allP2 = BigInt(await lire4(jeton, sel4('allowance(address,address)') + pad(compte) + pad(PERMIT2)));
+    } catch (e) { causeAllP2 = e.message || String(e); }
+    try {
+      const rawP = await lire4(PERMIT2, sel4('allowance(address,address,address)')
+        + pad(compte) + pad(jeton) + pad(V.posm));
+      /* permit2.allowance → (uint160 amount, uint48 expiration, uint48 nonce) ; amount = 1er mot.
+       * ⛔ Une expiration passee vaut ZERO meme si amount > 0 — on la lit. */
+      allPosm = BigInt('0x' + String(rawP).slice(2, 66));
+      const expP = BigInt('0x' + String(rawP).slice(66, 130));
+      const maintenant = BigInt(Math.floor(Date.now() / 1000));
+      if (allPosm > 0n && expP > 0n && expP < maintenant) allPosm = 0n;
+    } catch (e) { causeAllPosm = e.message || String(e); }
+    const okP2 = faitAll(allP2);
+    const okPosm = faitAll(allPosm);
+    vue += ligne('approve block → Permit2', okP2 === true ? pastille('DONE', 'ok')
+      : okP2 === null ? pastille('NOT MEASURED', 'dim') + ' ' + enTexte(causeAllP2 || '')
+      : pastille('TO DO — measured 0', 'warn'));
+    vue += ligne('Permit2 → PositionManager', okPosm === true ? pastille('DONE', 'ok')
+      : okPosm === null ? pastille('NOT MEASURED', 'dim') + ' ' + enTexte(causeAllPosm || '')
+      : pastille('TO DO — measured 0', 'warn'));
+    vue += ligne('quote approvals', 'NONE needed — native ETH has no ERC20 allowance');
+
+    if (okP2 !== true || okPosm !== true) {
+      /* ⛔ FAIL-CLOSED : pas mesure OU a zero ⇒ Launch reste FERME. On NOMME ce qui manque et
+       *    on offre les memes octets que Liquidity (encodeApprove / encodePermit2Approve). */
+      const manques = [];
+      if (okP2 !== true) manques.push(okP2 === null
+        ? 'block → Permit2 (could not read)'
+        : 'block → Permit2 (allowance is 0)');
+      if (okPosm !== true) manques.push(okPosm === null
+        ? 'Permit2 → PositionManager (could not read)'
+        : 'Permit2 → PositionManager (allowance is 0)');
+      const etapesAppro = [];
+      if (okP2 !== true) etapesAppro.push({
+        nom: 'approve block → Permit2',
+        to: jeton,
+        data: encodeApprove(PERMIT2, MAX_UINT256),
+      });
+      if (okPosm !== true) etapesAppro.push({
+        nom: 'Permit2 → PositionManager (block)',
+        to: PERMIT2,
+        data: encodePermit2Approve(jeton, V.posm, MAX_UINT160, MAX_UINT48),
+      });
+      /* Si une lecture a echoue, on n offre PAS de Run sur une etape non mesuree : le calldata
+       * serait un pari. On n offre Run que pour les etapes MESUREES a zero. */
+      const executables = [];
+      if (okP2 === false) executables.push(etapesAppro.find((e) => e.to === jeton));
+      if (okPosm === false) executables.push(etapesAppro.find((e) => e.to === PERMIT2));
+      const suivante = executables.find(Boolean) || null;
+      box.innerHTML = vue
+        + ligne('chain check', pastille('APPROVALS MISSING', 'bad'))
+        + ligne('why', 'Launch pulls your blocks through Permit2. Measured missing: '
+          + enTexte(manques.join(' · '))
+          + '. Without these, the mint reverts (TRANSFER_FROM_FAILED) — that is NOT a vague '
+          + '« execution reverted », it is a missing approval.')
+        + ligne('meaning', suivante
+          ? 'Run the approval(s) below, then Work out the launch again. Launch stays closed until both are present.'
+          : 'Could not measure an approval — nothing to sign. Fix the read (RPC / network) and Work out again.');
+      plancementAppro = suivante ? { suivante, reste: executables.filter(Boolean), jeton, posm: V.posm } : null;
+      if (suivante) {
+        $('#lancApprouver').style.display = '';
+        $('#lancApprouver').disabled = false;
+        $('#lancApprouver').textContent = 'Run: ' + suivante.nom;
+      }
+      gardeMainnet();
+      return;
+    }
+
     box.innerHTML = vue + ligne('chain check', 'asking the chain to run both steps…');
 
     /* ══ ON DEMANDE A LA CHAINE D EXECUTER LES DEUX ETAPES AVANT D OUVRIR QUOI QUE CE SOIT ══════
@@ -3201,7 +3293,9 @@ $('#lancCalculer').onclick = async () => {
      *    APRES un `initialize` reussi — donc une pool creee, vide, et un createur bloque. Aucun
      *    bouton ne rattrape cet etat.
      * ⛔ ET ON SIMULE LES OCTETS QUE LES BOUTONS ENVERRONT, pas un equivalent. Verifier une
-     *    transaction voisine validerait autre chose que ce qui sera signe. */
+     *    transaction voisine validerait autre chose que ce qui sera signe.
+     * ⚠️ DEPUIS 2026-09-07 : on n arrive ici QUE si block→Permit2 et Permit2→POSM sont poses.
+     *    Sinon eth_simulateV1 refuse pour la mauvaise raison (revert opaque). */
     const deadlineV = BigInt(Math.floor(Date.now() / 1000) + 1800);
     const mint = encodeMintPosition({ cle, tickBas: p.tickBas,
       tickHaut: p.tickHaut, liquidite: L,
@@ -3346,9 +3440,35 @@ $('#lancLancer').onclick = async () => {
     V4[chaine].posm, plancement.donnee);
 };
 
-/* ⛔ LE SECOND BOUTON A DISPARU, ET AVEC LUI L ETAT QUI POUVAIT MAL TOURNER. Il existait pour
- *    minter APRES un initialize deja envoye — c est-a-dire pour rattraper un lancement a moitie
- *    fait. `multicall` supprime ce cas au lieu de le gerer : il n y a plus de moitie. */
+/* ⛔ APPROBATIONS PERMIT2 DU LANCEMENT — MEMES HELPERS QUE LIQUIDITY.
+ *    encodeApprove / encodePermit2Approve / envoyerTx (qui appelle memeChaineQueLaPage).
+ *    Apres un Run reussi on RELANCE « Work out the launch » : c est la qui re-mesure et, si
+ *    les deux sont poses, re-joue eth_simulateV1 avant d ouvrir Launch. */
+$('#lancApprouver').onclick = async () => {
+  if (!compte) return dire('Connect your wallet first.', 'bad');
+  if (!plancementAppro || !plancementAppro.suivante) {
+    return dire('Work out the launch first — approvals are measured there.', 'warn');
+  }
+  const s = plancementAppro.suivante;
+  afficherTx('wallet', s.nom);
+  const r = await envoyerTx({ to: s.to, data: s.data, value: '0x0', nom: s.nom });
+  if (!r) { afficherTx('fail', s.nom); return; }
+  if (!r.receipt) {
+    afficherTx('pending', s.nom, r.hash);
+    return dire('Press « Work out the launch » when ready.\n' + r.hash, 'warn');
+  }
+  afficherTx(r.ok ? 'ok' : 'fail', s.nom, r.hash);
+  if (!r.ok) return;
+  dire('Confirmed on-chain: ' + s.nom + '\nRe-checking the launch…', 'ok');
+  /* ⛔ On ne bascule PAS Launch a la main : seul le chemin mesure (Work out → simulate) l ouvre. */
+  $('#lancCalculer').click();
+};
+
+/* ⛔ LE SECOND BOUTON DE LANCEMENT (mint apres initialize) A DISPARU, ET AVEC LUI L ETAT QUI
+ *    POUVAIT MAL TOURNER. Il existait pour minter APRES un initialize deja envoye — c est-a-dire
+ *    pour rattraper un lancement a moitie fait. `multicall` supprime ce cas au lieu de le gerer :
+ *    il n y a plus de moitie. Le bouton #lancApprouver n est PAS ce second bouton : ce sont des
+ *    approvals Permit2 AVANT le mint, pas un mint separe. */
 
 async function memeChaineQueLaPage() {
   const R = RESEAUX[chaine];
@@ -3408,7 +3528,7 @@ function gardeMainnet() {
    * FORCER le refus, jamais l autorisation. */
   /* ⛔ Launch (#lancLancer) was missing from this list — comment said three buttons, code had two.
    *    On mainnet without the checkbox, Work out → Launch could still send. Force-refuse only. */
-  if (!ok) for (const id of ['#poolAgir', '#swapAgir', '#lancLancer']) { const b = $(id); if (b) b.disabled = true; }
+  if (!ok) for (const id of ['#poolAgir', '#swapAgir', '#lancLancer', '#lancApprouver']) { const b = $(id); if (b) b.disabled = true; }
 }
 /* ⛔ ON N ENREGISTRE QUE LE « OUI ». Decocher n efface pas la trace — ce serait un troisieme etat
  * (« a retire son consentement ») que personne n a demande, et qui ferait redemander a la
