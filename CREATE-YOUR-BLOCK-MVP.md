@@ -30,3 +30,16 @@ Honest monetization candidates (pick later with evidence, not hope):
 - A stranger can Create + Launch a Practice block without opening Advanced.
 - Chain re-read confirms address (not tx-success inference).
 - Zero undated revenue claims in README or marketing.
+
+
+## Dig-adapt Instant Create (2026-09-07, Europe/Brussels)
+
+Shipped on branch `feat/instant-dig-adapt` (this repo):
+
+1. **P11** — status funnel strip on simple Instant Create path.
+2. **P1/P4** — Create CTA packet: network + irreversibility + pointer to What you will sign.
+3. **P2** — post-create re-read max 3; repeated empty fingerprint → Blocked.
+4. README dig-adapted UX notes; METHODE unchanged (no invented revenue).
+
+Still required for honesty: Practice Instant path verified **with a wallet** (trap #7).
+
