@@ -71,3 +71,26 @@ export function parametresLancement({ supply, valorisationEth, espacement, tickC
     prixImpose: tickCourant !== null && tickHaut !== tickPrix,
     espacement: Number(espacement) };
 }
+
+/** Documented 2026-09-07: whole-supply ETH below this arms a Launch soft-gate (second confirm).
+ *  Not a “correct” price — friction against irreversible dust / sniper freebies.
+ *  Practice E2E vals of 1–100 ETH stay one-click Work out → Launch. */
+export const VALO_PLANCHER_ETH = 1;
+
+/**
+ * Classify a Launch valuation for the too-cheap / sniper soft-gate.
+ * Callers already refuse ILLISIBLE (<=0 / non-finite). TROP_BON_MARCHE means: keep Work out,
+ * but do not enable Launch until the user ticks an explicit permanent-price / sniper confirm.
+ * @param {number|string} valorisationEth
+ * @param {number} [plancherEth=VALO_PLANCHER_ETH]
+ */
+export function classementValoLancement(valorisationEth, plancherEth = VALO_PLANCHER_ETH) {
+  const v = Number(valorisationEth);
+  const plancher = Number(plancherEth);
+  if (!Number.isFinite(v) || !(v > 0)) return { etat: 'ILLISIBLE' };
+  if (!Number.isFinite(plancher) || !(plancher > 0)) {
+    return { etat: 'ILLISIBLE', pourquoi: 'floor must be a positive number' };
+  }
+  if (v < plancher) return { etat: 'TROP_BON_MARCHE', plancherEth: plancher, valo: v };
+  return { etat: 'OK', plancherEth: plancher, valo: v };
+}
