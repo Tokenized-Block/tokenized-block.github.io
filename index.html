@@ -65,7 +65,7 @@ main{max-width:560px;margin:0 auto}
   /* ⛔ CE QUI TRAVERSE TOUTE LA LARGEUR : l en-tete, le choix de reseau, la bascule et
    *    l avertissement mainnet. Les mettre en colonne les rendrait secondaires — or ce sont les
    *    choses qu on doit voir AVANT de toucher a quoi que ce soit. */
-  main > header, main > .tabs, main > .bascule, main > #gardeMainnet { column-span: all; }
+  main > header, main > .tabs, main > #funnel, main > .bascule, main > #gardeMainnet { column-span: all; }
 }
 @media (min-width: 1500px) {
   /* ⚠️ Trois colonnes seulement quand il y a VRAIMENT la place : plus tot, une troisieme colonne
@@ -158,6 +158,23 @@ button.act:disabled{opacity:.4}
 #photoDetails .photoCorps{padding-bottom:10px}
 /* Post-create handoff CTA — secondary to Create, only after chain re-read confirms. */
 #ouvrirLancement{display:none;margin-top:8px}
+/* P11 dig-adapt: status funnel — labels wire to real create/re-read states, never fake success. */
+#funnel{margin:14px 0 8px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;
+background:var(--bg2)}
+#funnel .flab{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);margin:0 0 8px}
+#funnel ol{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+#funnel li{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid var(--line);
+color:var(--dim);background:transparent}
+#funnel li.on{color:var(--fg);border-color:#4d8cff;background:#132038;font-weight:700}
+#funnel li.done{color:var(--ok);border-color:#1e5a3a}
+#funnel li.bad{color:var(--bad);border-color:#7a2a2a;background:#2a1212;font-weight:700}
+/* P1/P4 dig-adapt: Create CTA packet — network + irreversibility + pointer to signed plan. */
+#ctaPacket{margin:0 0 10px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;
+background:var(--card);font-size:13.5px;line-height:1.55}
+#ctaPacket .ctaNet{font-weight:800;margin:0 0 4px}
+#ctaPacket .ctaIrr{color:var(--warn);margin:0 0 6px}
+#ctaPacket .ctaPtr{margin:0;color:var(--dim)}
+#ctaPacket a{color:#7fb0ff}
 #etat{margin-top:12px;padding:12px 14px;border-radius:10px;border:1px solid var(--line);
 background:var(--bg2);font-size:14px;white-space:pre-wrap;word-break:break-word}
 .ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
@@ -264,11 +281,117 @@ summary:hover{color:var(--fg)}
   #ov,#ov *{animation:none !important}
   #ov[data-phase="ok"] .ovMarque,#ov[data-phase="fail"] .ovMarque{stroke-dashoffset:0}
 }
+
+
+/* ══ VISUAL PASS (feat/tblock-visual) — CSS + light HTML only; dig-adapt logic untouched ══ */
+/* Hero: tighter brand row, one-line subtitle, more air under header */
+header{gap:10px;margin-bottom:16px;align-items:center}
+header svg{width:40px;height:44px;border-radius:10px}
+h1{font-size:18px;letter-spacing:-.01em;line-height:1.2}
+.sub{font-size:12.5px;margin:3px 0 0;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Cards: consistent radius + breathing room; quieter micro-headers */
+.card{border-radius:13px;padding:16px 16px 14px;margin-bottom:12px}
+.card h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;color:#6e84b0;margin:0 0 10px;opacity:.92}
+.cardQuiet{padding:10px 14px;background:var(--bg2);border-style:dashed;opacity:.95}
+.cardQuiet summary{min-height:44px;color:var(--dim);font-size:13px}
+#gardeMainnet{border-radius:13px;margin-bottom:10px}
+
+/* Practice / Real — segmented pill track */
+.tabs{display:flex;gap:0;margin-bottom:10px;padding:4px;background:var(--bg2);border:1px solid var(--line);
+border-radius:999px}
+.tabs button{flex:1;background:transparent;color:var(--dim);border:0;border-radius:999px;
+padding:11px 10px;font-size:13px;font-weight:600;font-family:inherit;min-height:44px;cursor:pointer}
+.tabs button[aria-selected=true]{background:var(--blue);color:#fff;box-shadow:0 1px 0 rgba(0,0,0,.25)}
+.tabs button .k{color:inherit;opacity:.75;flex:none;font-size:11px}
+
+/* Advanced toggle: quieter, clearly labelled Advanced */
+.bascule{margin:8px 0 12px;padding:10px 12px;border:1px dashed #243556;color:#6e84b0;
+border-radius:12px;font-size:13px;min-height:44px;opacity:.85}
+.bascule:hover{opacity:1;color:var(--dim);border-color:var(--line)}
+body.simple .avance{display:none !important}
+body.simple .card.avance{display:none !important}
+
+/* Primary Create: Name/Symbol + preview dominate */
+.createPrimary{display:flex;flex-direction:column;align-items:center;margin:12px 0 2px;padding:10px 10px 6px;
+background:var(--bg2);border:1px solid var(--line);border-radius:13px}
+#apercu{display:block;width:136px;height:150px;margin:0 auto;border-radius:12px}
+.previewHint{margin:6px 0 0;font-size:11px;color:var(--dim);letter-spacing:.02em;text-align:center}
+#photoDetails{margin-top:8px;border-color:#243556;opacity:.85}
+
+/* Funnel: unmissable under tabs — numbered pills + connectors; quieter when Idle */
+#funnel{margin:0 0 12px;padding:12px 14px;border-radius:13px;border:1px solid #3a5a9a;
+background:linear-gradient(180deg,#132038 0%,var(--bg2) 100%);box-shadow:0 0 0 1px rgba(77,140,255,.12)}
+#funnel .flab{font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:#9eb6e0;margin:0 0 10px}
+#funnel ol{list-style:none;margin:0;padding:0;display:flex;flex-wrap:nowrap;gap:0;align-items:center;overflow-x:auto;-webkit-overflow-scrolling:touch}
+#funnel li{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:8px 11px;margin:0;
+border-radius:999px;border:1px solid transparent;color:#5a7199;background:transparent;opacity:.55;
+flex:0 0 auto;white-space:nowrap;position:relative}
+#funnel li + li{margin-left:8px}
+#funnel li + li::before{content:"";position:absolute;left:-8px;top:50%;width:8px;height:2px;
+background:#3a5a9a;transform:translateY(-50%);border-radius:1px}
+#funnel li .fn{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;
+border-radius:50%;font-size:10px;font-weight:800;background:#0a1633;color:#7a92b8;border:1px solid var(--line)}
+#funnel li .fl{font-weight:600}
+#funnel li.on{opacity:1;color:var(--fg);border-color:#4d8cff;background:#1a3358;font-weight:700}
+#funnel li.on .fn{background:var(--blue);color:#fff;border-color:var(--blue)}
+#funnel li.done{opacity:.95;color:var(--ok);border-color:#1e5a3a;background:transparent}
+#funnel li.done .fn{background:#0d3a22;color:var(--ok);border-color:#1e5a3a}
+#funnel li.bad{opacity:1;color:var(--bad);border-color:#7a2a2a;background:#2a1212;font-weight:700}
+#funnel[data-state="Idle"]{border-style:solid;opacity:1}
+#funnel[data-state="Idle"] .flab{opacity:.9}
+#funnel[data-state="Idle"] li:not(.on){opacity:.4}
+#funnel[data-state="Idle"] li.on{opacity:.9;border-color:#4d8cff;background:#132038;font-weight:700}
+#funnel[data-state="Idle"] li.on .fn{background:#243556;color:#c5d6f5;border-color:#4d8cff}
+
+/* CTA packet: one-line cost next to Create; primary taller; secondary quieter */
+#ctaPacket{border-radius:13px;margin:0 0 10px;padding:10px 12px;border:1px solid var(--line);background:var(--card)}
+#ctaPacket .ctaLine{margin:0;font-size:13px;line-height:1.45;display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center}
+#ctaPacket .ctaNet{font-weight:800;color:var(--fg)}
+#ctaPacket .ctaIrr{color:var(--warn);font-weight:600}
+#ctaPacket .ctaSep{color:var(--dim);opacity:.7}
+#ctaPacket .ctaPtr{color:#7fb0ff;font-weight:600;text-decoration:none}
+#ctaPacket .ctaPtr:hover{text-decoration:underline}
+button.act{border-radius:12px;padding:18px 16px;font-size:16.5px;min-height:52px;margin-top:6px;letter-spacing:.01em}
+button.act.sec{opacity:.72;border-color:#243556;color:var(--dim);font-weight:600;padding:12px 14px;min-height:44px}
+button.act.sec:hover{opacity:1;color:var(--fg)}
+#ouvrirLancement{opacity:.8}
+#etat{margin-top:10px}
+
+/* Gallery secondary — collapsed by default, never above Create */
+#carteGalerieWrap{margin-top:8px;margin-bottom:12px}
+#carteGalerieWrap[hidden]{display:none}
+#carteGalerieWrap .galerie{grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:8px}
+
+/* Mobile / mini-app: primary path without scroll wall */
+@media (max-width:640px){
+  main{max-width:100%}
+  body{padding-top:max(10px,env(safe-area-inset-top));padding-bottom:calc(20px + env(safe-area-inset-bottom))}
+  header{margin-bottom:12px}
+  .sub{white-space:normal}
+  .tabs button{min-height:44px;padding:12px 8px}
+  button.act{min-height:52px}
+  #apercu{width:112px;height:123px}
+  .createPrimary{padding:8px;margin:10px 0 0}
+  .card{padding:14px 12px 12px;margin-bottom:10px}
+  #funnel{padding:10px 10px;margin-bottom:10px}
+  #funnel ol{padding-bottom:2px}
+  #photoDetails>summary{font-size:12.5px}
+  .note{font-size:11.5px}
+}
+@media (min-width:1000px){
+  main > header, main > .tabs, main > #funnel, main > #gardeMainnet,
+  main > #ctaPacket, main > #agir, main > #relire, main > #ouvrirLancement,
+  main > #etat, main > .note, main > .bascule, main > #carteGalerieWrap
+  {column-span:all}
+}
+
 </style>
+<body class="simple">
 <main>
 <header>
   <svg id="marque" viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg"></svg>
-  <div><h1>Tokenized Block</h1><p class="sub">Build your block. It becomes a B-20 token on Base.</p></div>
+  <div><h1>Tokenized Block</h1><p class="sub">Build a block → B-20 on Base · no admin, no minter.</p></div>
 </header>
 
 <div class="tabs">
@@ -279,21 +402,20 @@ summary:hover{color:var(--fg)}
   <button id="t84532" aria-selected="true">Practice · free<span class="k"> · Base Sepolia</span></button>
   <button id="t8453" aria-selected="false">Real · costs ETH<span class="k"> · Base mainnet</span></button>
 </div>
-<!-- ⛔ MESURE, PAS INTUITION : 24 champs, 9 sections, 11 termes de jargon, 5,3 ecrans. Le mode
-     simple ne RETIRE rien — il replie. Un clic rend tout visible, et le plan signe est identique
-     au caractere pres dans les deux modes. -->
-<!-- ⛔ LES BLOCKS DES AUTRES, AVANT TOUTE CONNEXION. Mesure du 2026-09-06 : 116 blocks crees dans
-     les 9 000 derniers blocs de chaine, 2 483 sur 200 000. Le standard est ACTIVEMENT utilise —
-     c est ce qui rend cette galerie possible. Avec trois entrees elle aurait dit « personne ne
-     s en sert » a chaque visiteur, et on ne reprend pas la premiere chose qu on montre.
-     ⚠️ Elle se charge APRES la page : elle ne doit jamais retarder ce que l utilisateur est venu
-     faire. Si elle echoue, elle se tait plutot que d inventer. -->
-<div class="card" id="carteGalerie" style="display:none">
-  <h2>Blocks people made</h2>
-  <div id="galerie" class="galerie"></div>
-  <div id="galerieNote" class="k" style="margin-top:10px"></div>
-</div>
-<button class="bascule" id="bascule" aria-expanded="false">Show every setting</button>
+
+<!-- ⛔ P11 dig-adapt (X-DIG 2026-09-07): status funnel for Instant Create.
+     Labels map to real wallet/chain states. Never invent a green « Instant » success. -->
+<nav id="funnel" aria-label="Create status" data-state="Idle">
+  <p class="flab">Create status</p>
+  <ol>
+    <li data-step="Idle" data-n="0" class="on"><span class="fn">0</span><span class="fl">Idle</span></li>
+    <li data-step="Signing" data-n="1"><span class="fn">1</span><span class="fl">Signing</span></li>
+    <li data-step="Pending" data-n="2"><span class="fn">2</span><span class="fl">Pending</span></li>
+    <li data-step="Re-read" data-n="3"><span class="fn">3</span><span class="fl">Re-read</span></li>
+    <li data-step="Ready-to-Launch" data-n="4"><span class="fn">4</span><span class="fl">Ready</span></li>
+    <li data-step="Blocked" data-n="!"><span class="fn">!</span><span class="fl">Blocked</span></li>
+  </ol>
+</nav>
 
 <div id="gardeMainnet">
   <div class="t">⚠ Base mainnet — real money</div>
@@ -304,11 +426,15 @@ summary:hover{color:var(--fg)}
 </div>
 
 <div class="card">
-  <h2>Your block</h2>
+  <h2>Create your block</h2>
   <label for="nom">Name</label><input id="nom" value="Tokenized Block" maxlength="32">
   <div class="duo">
     <div><label for="sym">Symbol</label><input id="sym" value="TBLOCK" maxlength="11"></div>
     <div class="avance"><label for="dec">Decimals</label><input id="dec" type="number" min="6" max="18" value="18"></div>
+  </div>
+  <div class="createPrimary">
+    <svg id="apercu" viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"></svg>
+    <p class="previewHint">Live preview · engraved on create</p>
   </div>
   <label class="avance" for="supply">Total supply (whole units)</label><input class="avance" id="supply" value="1000000000" inputmode="numeric">
   <label class="avance" for="sel">Salt — it fixes the address. Two blocks cannot share the same one.</label>
@@ -346,8 +472,6 @@ summary:hover{color:var(--fg)}
     <div><label for="eclats">Shards — how many break away</label>
       <input id="eclats" type="range" min="0" max="6" value="3"></div>
   </div>
-  <!-- ⛔ L ECART : « la distance des elements ». A nombre d eclats EGAL, c est ce qui change le
-       plus la silhouette — donc ce qui distingue deux blocs vus de loin, dans une galerie. -->
   <div class="duo avance">
     <div><label for="ecart">Spread — how far the shards sit from the block</label>
       <input id="ecart" type="range" min="0" max="4" value="2"></div>
@@ -419,18 +543,41 @@ summary:hover{color:var(--fg)}
     <option value="fleche">Arrow — pointing up</option>
     <option value="vide">Empty — glass only</option>
   </select>
-  <svg id="apercu" viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg"></svg>
 </div>
 
-<div class="card">
-  <h2>What you will sign</h2>
-  <div id="fiche"></div>
+<!-- ⛔ P1/P4 dig-adapt: evidence packet on the Create CTA — network, irreversibility, link to
+     existing « What you will sign » (gas lives there). Strengthen visibility; do not bury in Advanced. -->
+<div id="ctaPacket">
+  <p class="ctaLine"><span class="ctaNet" id="ctaNet">Network: Practice · Base Sepolia</span>
+  <span class="ctaSep">·</span>
+  <span class="ctaIrr">Permanent · gas only · no admin</span>
+  <span class="ctaSep">·</span>
+  <a class="ctaPtr" href="#carteASigner">What you will sign</a></p>
+</div>
+<button class="act" id="agir">Connect wallet</button>
+<button class="act sec" id="relire">Re-read the chain</button>
+<!-- ⛔ HANDOFF APRES CREATION CONFIRMEE (relecture code ≠ tx-success). Prefill Launch/LP/Swap;
+     CTA secondary ouvre le lancement unilateral existant (lancement.js) — pas de frais OpenLaunch. -->
+<button class="act sec" id="ouvrirLancement" type="button">Launch this block — token-only, one transaction</button>
+<div id="etat">Name your block, then connect your wallet to Create.</div>
+
+<div class="card cardQuiet" id="carteASigner">
+  <details id="signDetails">
+    <summary>What you will sign — destination, data head, gas</summary>
+    <div id="fiche"></div>
+  </details>
 </div>
 
-<div class="card">
-  <h2>On-chain state</h2>
-  <div id="etatToken"></div>
+<div class="card cardQuiet" id="carteEtat">
+  <details id="etatDetails">
+    <summary>On-chain state — re-read after create</summary>
+    <div id="etatToken"></div>
+  </details>
 </div>
+
+<!-- ⛔ MESURE, PAS INTUITION : simple mode folds Advanced; signed plan identical. -->
+<button class="bascule" id="bascule" aria-expanded="false">Advanced · show every setting</button>
+
 
 <div class="card avance">
   <h2>Your blocks</h2>
@@ -519,12 +666,23 @@ summary:hover{color:var(--fg)}
   <button class="act" id="swapAgir" disabled>Run the next step</button>
 </div>
 
-<button class="act" id="agir">Connect wallet</button>
-<button class="act sec" id="relire">Re-read the chain</button>
-<!-- ⛔ HANDOFF APRES CREATION CONFIRMEE (relecture code ≠ tx-success). Prefill Launch/LP/Swap;
-     CTA secondary ouvre le lancement unilateral existant (lancement.js) — pas de frais OpenLaunch. -->
-<button class="act sec" id="ouvrirLancement" type="button">Launch this block — token-only, one transaction</button>
-<div id="etat">Customise your block, then connect your wallet.</div>
+<!-- Gallery secondary: does not compete with Instant Create above the fold. -->
+<details class="card cardQuiet" id="carteGalerieWrap" hidden>
+  <summary>Blocks people made — gallery</summary>
+<!-- ⛔ LES BLOCKS DES AUTRES, AVANT TOUTE CONNEXION. Mesure du 2026-09-06 : 116 blocks crees dans
+     les 9 000 derniers blocs de chaine, 2 483 sur 200 000. Le standard est ACTIVEMENT utilise —
+     c est ce qui rend cette galerie possible. Avec trois entrees elle aurait dit « personne ne
+     s en sert » a chaque visiteur, et on ne reprend pas la premiere chose qu on montre.
+     ⚠️ Elle se charge APRES la page : elle ne doit jamais retarder ce que l utilisateur est venu
+     faire. Si elle echoue, elle se tait plutot que d inventer. -->
+<div id="carteGalerie" style="display:none">
+  <h2>Blocks people made</h2>
+  <div id="galerie" class="galerie"></div>
+  <div id="galerieNote" class="k" style="margin-top:10px"></div>
+</div>
+</details>
+
+
 
 <p class="note">⛔ This page holds no key. It <b>presents</b> the transaction; your wallet shows it and signs it.<br>
 ⛔ The block is born <b>with no admin and no minter</b>, and its supply equals its cap. Nobody — you included — will ever mint one more, or change its name, logo or description.<br>
@@ -657,6 +815,42 @@ const etat = $('#etat');
 const dire = (m, c = '') => { etat.className = c; etat.textContent = m; };
 const ligne = (k, v) => `<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`;
 const pastille = (t, c) => `<span class="pill p-${c}">${t}</span>`;
+
+/* ══ DIG-ADAPT Instant Create (P11 / P1 / P4 / P2) — 2026-09-07 ══════════════════════════════
+ * Status comes from wallet + chain re-read only. No flattering « Instant » green without code. */
+const FUNNEL_STEPS = ['Idle', 'Signing', 'Pending', 'Re-read', 'Ready-to-Launch', 'Blocked'];
+function setFunnel(step) {
+  const nav = $('#funnel');
+  if (!nav) return;
+  const i = FUNNEL_STEPS.indexOf(step);
+  if (i < 0) return;
+  nav.setAttribute('data-state', step);
+  nav.querySelectorAll('li').forEach(li => {
+    const s = li.getAttribute('data-step');
+    const j = FUNNEL_STEPS.indexOf(s);
+    li.classList.remove('on', 'done', 'bad');
+    if (s === 'Blocked' && step === 'Blocked') li.classList.add('bad', 'on');
+    else if (j === i) li.classList.add('on');
+    else if (j >= 0 && j < i && step !== 'Blocked') li.classList.add('done');
+  });
+}
+function majCtaPacket() {
+  const el = $('#ctaNet');
+  if (!el) return;
+  const practice = chaine === 84532;
+  el.textContent = practice
+    ? 'Network: Practice · Base Sepolia (free test ETH)'
+    : 'Network: Real · Base mainnet (real ETH)';
+}
+
+/* Visual pass: CTA link opens the signing disclosure (hex/gas stay collapsed until asked). */
+document.addEventListener('click', (ev) => {
+  const a = ev.target && ev.target.closest && ev.target.closest('a[href="#carteASigner"]');
+  if (!a) return;
+  const d = $('#signDetails');
+  if (d) d.open = true;
+});
+
 
 const abi = await (await fetch('./abi.json')).json();
 /**
@@ -932,27 +1126,12 @@ function logoSvg(o) {
     diagonale: (i) => ({ x: 22 + i * 28, y: 200 - i * 30, s: 0.24 - i * 0.02, o: 0.95 - i * 0.09 }),
   };
   const place = PLACES[o.orbite] || PLACES.sillage;
-  /* ⛔ L ECART S APPLIQUE A UN SEUL ENDROIT : le vecteur qui va du CENTRE DU BLOC vers l eclat.
-   *    Le mettre dans chacune des dix dispositions aurait demande dix modifications, dix occasions
-   *    de diverger, et la onzieme disposition ajoutee l aurait oublie sans que rien ne le dise.
-   * ⚠️ 2 EST LE MULTIPLICATEUR NEUTRE (1.0), et ce n est pas un hasard : c est la valeur par
-   *    defaut, donc un block grave AVANT ce reglage se redessine au pixel pres comme il l a ete.
-   *    Ses metadonnees sont sur la chaine ; elles ne changeront jamais, le dessin non plus. */
+  /* ⛔ L ECART S APPLIQUE A UN SEUL ENDROIT : le vecteur qui va du CENTRE DU BLOC vers l eclat. */
   const ECARTS = [0.55, 0.78, 1, 1.28, 1.6];
   const k = ECARTS[Math.max(0, Math.min(4, Number(o.ecart) ?? 2))] ?? 1;
   let frag = '';
   for (let i = 0; i < eclats; i++) {
     const p0 = place(i, eclats);
-    /* ⚠️ Le centre du bloc est (100, 104) — la meme constante que les orbites circulaires
-     *    utilisent deja. Ecarter depuis le coin de l image aurait pousse les eclats en diagonale
-     *    au lieu de les eloigner du bloc. */
-    /* ⛔ BORNE DANS LE CADRE, MESUREE ET NON SUPPOSEE. A l ecart maximal, 4 eclats sur 6 sortaient
-     *    du viewBox 200x220 et se faisaient COUPER : un reglage qui fait disparaitre des elements
-     *    n en est pas un. Les marges (12 / 188 / 12 / 208) laissent la place au rayon d un eclat
-     *    a son echelle habituelle (~9 px).
-     * ⚠️ ET LE RISQUE DU CORRECTIF EST L INVERSE : trop borner ferait retomber plusieurs ecarts
-     *    sur le MEME dessin — « cinq reglages, trois images », un curseur qui ment. Verifie apres
-     *    coup dans le navigateur : les cinq valeurs rendent bien cinq positions distinctes. */
     const dans = (v, min, max) => Math.max(min, Math.min(max, v));
     const p = k === 1 ? p0 : { ...p0,
       x: dans(100 + (p0.x - 100) * k, 12, 188),
@@ -965,20 +1144,7 @@ function logoSvg(o) {
       + `<path d="M0-40 46-13 46 40 0 66-46 40-46-13Z" fill="none" stroke="${ca(90, 72)}" stroke-width="5" stroke-linejoin="round"/></g>`;
   }
 
-  /* ── LES COINS ────────────────────────────────────────────────────────────────────────────────
-   * ⛔ ILS ETAIENT VIDES, ET C EST LA MOITIE DE L IMAGE. Le bloc occupe le centre ; tout autour ne
-   *    portait rien. Deux blocs de meme teinte se ressemblaient donc bien plus que le compte de
-   *    combinaisons ne le laissait croire : le CATALOGUE etait grand, la SILHOUETTE etait unique.
-   * ⚠️ UN SEUL MOTIF, QUATRE FOIS, MIROITE. Dessiner les quatre coins a la main aurait fait quatre
-   *    occasions de se tromper de signe — et un coin decale d un pixel se voit immediatement,
-   *    parce que l oeil compare les symetries avant les formes.
-   * ⚠️ « aucun » rend une chaine VIDE, pas un dessin transparent : un ornement invisible pese
-   *    quand meme dans le contractURI, qui est GRAVE et se paie au gas. */
-  /* ⛔ NOMMEE `COINS` ET PAS `ORNEMENTS`, ET LA VALEUR `motifCoin` ET PAS `motif` : il existe DEJA
-   *    un `const motif` dans cette meme fonction (ligne ~856), la fabrique des motifs de FACE.
-   *    Deux `const` du meme nom dans la meme portee, c est une SyntaxError — la page entiere
-   *    n aurait pas demarre, pas seulement les coins. Attrape avant deploiement, par relecture du
-   *    point d assemblage et non par le test : aucun test ne charge le HTML. */
+
   const COINS = {
     aucun: '',
     points: '<circle cx="0" cy="0" r="5"/>',
@@ -990,8 +1156,6 @@ function logoSvg(o) {
     etoiles: '<path d="M0-11 3-3 11 0 3 3 0 11-3 3-11 0-3-3Z"/>',
   };
   const motifCoin = COINS[o.ornement] ?? '';
-  /* ⚠️ Les quatre ancrages sont a l INTERIEUR du cadre 200x220 : un motif pose sur le bord sortirait
-   *    du viewBox et se ferait couper differemment selon la taille d affichage. */
   const coins = !motifCoin ? '' : '<g fill="' + ca(85, 66) + '" stroke="' + ca(85, 66) + '" opacity="0.85">'
     + [[16, 16, 1, 1], [184, 16, -1, 1], [16, 204, 1, -1], [184, 204, -1, -1]]
       .map(([x, y, sx, sy]) => `<g transform="translate(${x} ${y}) scale(${sx} ${sy})">${motifCoin}</g>`).join('')
@@ -1036,8 +1200,6 @@ function logoSvg(o) {
   const M = MATIERES[o.matiere] || MATIERES.verre;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220"><rect width="200" height="220" fill="${M.fond}"/>`
-    /* ⚠️ LES COINS PASSENT AVANT LE BLOC, donc DERRIERE lui : un ornement qui recouvrirait une
-     *    face changerait la lecture de la matiere, qui est le reglage le plus structurant. */
     + coins
     + `<path d="M100 30 170 70 100 110 30 70Z" fill="${M.haut}"/>`
     + `<path d="M30 70 100 110 100 190 30 150Z" fill="${M.gauche}"/>`
@@ -1405,8 +1567,8 @@ function appliquerMode() {
    *    ce qu il contient, pas decrire son mecanisme : « every setting » ne dit rien de ce qu on y
    *    trouve, alors que « material, shards, colours » se reconnait. */
   b.textContent = simple
-    ? 'Customise the block — material, face, shards, colours, supply'
-    : 'Hide the advanced settings';
+    ? 'Advanced · show settings (material, face, shards, colours, supply)'
+    : 'Advanced · hide settings';
   b.setAttribute('aria-expanded', String(!simple));
 }
 $('#bascule').onclick = () => {
@@ -1426,10 +1588,6 @@ appliquerMode();
  *    de ne rien proposer — c est le defaut qu on reproche a toutes les interfaces « intelligentes ».
  * ⚠️ Elle ne s applique qu UNE FOIS par session : se reconnecter ne doit pas defaire ce qu on
  *    vient de regler. */
-/* ⛔ ET CELLE-CI GARDE UNE AUTRE CHOSE : elle dit ce qui compte comme « l utilisateur a touche ».
- * Un reglage absent d ici serait ECRASE par l apparence derivee de l adresse a la connexion —
- * quelqu un choisirait ses coins, brancherait son wallet, et les verrait changer sans comprendre.
- * Ecraser un choix explicite est pire que ne rien proposer. */
 const APPARENCE = ['teinte', 'accent', 'division', 'eclats', 'orbite', 'facette', 'matiere', 'ornement', 'ecart'];
 let aTouche = false, personnelApplique = false;
 for (const el of APPARENCE) {
@@ -1473,11 +1631,7 @@ function paramsLogoDepuisApparence(a, lettre) {
     teinte: d.teinte ?? 222, accent: d.accent ?? 38,
     division: d.division ?? 3, eclats: d.eclats ?? 3,
     orbite: d.orbite ?? 'sillage', facette: d.facette ?? 'lettre',
-    matiere: d.matiere ?? 'verre',
-    /* ⚠️ Les defauts reproduisent EXACTEMENT le dessin d avant ces deux axes : coins nus et
-     * ecart 2 (le multiplicateur neutre, 1.0). Un block deja grave doit continuer de se dessiner
-     * comme il a ete grave — ses metadonnees sont sur la chaine et ne changeront jamais. */
-    ornement: d.ornement ?? 'aucun', ecart: d.ecart ?? 2, lettre,
+    matiere: d.matiere ?? 'verre', lettre,
   };
 }
 
@@ -1540,6 +1694,7 @@ async function remplirGalerie() {
       + ' blocks made in the last ' + (r.fenetre.a - r.fenetre.de).toLocaleString('en-US') + ' chain blocks'
       + (rates ? ' · ' + rates + ' window(s) could not be read — this list is incomplete' : '');
     $('#carteGalerie').style.display = '';
+    const gw = $('#carteGalerieWrap'); if (gw) gw.hidden = false;
   } catch (e) {
     /* ⛔ ON NE MONTRE RIEN PLUTOT QU UN FAUX. Une galerie vide « par erreur » se lirait comme un
      *    fait sur le produit. */
@@ -1548,14 +1703,7 @@ async function remplirGalerie() {
 /* ⚠️ Apres le premier rendu, jamais avant. */
 setTimeout(remplirGalerie, 400);
 
-/* ⛔ TROIS LISTES DOIVENT BOUGER ENSEMBLE QUAND UN REGLAGE EST AJOUTE, ET J EN AI OUBLIE DEUX.
- * Le 2026-09-07, `ornement` et `ecart` ont ete ajoutes au formulaire, a `paramsLogo` et au
- * tirage — mais pas ici ni dans `APPARENCE`. Resultat mesure dans le navigateur : les huit
- * ornements rendaient le MEME SVG de 3 313 octets, les cinq ecarts le meme `translate`. Le
- * controle existait, paraissait branche, et ne changeait RIEN. Aucune erreur, rien a l ecran —
- * la classe exacte du module non declare dans `serveur.js`.
- * ⇒ La regle 13 de `verifie-coherence.mjs` compare desormais les trois listes a `paramsLogo`. */
-const CHAMPS = ['nom','sym','dec','supply','sel','desc','teinte','accent','division','eclats','orbite','facette','matiere','ornement','ecart','photo'];
+const CHAMPS = ['nom','sym','dec','supply','sel','desc','teinte','accent','division','eclats','orbite','facette','matiere','photo'];
 /* ⛔ `addEventListener` ET NON `n.onchange = …` — LA GARDE VIENT D EVITER LE BUG. `#photo` a deja
  * son propre gestionnaire, assigne plus haut, qui redimensionne et mesure l image. Une affectation
  * de propriete l aurait ECRASE en silence : le champ aurait paru branche, la photo n aurait jamais
@@ -1574,8 +1722,9 @@ for (const id of [84532, 8453]) $('#t' + id).onclick = () => {
   /* ⛔ LA GALERIE SUIT LE RESEAU. Sans ce rappel, elle garderait les blocks de l ancien reseau
    *    sous une note qui nommerait le nouveau — un mensonge pire que l absence de note. */
   $('#carteGalerie').style.display = 'none';
+  const gw = $('#carteGalerieWrap'); if (gw) gw.hidden = true;
   remplirGalerie();
-  dire('Network: ' + RESEAUX[id].nom + '.'); rafraichir();
+  majCtaPacket(); dire('Network: ' + RESEAUX[id].nom + '.'); rafraichir();
 };
 
 /**
@@ -1663,6 +1812,7 @@ function apresCreationConfirmee(adr) {
     cta.style.display = '';
     cta.dataset.block = adr;
   }
+  setFunnel('Ready-to-Launch');
 }
 
 /** Open advanced settings if needed, scroll to unilateral Launch, keep prefilled address. */
@@ -3118,30 +3268,59 @@ $('#agir').onclick = async () => {
      * a la MEME adresse ailleurs — l adresse derive de (variant, createur, sel), pas de la chaine
      * — et l utilisateur croirait avoir cree sur mainnet. */
     if (!(await memeChaineQueLaPage())) return;
+    setFunnel('Signing');
     dire("Your wallet will open.\nRe-read the destination and the start of `data` before accepting.", 'warn');
     afficherTx("wallet", "Confirm the creation in your wallet.");
     const hash = await window.ethereum.request({ method: 'eth_sendTransaction',
       params: [{ from: compte, to: FACTORY, value: '0x0', data: dernier.data }] });
+    setFunnel('Pending');
     dire('Sent.\n' + hash + '\n\nRe-reading the chain…', 'ok');
     afficherTx('pending', 'Waiting for the block…', hash);
-    /* ⛔ On ne declare rien cree parce que l envoi a reussi : on RELIT jusqu a voir le code. */
-    for (let i = 0; i < 40; i++) {
-      await new Promise((r) => setTimeout(r, 2000));
-      if ((await rpc('eth_getCode', [adr, 'latest'])) !== '0x') {
+    /* ⛔ P2 dig-adapt: bounded re-read — max 3; same empty fingerprint twice → Blocked (no RPC spam).
+     *    Success only when eth_getCode ≠ 0x. Never infer from broadcast alone. */
+    let prevEmptyFp = null;
+    let seenCode = false;
+    for (let i = 0; i < 3; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      setFunnel('Re-read');
+      const code = await rpc('eth_getCode', [adr, 'latest']);
+      if (code !== '0x') {
+        seenCode = true;
         await relireJeton(adr);
         apresCreationConfirmee(adr);
         afficherTx('ok', 'Your block lives at\n' + adr, hash);
         return dire('Created and VERIFIED on-chain.\n' + adr + '\n' + hash
           + '\n\nLaunch / Liquidity / Swap are prefilled. Use « Launch this block » below for unilateral launch.', 'ok');
       }
+      const fp = 'empty:' + String(adr).toLowerCase() + ':' + String(code);
+      if (prevEmptyFp !== null && fp === prevEmptyFp) {
+        setFunnel('Blocked');
+        afficherTx('fail', 'Blocked — empty on-chain state repeated\n' + adr, hash);
+        return dire('Blocked: re-read saw the same empty code at this address twice.\n'
+          + 'Not retrying RPC further (max 3, stop on repeated empty fingerprint).\n'
+          + 'This is not a silent success — press « Re-read the chain » later, or check the explorer.\n'
+          + adr + '\n' + hash, 'bad');
+      }
+      prevEmptyFp = fp;
     }
-    dire("Sent, but the code has not appeared yet.\nThis is not a failure — press « Re-read the chain ».\n" + hash, 'warn');
-  } catch (e) { dire(refusUtilisateur(e) ? 'You declined the transaction.' : 'Failed: ' + (e.message || e), 'bad'); }
+    if (!seenCode) {
+      setFunnel('Blocked');
+      afficherTx('fail', 'Blocked — code not visible after 3 re-reads\n' + adr, hash);
+      return dire('Blocked: sent, but code still absent after 3 bounded re-reads.\n'
+        + 'Not spam-retrying. Press « Re-read the chain » later, or check the explorer.\n'
+        + adr + '\n' + hash, 'bad');
+    }
+  } catch (e) {
+    if (refusUtilisateur(e)) { setFunnel('Idle'); dire('You declined the transaction.', 'bad'); }
+    else { setFunnel('Blocked'); dire('Failed: ' + (e.message || e), 'bad'); }
+  }
 };
 
 /* ⛔ L INITIALISATION VIT EN BAS, apres TOUTES les declarations qu elle lit. Un appel place plus
  * haut s executait avant `const DEVISES` et vidait la page entiere. */
 peuplerDevises();
+setFunnel('Idle');
+majCtaPacket();
 await rafraichir();
 
 /* ══ MINI APP : RETIRER L ECRAN DE CHARGEMENT DE L HOTE ═════════════════════════════════════════
@@ -3174,3 +3353,5 @@ await rafraichir();
   }
 })();
 </script>
+
+</body>
