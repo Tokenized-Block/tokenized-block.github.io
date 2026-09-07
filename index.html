@@ -793,7 +793,7 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
     <select id="poolDevise" style="width:100%;padding:10px;border-radius:9px;background:#0d1220;color:#dce6f5;border:1px solid #1c2740;font-size:14px"></select>
     <label for="poolValeur">Starting value of the whole supply</label>
     <input id="poolValeur" value="10000" inputmode="numeric">
-    <p class="expl" style="margin:6px 0 0;color:#f0c674">If the pool is empty, this starting value engraves the price forever — it cannot be reinitialized.</p>
+    <p class="expl" style="margin:6px 0 0;color:#f0c674">If the pool is empty, this starting value engraves the price forever — it cannot be reinitialized. Initialize + mint are ONE transaction (same as Launch) — refusing mid-way cannot leave an empty pool.</p>
     <!-- ⛔ LE PRIX DE DEPART SE CHOISIT. Il etait code en dur a `PRIX_1_POUR_1` = 2^96, un ratio
          d UNITES DE BASE qui ignore les decimales : sur une paire USDC(6)/block(18) cela signifie
          1 block = 1e12 USDC, et la pool nait morte. Le prix d une pool ne se reinitialise pas.
@@ -2675,8 +2675,20 @@ async function construirePlan() {
     /* ⛔ PLUS DE CONSTANTE ICI. `PRIX_1_POUR_1` ignore les decimales : sur USDC(6)/block(18) elle
    * prixe 1 block a 1e12 USDC et la pool nait morte. On pose le prix DERIVE du champ, et si on
    * n a pas pu le calculer on n offre PAS l etape — un prix devine se grave definitivement. */
-    { nom: '1. initialize pool', ok: e.initialisee, to: v.poolm,
-      data: sqrtPrix === null ? null : encodeInitialize(cle, sqrtPrix) },
+    /* ⛔⛔ INIT SEUL = POOL VIDE GRAVEE. Launch ferme ce demi-etat via POSM multicall.
+     *    Liquidity faisait encore initialize (PoolManager) puis mint plus tard : refus / onglet
+     *    ferme entre les deux = pool au bon prix, LIVRE VIDE, rien ne rattrape.
+     *    ⇒ Quand le prix est mesurable et la pool absente, l initialize N EST PLUS une etape
+     *    runnable : il est BUNDLE dans le mint (encodeInitializePool + encodeMintPosition via
+     *    encodeMulticall sur le POSM). Approvals restent avant. Pool deja la → mint seul. */
+    { nom: (!e.initialisee && sqrtPrix !== null)
+        ? '1. initialize pool (with mint — one transaction)'
+        : '1. initialize pool',
+      ok: e.initialisee, bundled: (!e.initialisee && sqrtPrix !== null),
+      to: v.poolm,
+      data: (e.initialisee || (!e.initialisee && sqrtPrix !== null))
+        ? undefined
+        : (sqrtPrix === null ? null : encodeInitialize(cle, sqrtPrix)) },
     { nom: '2. approve block → Permit2', ok: fait(pB.versPermit2), to: b20, data: encodeApprove(PERMIT2, MAX_UINT256) },
     /* ⛔ Pas d approve quote pour ETH natif — Launch le dit deja : native ETH has no ERC20 allowance. */
     ...(!quoteNatif ? [
@@ -2691,7 +2703,11 @@ async function construirePlan() {
      * ni de NFT id invente). Si CETTE session a deja confirme un mint pour ce block, on attache
      * le hash pour l affichage — distinct de DONE / TO DO.
      * ⚠️ ETH natif : SETTLE_PAIR tire le msg.value — sans valeur le mint revert apres Launch. */
-    { nom: '6. mint position', ok: false, to: v.posm, mint: true,
+    { nom: (!e.initialisee && sqrtPrix !== null)
+        ? '6. initialize + mint position (ONE transaction)'
+        : '6. mint position',
+      ok: false, to: v.posm, mint: true,
+      needsInit: (!e.initialisee && sqrtPrix !== null),
       confirmeSession: (liqMintSession
         && liqMintSession.chaine === chaine
         && String(liqMintSession.b20).toLowerCase() === b20.toLowerCase())
@@ -2733,7 +2749,7 @@ async function construirePlan() {
         + (Number(valeurVoulue) / Number(jetons)).toExponential(3) + ' ' + v.quoteNom
         + '  <span class="dim">(' + jetons.toLocaleString('en-US') + ' whole blocks)</span>')
       + ligne('sqrtPriceX96', '<span class="dim">' + sqrtPrix + '</span>')
-      + ligne('locked forever', '<b>Starting value sets the irreversible pool price</b> — step 1 engraves it; it cannot be reinitialized.')
+      + ligne('locked forever', '<b>Starting value sets the irreversible pool price</b> — initialize+mint engraves it in one tx; it cannot be reinitialized.')
     /* ⛔ « CANNOT PRICE — decimals or supply not measured » etait VRAI et INUTILISABLE : il ne
      * disait ni LAQUELLE des trois lectures manquait, ni POURQUOI, donc pas quoi faire. Une
      * limite de debit appelle « reessaie » ; une adresse sans jeton appelle « change d adresse ».
@@ -2819,13 +2835,22 @@ async function construirePlan() {
       : (s.data === null || s.data === undefined);
     /* ⛔ CONFIRMED THIS SESSION ≠ DONE. DONE implique un etat relu sur la chaine (approvals).
      *    Le mint n offre pas ca ; apres receipt on dit la session + le hash, sans NFT id. */
-    vue += ligne(s.nom, s.confirmeSession
+    vue += ligne(s.nom, s.bundled
+      ? pastille('WITH MINT — ONE TX', 'ok')
+        + ' <span class="dim">not a separate send — empty-pool half-state closed (same as Launch)</span>'
+      : s.confirmeSession
       ? pastille('CONFIRMED THIS SESSION', 'ok')
         + ' <span class="dim">tx ' + enTexte(s.confirmeSession)
         + ' — position NFT id not read (no single on-chain « mint done »)</span>'
       : s.ok === true ? pastille('DONE', 'ok')
       : impossible ? pastille('CANNOT BUILD — see above', 'bad')
       : s.ok === null ? pastille('NOT MEASURED', 'dim') : pastille('TO DO', 'warn'));
+  }
+  if (!e.initialisee && sqrtPrix !== null) {
+    vue += ligne('atomic init+mint', pastille('EMPTY-POOL HALF-STATE CLOSED', 'ok')
+      + ' <span class="dim">step 1 is not sent alone — initializePool + mint ride POSM multicall like Launch</span>');
+  } else if (!e.initialisee && sqrtPrix === null) {
+    vue += ligne('⛔ empty-pool risk', 'Cannot price yet — initialize stays blocked (no guessed price to engrave).');
   }
   /* ⛔ La garde de solde nomme la VRAIE cause : un premier essai avait rendu TRANSFER_FROM_FAILED,
    * ce qui IMITE PARFAITEMENT « un B20 ne peut pas etre poole ». C etait le montant. */
@@ -2862,7 +2887,8 @@ async function construirePlan() {
   /* ⛔ LE BOUTON RESTE VISIBLE, TOUJOURS. Le cacher ferait passer l app pour cassee au lieu de
    * bloquee : l utilisateur cherche un controle qui n existe pas, au lieu de lire ce qui manque.
    * Grise + une raison NOMMEE. */
-  const suivante = etapes.find((s) => s.ok !== true);
+  /* ⛔ Bundled initialize is not runnable alone — skip so approvals then atomic mint run. */
+  const suivante = etapes.find((s) => !s.bundled && s.ok !== true);
   const b = $('#poolAgir');
   /* ⛔ LA DECISION VIT DANS `pool.js`, PURE ET TESTEE (`test-blocage.mjs`, 7 assertions). Elle
    * etait ici, dans une chaine de `else if` au milieu de 400 lignes, verifiable seulement a
@@ -2926,7 +2952,8 @@ async function construirePlan() {
    * Les recalculer au moment de signer les recalculerait sur un etat relu plus tard : ce qui a
    * ete MONTRE a l utilisateur doit etre ce qui est SIGNE. */
   return { etapes, suivante, cle, v, liq, b20, besoinB, besoinQ, quoteEst0,
-    tickBas: tickBasLiq, tickHaut: tickHautLiq, quoteNatif };
+    tickBas: tickBasLiq, tickHaut: tickHautLiq, quoteNatif, sqrtPrix,
+    needsInit: (!e.initialisee && sqrtPrix !== null) };
 }
 
 $('#poolEtat').onclick = async () => {
@@ -3846,6 +3873,18 @@ $('#poolAgir').onclick = async () => {
         max1: plan.besoinQ === null || plan.besoinB === null ? MAX_UINT128
           : ((plan.quoteEst0 ? plan.besoinB : plan.besoinQ) * 102n) / 100n,
         proprietaire: compte, deadline });
+      /* ⛔⛔ ATOMIC INIT+MINT (Liquidity = Launch). needsInit ⇒ POSM multicall(initializePool, mint).
+       *    Sending initialize alone left an empty engraved pool if mint was refused. Fail-closed
+       *    if price missing — never guess sqrtPrix at send time. */
+      if (s.needsInit || plan.needsInit) {
+        if (plan.sqrtPrix === null || plan.sqrtPrix === undefined) {
+          dire('⛔ Cannot initialize+mint — starting price not measured. NOTHING was sent.', 'bad');
+          afficherTx('fail', s.nom);
+          return;
+        }
+        data = encodeMulticall([encodeInitializePool(plan.cle, plan.sqrtPrix), data]);
+        dire('This step creates the pool AND mints in ONE transaction — a refuse leaves nothing half-done (no empty pool).', 'warn');
+      }
     }
     afficherTx('wallet', s.nom);
     /* ⛔ SEULE L ETAPE D ENVELOPPE PORTE DE LA VALEUR, et elle porte EXACTEMENT ce qui manque.
