@@ -1,4 +1,4 @@
-# Tokenized Block
+# Tokenized Block · Tokenized-Block.app
 
 Build a block — name, symbol, decimals, supply, description, colour — and it becomes a **B-20
 native token on Base**.
@@ -67,5 +67,11 @@ Mechanics only from the Zero 1 dig (no scoreboards, no invented revenue):
 | **P1 / P4** Create CTA packet | Network (Practice/Real), irreversibility one-liner, link to **What you will sign** (gas already there). |
 | **P2** bounded re-read | After create: max **3** eth_getCode re-reads; same empty fingerprint twice → **Blocked** (honest message, no RPC spam). |
 
-Status is never inferred from broadcast alone — green / Ready-to-Launch only after chain re-read sees code. No platform fee, no custody. METHODE: no undated ARR/MRR claims.
+Status is never inferred from broadcast alone — green / Ready-to-Launch only after chain re-read sees code. **Custody:** none. **Network gas** → Base validators/builders (cannot redirect). **Real Create** charges a separate **0.001 ETH** Tokenized Block service fee to `0x37eb9b7ce0b51fe12fbf092026e001918128580a` (not gas); **Practice = 0**. METHODE: no undated ARR/MRR claims.
+
+## Brand / host (2026-09-07 overnight)
+
+- **Public brand:** Tokenized-Block.app
+- **Live host until DNS:** `https://tokenized-block.github.io/` (tokenized-block.app had no A/AAAA as of 2026-09-07 — do not flip farcaster homeUrl yet)
+- **Fee wallet (all Tokenized Block fees):** `0x37eb9b7ce0b51fe12fbf092026e001918128580a`
 

@@ -3,18 +3,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<title>TokenizedBlock</title>
+<title>Tokenized Block · Tokenized-Block.app</title>
 <!-- ══ MINI APP BASE / FARCASTER ═══════════════════════════════════════════════════════════════
      ⛔ Le nom de la balise et la forme du JSON sont LUS dans la spec, pas recites :
         `fc:miniapp` est l actuel, `fc:frame` reste pour la compatibilite ascendante, et
         `button.action.type` doit valoir exactement `launch_miniapp`.
      ⚠️ Les URL sont ABSOLUES et pointent le domaine servi. Un chemin relatif casserait l apercu :
         l apercu est construit par un serveur tiers qui n a aucun contexte de page. -->
-<meta property="og:title" content="TokenizedBlock">
+<meta property="og:title" content="Tokenized Block · Tokenized-Block.app">
 <meta property="og:description" content="Build a block. It becomes a B-20 token on Base — with no admin and no minter.">
 <meta property="og:image" content="https://tokenized-block.github.io/embed.png">
-<meta name="fc:miniapp" content='{"version":"1","imageUrl":"https://tokenized-block.github.io/embed.png","button":{"title":"Build a block","action":{"type":"launch_miniapp","url":"https://tokenized-block.github.io/","name":"TokenizedBlock","splashImageUrl":"https://tokenized-block.github.io/splash.png","splashBackgroundColor":"#000000"}}}'>
-<meta name="fc:frame" content='{"version":"1","imageUrl":"https://tokenized-block.github.io/embed.png","button":{"title":"Build a block","action":{"type":"launch_miniapp","url":"https://tokenized-block.github.io/","name":"TokenizedBlock","splashImageUrl":"https://tokenized-block.github.io/splash.png","splashBackgroundColor":"#000000"}}}'>
+<meta name="fc:miniapp" content='{"version":"1","imageUrl":"https://tokenized-block.github.io/embed.png","button":{"title":"Build a block","action":{"type":"launch_miniapp","url":"https://tokenized-block.github.io/","name":"Tokenized-Block.app","splashImageUrl":"https://tokenized-block.github.io/splash.png","splashBackgroundColor":"#000000"}}}'>
+<meta name="fc:frame" content='{"version":"1","imageUrl":"https://tokenized-block.github.io/embed.png","button":{"title":"Build a block","action":{"type":"launch_miniapp","url":"https://tokenized-block.github.io/","name":"Tokenized-Block.app","splashImageUrl":"https://tokenized-block.github.io/splash.png","splashBackgroundColor":"#000000"}}}'>
 <style>
 /* ══ BLEU NUIT ═════════════════════════════════════════════════════════════════════════════════
  * ⚠️ RETOUR AU BLEU NUIT, DEMANDE. Le noir integral a ete essaye puis ecarte : c est un choix
@@ -446,6 +446,11 @@ background:var(--bg2);font-size:13.5px;line-height:1.5;color:var(--fg)}
 #ctaPacket .ctaGas.real .ctaGasLab{color:var(--warn)}
 #ctaPacket .ctaGas.missing{border-color:#7a2a2a;background:#2a1212;color:#f0c0c0;font-weight:700}
 #ctaPacket .ctaGas a{color:#7fb0ff}
+#ctaPacket .ctaFee{margin:8px 0 0;padding:10px 12px;border-radius:10px;border:1px solid var(--line);
+background:var(--bg2);font-size:13px;line-height:1.5;color:var(--fg)}
+#ctaPacket .ctaFee.real{border-color:#7a4a12;background:#3a2410;color:#f0dcc0;font-weight:600}
+#ctaPacket .ctaFee .ctaFeeLab{font-weight:800;margin-right:6px}
+#ctaPacket .ctaFee a{color:#7fb0ff}
 #fiche .row.gasHot .k{color:var(--warn);font-weight:800}
 #fiche .row.gasHot .v{font-weight:600}
 button.act{border-radius:12px;padding:18px 16px;font-size:16.5px;min-height:52px;margin-top:6px;letter-spacing:.01em}
@@ -581,7 +586,7 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
 <main>
 <header>
   <svg id="marque" viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg"></svg>
-  <div><h1>Tokenized Block</h1><p class="sub">Build a block → B-20 on Base · no admin, no minter.</p></div>
+  <div><h1>Tokenized Block</h1><p class="sub">Tokenized-Block.app · Build a block → B-20 on Base · no admin, no minter.</p></div>
 </header>
 
 <div class="tabs">
@@ -783,10 +788,12 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
 <div id="ctaPacket">
   <p class="ctaLine"><span class="ctaNet" id="ctaNet">Network: Practice · Base Sepolia</span>
   <span class="ctaSep">·</span>
-  <span class="ctaIrr">Permanent · gas only · no admin</span>
+  <span class="ctaIrr" id="ctaIrr">Permanent · Practice: no Tokenized Block fee · no admin</span>
   <span class="ctaSep">·</span>
   <a class="ctaPtr" href="#carteASigner">What you will sign</a></p>
-  <p class="ctaGas" id="ctaGas" hidden></p>
+  <!-- Overnight economy 2026-09-07: mint cost panel — network gas ≠ Tokenized Block fee. -->
+  <p class="ctaGas on" id="ctaGas"></p>
+  <p class="ctaFee" id="ctaFee"></p>
 </div>
 <!-- Soft-gate after Create mined + empty eth_getCode / Blocked: stop blind second Create.
      Fail-closed honesty — no explorer API; user must confirm they checked the address link. -->
@@ -837,8 +844,9 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
 
 <!-- Compact trust strip — does not fight the Create CTA -->
 <div id="warningsStrip" role="note">
-  <div class="wItem"><b>No key here</b> — this page presents the tx; your wallet signs.</div>
+  <div class="wItem"><b>No key here</b> — this page presents the tx; your wallet signs. No custody.</div>
   <div class="wItem"><b>No admin / no minter</b> — supply = cap; name, logo, description permanent.</div>
+  <div class="wItem"><b>Fees</b> — network gas → Base validators (not us). Real Create: separate 0.001 ETH Tokenized Block service fee → fee wallet. Practice: 0.</div>
   <div class="wItem"><b>Re-read only</b> — state comes from the chain, not from “sent”.</div>
 </div>
 
@@ -1203,14 +1211,25 @@ function majCtaPacket() {
   el.textContent = practice
     ? 'Network: Practice · Base Sepolia (free test ETH)'
     : 'Network: Real · Base mainnet (real ETH)';
+  const irr = $('#ctaIrr');
+  if (irr) {
+    irr.textContent = practice
+      ? 'Permanent · Practice: no Tokenized Block fee · no admin'
+      : 'Permanent · Real: 0.001 ETH service fee + network gas · no admin';
+  }
+  majCtaFee();
+  const btn = $('#agir');
+  if (btn && compte) {
+    btn.textContent = practice
+      ? 'Create the block'
+      : 'Create — 0.001 ETH service fee + gas';
+  }
 }
 
 /**
- * Photo / heavy URI Create gas salience (GROK-SUPER residual #4 / MAINNET dig #9).
- * Estimate refuse-if-missing already gates send. This forces the MEASURED gas number onto the
- * primary Create CTA band when a photo is attached or eth_estimateGas reports multi-M gas —
- * so Real users cannot miss it behind collapsed « What you will sign ».
- * ⛔ Numbers come only from `estimerCout` (eth_estimateGas / eth_gasPrice). Never invent.
+ * Mint cost panel — ALWAYS visible (overnight economy 2026-09-07).
+ * Network gas from estimerCout only (never invent). Tokenized Block service fee is separate
+ * and must never be marketed as "gas". Photo/heavy URI keeps Real warn styling.
  */
 function createMetaLourd(cout) {
   const photo = !!(typeof photoChoisie === 'string' && photoChoisie.startsWith('data:'));
@@ -1218,46 +1237,66 @@ function createMetaLourd(cout) {
   return photo || grosGaz;
 }
 
+function majCtaFee() {
+  const el = $('#ctaFee');
+  if (!el) return;
+  const practice = chaine === 84532;
+  const wei = createServiceFeeWei();
+  const lien = '<a class="ctaPtr" href="' + feeWalletScanUrl() + '" target="_blank" rel="noopener">'
+    + FEE_WALLET.slice(0, 6) + '…' + FEE_WALLET.slice(-4) + '</a>';
+  el.classList.toggle('real', !practice && wei > 0n);
+  if (practice || wei === 0n) {
+    el.innerHTML = '<span class="ctaFeeLab">Tokenized Block service fee</span>'
+      + '<b>0</b> on Practice'
+      + '<br><span class="dim">Network gas (when you Create) goes to Base validators/builders — '
+      + 'it cannot be redirected to Tokenized Block. Fee wallet (Real only): ' + lien + '.</span>';
+  } else {
+    el.innerHTML = '<span class="ctaFeeLab">Tokenized Block service fee</span>'
+      + '<b>0.001 ETH</b> — separate transfer to ' + lien
+      + ' <span class="dim">(Basescan)</span>'
+      + '<br><span class="dim">This is a Tokenized Block service fee (subscription recovery), '
+      + '<b>not</b> network gas. Network gas still goes to Base validators/builders and cannot '
+      + 'be redirected here. Create will not open until this transfer confirms.</span>';
+  }
+}
+
 function majCtaGas(cout) {
   const el = $('#ctaGas');
   if (!el) return;
   const practice = chaine === 84532;
   const lourd = createMetaLourd(cout);
-  el.classList.remove('on', 'real', 'missing');
-  if (!lourd) {
-    el.hidden = true;
-    el.innerHTML = '';
-    return;
-  }
-  el.hidden = false;
+  el.classList.remove('real', 'missing');
   el.classList.add('on');
-  if (!practice) el.classList.add('real');
+  el.hidden = false;
+  if (!practice && lourd) el.classList.add('real');
   const pourquoi = (typeof photoChoisie === 'string' && photoChoisie.startsWith('data:'))
     ? (practice
         ? 'Photo / on-chain metadata makes Create heavier (Practice — test ETH).'
         : 'Photo / on-chain metadata is engraved forever — most of this gas writes it inside the token.')
     : (practice
-        ? 'Large on-chain metadata — Create uses more gas (Practice — test ETH).'
-        : 'Large on-chain metadata — most of this gas writes it inside the token (Real ETH).');
+        ? 'Network gas estimate for Create (Practice — test ETH).'
+        : 'Network gas for Create — paid to Base validators/builders, not to Tokenized Block.');
   if (!cout || cout.gaz == null) {
     el.classList.add('missing');
-    el.innerHTML = '<span class="ctaGasLab">Gas</span>'
+    el.innerHTML = '<span class="ctaGasLab">Network gas</span>'
       + pastille('NOT MEASURED', 'warn')
       + ' — Create will <b>not</b> send until an estimate is available. '
-      + '<a class="ctaPtr" href="#carteASigner">What you will sign</a>';
-    if (!practice) {
+      + '<a class="ctaPtr" href="#carteASigner">What you will sign</a>'
+      + '<br><span class="dim">' + pourquoi + '</span>';
+    if (!practice && lourd) {
       const sd = $('#signDetails'); if (sd) sd.open = true;
     }
     return;
   }
   if (cout.prixInconnu) {
     el.classList.add('missing');
-    el.innerHTML = '<span class="ctaGasLab">Gas</span>'
+    el.innerHTML = '<span class="ctaGasLab">Network gas</span>'
       + formaterGas(cout.gaz) + ' gas · '
       + pastille('price NOT MEASURED', 'warn')
       + ' — Create will <b>not</b> send without a readable cost. '
-      + '<a class="ctaPtr" href="#carteASigner">What you will sign</a>';
-    if (!practice) {
+      + '<a class="ctaPtr" href="#carteASigner">What you will sign</a>'
+      + '<br><span class="dim">' + pourquoi + '</span>';
+    if (!practice && lourd) {
       const sd = $('#signDetails'); if (sd) sd.open = true;
     }
     return;
@@ -1265,14 +1304,13 @@ function majCtaGas(cout) {
   const wei = cout.gaz * cout.prix;
   const eth = formaterEth(wei);
   const signe = estArrondi(wei) ? '≈' : '=';
-  const lab = practice ? 'Gas estimate' : 'Gas (Real — measured)';
+  const lab = practice ? 'Network gas estimate' : 'Network gas (Real — measured)';
   el.innerHTML = '<span class="ctaGasLab">' + lab + '</span>'
     + formaterGas(cout.gaz) + ' gas × ' + formaterGas(cout.prix) + ' wei '
     + signe + ' <b>' + eth + ' ETH</b>'
     + '<br><span class="dim">' + pourquoi + ' Detail in '
     + '<a class="ctaPtr" href="#carteASigner">What you will sign</a>.</span>';
-  /* Real + heavy: open the signing card so the gas row is impossible to miss. */
-  if (!practice) {
+  if (!practice && lourd) {
     const sd = $('#signDetails'); if (sd) sd.open = true;
   }
 }
@@ -1334,6 +1372,31 @@ const RESEAUX = {
            secours: ['https://base.drpc.org', 'https://1rpc.io/base'] },
 };
 const FACTORY = '0xb20f000000000000000000000000000000000000';
+/**
+ * SITE HOST / BRAND (overnight economy 2026-09-07 Europe/Brussels)
+ * Display brand: Tokenized-Block.app (canonical public name).
+ * Live absolute URLs stay on github.io until DNS for tokenized-block.app resolves
+ * (checked 2026-09-07: NXDOMAIN / no A/AAAA). Do NOT point farcaster.json homeUrl
+ * at a dead domain — cutover = DNS live first, then flip SITE_ORIGIN_LIVE.
+ */
+const SITE_BRAND = 'Tokenized-Block.app';
+const SITE_ORIGIN_LIVE = 'https://tokenized-block.github.io';
+const SITE_ORIGIN_FUTURE = 'https://tokenized-block.app'; /* DNS not live as of 2026-09-07 */
+/**
+ * Tokenized Block Create service fee (subscription recovery) — NOT gas.
+ * Network gas always goes to Base validators/builders; it CANNOT be redirected here.
+ * Real (8453): fixed 0.001 ETH as a separate visible ETH transfer to FEE_WALLET before Create.
+ * Practice (84532): 0. Fail-closed if the fee transfer fails — Create is not sent.
+ */
+const FEE_WALLET = '0x37eb9b7ce0b51fe12fbf092026e001918128580a';
+const REAL_CREATE_SERVICE_FEE_WEI = 1000000000000000n; /* 0.001 ETH */
+function createServiceFeeWei() {
+  return chaine === 8453 ? REAL_CREATE_SERVICE_FEE_WEI : 0n;
+}
+function feeWalletScanUrl() {
+  const scan = (RESEAUX[chaine] && RESEAUX[chaine].scan) || 'https://basescan.org';
+  return scan + '/address/' + FEE_WALLET;
+}
 let chaine = 84532, compte = null, dernier = null;
 /* Soft-gate session state — declared early so relireJeton (above) never hits TDZ. */
 let createSoftGate = null; /* { adr, hash, unlocked } | null */
@@ -1987,7 +2050,17 @@ async function rafraichir() {
   $('#fiche').innerHTML =
       ligne('network', RESEAUX[chaine].nom + ' (' + chaine + ')')
     + ligne('to', '<span class="mono">' + FACTORY + '</span>')
-    + ligne('value', '0')
+    + ligne('value', '0 (Create calldata — factory)')
+    + ligne('TB service fee', (() => {
+        const w = createServiceFeeWei();
+        if (w === 0n) return pastille('0 — Practice', 'ok')
+          + '<br><span class="dim">No Tokenized Block fee on Practice. Network gas ≠ TB fee.</span>';
+        return pastille('0.001 ETH', 'warn')
+          + ' → <a class="mono" href="' + feeWalletScanUrl() + '" target="_blank" rel="noopener">'
+          + FEE_WALLET + '</a>'
+          + '<br><span class="dim">Separate ETH transfer <b>before</b> Create. Not gas. '
+          + 'Network gas goes to Base validators/builders and cannot be redirected to this wallet.</span>';
+      })())
     + ligne('data', '<span class="mono">' + dataHead + '</span> <span class="dim">(' + dataBytes + ' bytes)</span>'
         + '<button type="button" class="dataExpand" id="dataExpandBtn">Show full data</button>'
         + '<div class="dataFull" id="dataFullBox">' + data + '</div>')
@@ -2624,7 +2697,7 @@ $('#ouvrirLancement').onclick = () => {
   if (ns) ns.scrollIntoView({ behavior: 'smooth', block: 'start' });
   $('#lancBlock') && $('#lancBlock').focus();
   dire('Block address filled for Launch — work out the launch, then one transaction.\n'
-    + 'Token-only LP: buyers bring the ETH. No platform fee, no custody.', 'ok');
+    + 'Token-only LP: buyers bring the ETH. Launch itself has no Tokenized Block fee / no custody. Real Create service fee (if paid) is separate.', 'ok');
 };
 
 /* ⛔ Le lecteur vient de lecteur.js — le MEME module que la suite de tests exerce. Une copie
@@ -5286,7 +5359,9 @@ $('#agir').onclick = async () => {
   try {
     if (!compte) {
       [compte] = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      $('#agir').textContent = 'Create the block';
+      $('#agir').textContent = (chaine === 8453)
+        ? 'Create — 0.001 ETH service fee + gas'
+        : 'Create the block';
       /* ⛔ LE BLOCK DE CETTE PERSONNE, AVANT MEME QU ELLE TOUCHE QUOI QUE CE SOIT. Derive de son
        *    adresse, donc stable et reconnaissable. N ecrase rien si elle a deja regle l apparence. */
       appliquerBlockPersonnel(compte);
@@ -5409,8 +5484,40 @@ $('#agir').onclick = async () => {
         + 'Check the new address in « What you will sign », tick the gate, then Create again.\n'
         + (adr || ''), 'bad');
     }
+    /* ⛔ OVERNIGHT ECONOMY 2026-09-07: Real Create service fee BEFORE Create.
+     * Separate visible ETH transfer to FEE_WALLET — never marketed as gas.
+     * Fail-closed: if fee transfer fails / is declined / receipt ≠ 0x1, Create is NOT sent. */
+    const fraisWei = createServiceFeeWei();
+    if (fraisWei > 0n) {
+      dire('Real Create: first a Tokenized Block service fee of 0.001 ETH to\n'
+        + FEE_WALLET
+        + '\n(This is NOT network gas — gas still goes to Base validators.)\n'
+        + 'Create will open only after this transfer confirms.', 'warn');
+      afficherTx('wallet', 'Confirm the 0.001 ETH Tokenized Block service fee (not gas).');
+      const frais = await envoyerTx({
+        to: FEE_WALLET,
+        data: '0x',
+        value: '0x' + fraisWei.toString(16),
+        nom: 'Tokenized Block Create service fee 0.001 ETH (not gas)'
+      });
+      if (!frais || !frais.ok) {
+        setFunnel('Blocked');
+        afficherTx('fail', 'Service fee failed — Create NOT sent');
+        return dire('⛔ Create was NOT sent — Tokenized Block service fee did not confirm.\n'
+          + 'No Create calldata was broadcast. Fix the fee transfer (or decline), then try again.\n'
+          + 'Fee wallet: ' + FEE_WALLET + '\nAmount: 0.001 ETH (service fee, not gas).', 'bad');
+      }
+      dire('Service fee confirmed: ' + frais.hash
+        + '\nNext: Create the block (factory calldata, value 0 — network gas separate).', 'ok');
+    }
+    const feeNote = fraisWei > 0n
+      ? '\nTokenized Block service fee 0.001 ETH already confirmed (separate tx).'
+      : '\nPractice: no Tokenized Block service fee.';
     dire('Your wallet will open.\nGas limit from estimate + 25% margin: ' + gaz.toString()
-      + ' (estimate ' + mesure.gaz.toString() + ').\nRe-read the destination and the start of `data` before accepting.', 'warn');
+      + ' (estimate ' + mesure.gaz.toString() + ').'
+      + feeNote
+      + '\nRe-read the destination and the start of `data` before accepting.\n'
+      + 'Network gas → Base validators (not Tokenized Block).', 'warn');
     afficherTx('wallet', 'Confirm the creation in your wallet.');
     const hash = await window.ethereum.request({ method: 'eth_sendTransaction',
       params: [{ from: compte, to: FACTORY, value: '0x0', data: dernier.data, gas: '0x' + gaz.toString(16) }] });
