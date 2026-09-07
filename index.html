@@ -425,6 +425,17 @@ border-radius:50%;font-size:10px;font-weight:800;background:#0a1633;color:#7a92b
 #ctaPacket .ctaSep{color:var(--dim);opacity:.7}
 #ctaPacket .ctaPtr{color:#7fb0ff;font-weight:600;text-decoration:none}
 #ctaPacket .ctaPtr:hover{text-decoration:underline}
+/* Photo / heavy URI Create: gas must be visible on the CTA band, not only inside collapsed « What you will sign ». */
+#ctaPacket .ctaGas{display:none;margin:8px 0 0;padding:10px 12px;border-radius:10px;border:1px solid var(--line);
+background:var(--bg2);font-size:13.5px;line-height:1.5;color:var(--fg)}
+#ctaPacket .ctaGas.on{display:block}
+#ctaPacket .ctaGas .ctaGasLab{font-weight:800;margin-right:6px}
+#ctaPacket .ctaGas.real{border-color:#7a4a12;background:#3a2410;color:#f0dcc0;font-size:14.5px;font-weight:600}
+#ctaPacket .ctaGas.real .ctaGasLab{color:var(--warn)}
+#ctaPacket .ctaGas.missing{border-color:#7a2a2a;background:#2a1212;color:#f0c0c0;font-weight:700}
+#ctaPacket .ctaGas a{color:#7fb0ff}
+#fiche .row.gasHot .k{color:var(--warn);font-weight:800}
+#fiche .row.gasHot .v{font-weight:600}
 button.act{border-radius:12px;padding:18px 16px;font-size:16.5px;min-height:52px;margin-top:6px;letter-spacing:.01em}
 button.act.sec{opacity:.72;border-color:#243556;color:var(--dim);font-weight:600;padding:12px 14px;min-height:44px}
 button.act.sec:hover{opacity:1;color:var(--fg)}
@@ -753,13 +764,16 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
 </details>
 
 <!-- ⛔ P1/P4 dig-adapt: evidence packet on the Create CTA — network, irreversibility, link to
-     existing « What you will sign » (gas lives there). Strengthen visibility; do not bury in Advanced. -->
+     « What you will sign ». Photo/heavy URI: #ctaGas forces the measured gas line on the band. -->
+<!-- ⛔ P1/P4 + photo/heavy URI dig: gas still lives in « What you will sign », AND the CTA band
+     forces a visible gas line when photo / large metadata (estimate from eth_estimateGas only). -->
 <div id="ctaPacket">
   <p class="ctaLine"><span class="ctaNet" id="ctaNet">Network: Practice · Base Sepolia</span>
   <span class="ctaSep">·</span>
   <span class="ctaIrr">Permanent · gas only · no admin</span>
   <span class="ctaSep">·</span>
   <a class="ctaPtr" href="#carteASigner">What you will sign</a></p>
+  <p class="ctaGas" id="ctaGas" hidden></p>
 </div>
 <!-- Soft-gate after Create mined + empty eth_getCode / Blocked: stop blind second Create.
      Fail-closed honesty — no explorer API; user must confirm they checked the address link. -->
@@ -1157,6 +1171,78 @@ function majCtaPacket() {
   el.textContent = practice
     ? 'Network: Practice · Base Sepolia (free test ETH)'
     : 'Network: Real · Base mainnet (real ETH)';
+}
+
+/**
+ * Photo / heavy URI Create gas salience (GROK-SUPER residual #4 / MAINNET dig #9).
+ * Estimate refuse-if-missing already gates send. This forces the MEASURED gas number onto the
+ * primary Create CTA band when a photo is attached or eth_estimateGas reports multi-M gas —
+ * so Real users cannot miss it behind collapsed « What you will sign ».
+ * ⛔ Numbers come only from `estimerCout` (eth_estimateGas / eth_gasPrice). Never invent.
+ */
+function createMetaLourd(cout) {
+  const photo = !!(typeof photoChoisie === 'string' && photoChoisie.startsWith('data:'));
+  const grosGaz = !!(cout && cout.gaz != null && cout.gaz > 1000000n);
+  return photo || grosGaz;
+}
+
+function majCtaGas(cout) {
+  const el = $('#ctaGas');
+  if (!el) return;
+  const practice = chaine === 84532;
+  const lourd = createMetaLourd(cout);
+  el.classList.remove('on', 'real', 'missing');
+  if (!lourd) {
+    el.hidden = true;
+    el.innerHTML = '';
+    return;
+  }
+  el.hidden = false;
+  el.classList.add('on');
+  if (!practice) el.classList.add('real');
+  const pourquoi = (typeof photoChoisie === 'string' && photoChoisie.startsWith('data:'))
+    ? (practice
+        ? 'Photo / on-chain metadata makes Create heavier (Practice — test ETH).'
+        : 'Photo / on-chain metadata is engraved forever — most of this gas writes it inside the token.')
+    : (practice
+        ? 'Large on-chain metadata — Create uses more gas (Practice — test ETH).'
+        : 'Large on-chain metadata — most of this gas writes it inside the token (Real ETH).');
+  if (!cout || cout.gaz == null) {
+    el.classList.add('missing');
+    el.innerHTML = '<span class="ctaGasLab">Gas</span>'
+      + pastille('NOT MEASURED', 'warn')
+      + ' — Create will <b>not</b> send until an estimate is available. '
+      + '<a class="ctaPtr" href="#carteASigner">What you will sign</a>';
+    if (!practice) {
+      const sd = $('#signDetails'); if (sd) sd.open = true;
+    }
+    return;
+  }
+  if (cout.prixInconnu) {
+    el.classList.add('missing');
+    el.innerHTML = '<span class="ctaGasLab">Gas</span>'
+      + formaterGas(cout.gaz) + ' gas · '
+      + pastille('price NOT MEASURED', 'warn')
+      + ' — Create will <b>not</b> send without a readable cost. '
+      + '<a class="ctaPtr" href="#carteASigner">What you will sign</a>';
+    if (!practice) {
+      const sd = $('#signDetails'); if (sd) sd.open = true;
+    }
+    return;
+  }
+  const wei = cout.gaz * cout.prix;
+  const eth = formaterEth(wei);
+  const signe = estArrondi(wei) ? '≈' : '=';
+  const lab = practice ? 'Gas estimate' : 'Gas (Real — measured)';
+  el.innerHTML = '<span class="ctaGasLab">' + lab + '</span>'
+    + formaterGas(cout.gaz) + ' gas × ' + formaterGas(cout.prix) + ' wei '
+    + signe + ' <b>' + eth + ' ETH</b>'
+    + '<br><span class="dim">' + pourquoi + ' Detail in '
+    + '<a class="ctaPtr" href="#carteASigner">What you will sign</a>.</span>';
+  /* Real + heavy: open the signing card so the gas row is impossible to miss. */
+  if (!practice) {
+    const sd = $('#signDetails'); if (sd) sd.open = true;
+  }
 }
 
 /* Visual pass: CTA link opens the signing disclosure (hex/gas stay collapsed until asked). */
@@ -1835,7 +1921,12 @@ async function rafraichir() {
   const porteur = compte || '0x0000000000000000000000000000000000000001';
   let data;
   try { data = calldata(f, porteur); }
-  catch (e) { $('#fiche').innerHTML = ligne('error', e.message); return; }
+  catch (e) {
+    $('#fiche').innerHTML = ligne('error', e.message);
+    /* Photo may still be attached — surface fail-closed gas state on the CTA band. */
+    majCtaGas(null);
+    return;
+  }
   dernier = { f, data, porteur };
 
   /* ⛔ L adresse n est PAS calculee ici : elle est DEMANDEE au precompile. Une adresse que je
@@ -1868,7 +1959,7 @@ async function rafraichir() {
     + ligne('data', '<span class="mono">' + dataHead + '</span> <span class="dim">(' + dataBytes + ' bytes)</span>'
         + '<button type="button" class="dataExpand" id="dataExpandBtn">Show full data</button>'
         + '<div class="dataFull" id="dataFullBox">' + data + '</div>')
-    + ligne('gas', cout.texte)
+    + ligne('gas', cout.texte).replace('class="row"', 'class="row' + (createMetaLourd(cout) ? ' gasHot' : '') + '"')
     + (f.refusSupply
         ? ligne('supply', pastille('NOT A WHOLE NUMBER', 'bad')
             + '<br><span class="dim">You typed <b>' + enTexte(f.refusSupply.tape) + '</b> — '
@@ -1904,6 +1995,8 @@ async function rafraichir() {
   /* Track address shown in « What you will sign » for Create honesty gate. */
   if (adr) noterAdresseCreateAffichee(adr);
   gardeMainnet();
+  majCtaPacket();
+  majCtaGas(cout);
 }
 
 /**
