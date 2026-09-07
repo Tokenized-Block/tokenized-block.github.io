@@ -815,6 +815,7 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
          echange, aucun tiers. -->
     <label for="poolDevise">Quote currency</label>
     <select id="poolDevise" style="width:100%;padding:10px;border-radius:9px;background:#0d1220;color:#dce6f5;border:1px solid #1c2740;font-size:14px"></select>
+    <p class="expl" id="poolDeviseNote" style="margin:6px 0 0;color:#f0c674"></p>
     <label for="poolValeur">Starting value of the whole supply</label>
     <input id="poolValeur" value="10000" inputmode="numeric">
     <p class="expl" style="margin:6px 0 0;color:#f0c674">If the pool is empty, this starting value engraves the price forever — it cannot be reinitialized. Initialize + mint are ONE transaction (same as Launch) — refusing mid-way cannot leave an empty pool.</p>
@@ -2121,7 +2122,7 @@ function peuplerDevises() {
   sel.innerHTML = liste.map((d) => `<option value="${d.adr}">${d.nom}`
     + (estEthNatif(d.adr) ? ' — native, same pool as Launch (no wrap)'
       : d.enveloppable ? ' — wrap your own ETH, no exchange needed'
-      : ' — you must already hold it')
+      : ' — you must ALREADY hold it (ETH alone cannot fund this pool; app does not buy it)')
     + '</option>').join('');
   if (liste.some((d) => d.adr.toLowerCase() === String(avant).toLowerCase())) sel.value = avant;
   /* ⛔⛔ L ETIQUETTE PORTE SON UNITE, ET C EST UNE CORRECTION. « Starting value of the whole
@@ -2134,7 +2135,29 @@ function peuplerDevises() {
   const d = liste.find((x) => x.adr.toLowerCase() === String(sel.value).toLowerCase()) || liste[0];
   const lab = document.querySelector('label[for="poolValeur"]');
   if (lab && d) lab.textContent = 'Starting value of the whole supply — in whole ' + d.nom
-    + ' (not wei)';
+    + ' (human units, not raw wei / not 10^decimals)';
+  /* ⛔ USDC (et tout quote non-enveloppable) : le champ depot est en unites HUMAINES.
+   *    Taper 1000000 = un million de USDC, PAS 1 USDC en unites brutes (6 decimals). */
+  const labLiq = document.querySelector('label[for="poolLiq"]');
+  if (labLiq && d) {
+    labLiq.textContent = estEthNatif(d.adr)
+      ? 'How much to put in (whole ETH — human units)'
+      : d.enveloppable
+        ? 'How much to put in (whole WETH — human units; wrap step if needed)'
+        : 'How much to put in (whole ' + d.nom + ' — human units; NOT raw 10^decimals units)';
+  }
+  const note = $('#poolDeviseNote');
+  if (note && d) {
+    if (estEthNatif(d.adr)) {
+      note.textContent = 'Same PoolKey as Launch (native ETH · fee 0 · spacing 200). No wrap.';
+    } else if (d.enveloppable) {
+      note.textContent = 'WETH path is distinct from Launch. Wrap uses your ETH — one tx, no exchange.';
+    } else {
+      note.textContent = '⚠ ' + d.nom + ' is not wrap-ETH. ETH alone cannot fund this pool. '
+        + 'You must already hold ' + d.nom + ' in this wallet. This app does not buy or bridge '
+        + d.nom + '. Decimals are read on-chain at Check (USDC is typically 6, not 18).';
+    }
+  }
 }
 /* ⛔ CET APPEL EST DESCENDU EN BAS DU MODULE. Ici, il s executait AVANT la declaration de
  * `DEVISES` qu il lit — `Cannot access 'DEVISES' before initialization`, et toute la page restait
@@ -2646,6 +2669,23 @@ async function construirePlan() {
     box.innerHTML = ligne('state', pastille(quoi[0], 'warn')) + ligne('why', enTexte(String(quoi[1] || '')));
     return null;
   }
+  /* ⛔ ABSURD HUMAN AMOUNT — fail-closed. Field is HUMAN units. Pasting raw USDC base units
+   *    (e.g. 1000000 intending « 1 USDC ») would ask for ONE MILLION USDC. Refuse ≥ 1e6 whole
+   *    quote units rather than let Check proceed toward mint. No silent rescale. */
+  if (eDep.etat === 'OK' && decQ !== null) {
+    const unitesEntieres = eDep.valeur / (10n ** BigInt(decQ));
+    if (unitesEntieres >= 1000000n) {
+      box.innerHTML = ligne('state', pastille('AMOUNT TOO LARGE — REFUSED', 'bad'))
+        + ligne('you typed', enTexte(texteDepot) + ' ' + enTexte(v.quoteNom)
+          + '  <span class="dim">(human units · quote decimals '
+          + enTexte(String(decQ)) + ' read on-chain)</span>')
+        + ligne('why', '≥ 1,000,000 whole ' + enTexte(v.quoteNom)
+          + ' is refused here. If you pasted raw on-chain units (USDC has 6 decimals: 1 USDC = '
+          + '1000000 raw), type the human amount instead (example: 1 or 0.001).'
+          + '<br><span class="dim">This page will not rescale a raw paste into a human amount.</span>');
+      return null;
+    }
+  }
 
   /* ⛔ L ETAPE ZERO : ENVELOPPER SON PROPRE ETH. Sans elle, un compte qui detient de l ETH et pas
    * de WETH voyait « Balance below the liquidity you asked for » sans savoir que le remede tenait
@@ -2806,10 +2846,25 @@ async function construirePlan() {
             ? ' — the public RPC throttled us. Click "Read the six steps" again in a few seconds.'
             : '') + '</span>'
         : ''));
+  /* ⛔ Quote non-enveloppable (USDC on Real): ETH alone cannot fund the pool; app does not buy it. */
+  const quoteExterne = !quoteNatif && !v.enveloppable;
   let vue = ligne('pair', enTexte(v.quoteNom) + ' / block')
     + ligne('pool', 'fee ' + (cle.fee / 10000) + '% · spacing ' + cle.tickSpacing
       + (quoteNatif ? '  <span class="dim">(same key as Launch — native ETH)</span>'
         : '  <span class="dim">(WETH/USDC path — distinct from Launch)</span>'))
+    + ligne('quote decimals', decQ === null
+        ? pastille('NOT MEASURED', 'warn')
+        : (enTexte(String(decQ))
+          + '  <span class="dim">(read on-chain'
+          + (quoteExterne ? ' — USDC is typically 6, not 18; human field ≠ raw units' : '')
+          + ')</span>'))
+    + ligne('block decimals', decB === null ? pastille('NOT MEASURED', 'warn') : enTexte(String(decB)))
+    + (quoteExterne
+        ? ligne('⚠ hold ' + v.quoteNom, '<b>ETH alone cannot fund a ' + enTexte(v.quoteNom)
+          + ' pool.</b> You must already hold ' + enTexte(v.quoteNom)
+          + ' in this wallet. This app does <b>not</b> buy, wrap, or bridge '
+          + enTexte(v.quoteNom) + '.')
+        : '')
     + prixVue
     /* ⛔ AFFICHER CE QUE LA POSITION EXIGE, pas seulement la liquidite demandee. `L` ne se
      * compare a aucun solde ; les deux montants ci-dessous, si. */
@@ -2831,10 +2886,12 @@ async function construirePlan() {
               + '<br><span class="dim">Your deposit follows the pool, not the field above.</span>');
           })()
         : '')
-    + ligne('this position needs', besoinB === null || besoinQ === null
+        + ligne('this position needs', besoinB === null || besoinQ === null || decB === null || decQ === null
         ? pastille('NEEDS A PRICE FIRST', 'warn')
-        : besoinB.toString() + ' block  <span class="dim">+</span>  ' + besoinQ.toString() + ' ' + v.quoteNom
-          + (prixReel !== null ? '  <span class="dim">(at the pool\'s actual price)</span>' : ''))
+        : formaterUnites(besoinB, decB) + ' block  <span class="dim">+</span>  '
+          + formaterUnites(besoinQ, decQ) + ' ' + v.quoteNom
+          + '  <span class="dim">(human · raw ' + besoinB.toString() + ' + ' + besoinQ.toString()
+          + (prixReel !== null ? ' · at the pool\'s actual price' : '') + ')</span>')
     /* ⛔⛔ CETTE LIGNE MENTAIT. Elle affichait `L / 10^decimales` suivi du nom de la devise —
      *    « you are asking for 0.037188 WETH » — alors que la position n en exige que 0,001176.
      *    `L` EST UN PARAMETRE DE COURBE, PAS UN MONTANT : les deux ne coincident qu au prix 1,
@@ -2849,9 +2906,15 @@ async function construirePlan() {
     /* ⛔ « — » NE DIT PAS POURQUOI. Un tiret se lit comme « zero » ou comme « ca a rate » ; ici
      * c est « personne n est connecte », ce qui appelle un geste precis. Trois etats, pas deux. */
     + ligne('your block', !compte ? pastille('CONNECT TO SEE YOURS', 'dim')
-        : sB === null ? pastille('NOT MEASURED', 'warn') : sB.toString() + (besoinB !== null && sB < besoinB ? '  ⛔ < needed' : ''))
+        : sB === null ? pastille('NOT MEASURED', 'warn')
+        : (decB === null ? sB.toString() : formaterUnites(sB, decB))
+          + (besoinB !== null && sB < besoinB ? '  ⛔ < needed' : '')
+          + (decB !== null ? '  <span class="dim">(decimals ' + decB + ')</span>' : ''))
     + ligne('your ' + v.quoteNom, !compte ? pastille('CONNECT TO SEE YOURS', 'dim')
-        : sQ === null ? pastille('NOT MEASURED', 'warn') : sQ.toString() + (besoinQ !== null && sQ < besoinQ ? '  ⛔ < needed' : ''));
+        : sQ === null ? pastille('NOT MEASURED', 'warn')
+        : (decQ === null ? sQ.toString() : formaterUnites(sQ, decQ))
+          + (besoinQ !== null && sQ < besoinQ ? '  ⛔ < needed' : '')
+          + (decQ !== null ? '  <span class="dim">(decimals ' + decQ + ' · human, not raw)</span>' : ''));
   /* ⛔ UNE ETAPE SANS CALLDATA N EST PAS « A FAIRE ». Quand le prix n a pas pu etre calcule,
    * l etape 1 porte `data: null` — et elle s affichait quand meme « TO DO », donc offerte au
    * clic avec un calldata nul. « Je ne peux pas construire cette etape » et « il reste a la
@@ -2902,12 +2965,31 @@ async function construirePlan() {
   const soldeInconnu = compte && (sB === null || sQ === null) && (besoinB !== null || besoinQ !== null);
   /* ⛔ « la liquidite demandee » etait le mauvais repere : ce qui manque se compare a ce que la
    * POSITION exige, pas au nombre tape dans le champ. Les deux ne coincident qu au prix 1. */
-  if (manque) vue += ligne('⛔', 'Balance below what this position needs. That is the AMOUNT, not the block.');
+  if (manque) {
+    vue += ligne('⛔', 'Balance below what this position needs. That is the AMOUNT, not the block.');
+    if (quoteExterne && sQ !== null && besoinQ !== null && sQ < besoinQ) {
+      vue += ligne('⛔ ' + v.quoteNom, 'You need ' + (decQ !== null ? formaterUnites(besoinQ, decQ) : besoinQ.toString())
+        + ' ' + enTexte(v.quoteNom) + ' in this wallet. ETH alone cannot fund this pool. '
+        + 'Get ' + enTexte(v.quoteNom) + ' via a transfer or a swap elsewhere — this app does not buy it.');
+    }
+  }
   /* ⛔ Dire l inconnu AUSSI dans la vue, pas seulement sur le bouton : l utilisateur lit la liste
    * avant de regarder le bouton, et un « NOT MEASURED » sans consequence affichee se lit comme un
    * detail cosmetique. */
-  else if (soldeInconnu) vue += ligne('⛔', 'Your balances could not be read, so nothing can confirm '
-    + 'you hold enough. That is NOT the same as having enough — read again before signing.');
+  else if (soldeInconnu) {
+    vue += ligne('⛔', 'Your balances could not be read, so nothing can confirm '
+      + 'you hold enough. That is NOT the same as having enough — read again before signing.');
+    if (quoteExterne && sQ === null) {
+      vue += ligne('⛔ ' + v.quoteNom + ' unread', enTexte(v.quoteNom)
+        + ' balance NOT MEASURED — mint stays closed. Re-read; do not sign blind on a USDC pool.');
+    }
+  }
+  /* ⛔ Zero USDC (or other hold-required quote) with a positive need: name the barrier, not just « manque ». */
+  if (quoteExterne && compte && sQ === 0n && besoinQ !== null && besoinQ > 0n) {
+    vue += ligne('⛔ 0 ' + v.quoteNom, 'Measured balance is zero. You must already hold '
+      + enTexte(v.quoteNom) + ' before Run / mint. This app does not buy or bridge '
+      + enTexte(v.quoteNom) + '.');
+  }
   /* ⛔ DIRE LE PLAFOND, PAS SEULEMENT « pas assez ». Un refus qui ne donne pas le chiffre
    * atteignable oblige l utilisateur a chercher par tatonnement — et chaque essai est un aller
    * simple vers le meme mur. */
@@ -2932,6 +3014,16 @@ async function construirePlan() {
    * a rate l etape 6 : bouton bloque, message renvoyant vers un blocage inexistant. */
   let empeche = raisonDeBloquer({ suivante, compte, manque, soldeInconnu,
     besoinsCalcules: besoinB !== null && besoinQ !== null && sqrtPrix !== null });
+  /* ⛔ USDC / hold-required quote: fail-closed with an honest CTA (no buy-USDC bridge invented). */
+  if (quoteExterne && compte && suivante) {
+    if (sQ === null) {
+      empeche = enTexte(v.quoteNom) + ' balance NOT MEASURED — re-read; will not mint blind';
+    } else if (sQ === 0n && besoinQ !== null && besoinQ > 0n) {
+      empeche = 'You hold 0 ' + v.quoteNom + ' — get some first (app does not buy it)';
+    } else if (besoinQ !== null && sQ < besoinQ) {
+      empeche = 'Not enough ' + v.quoteNom + ' — ETH cannot fund this pool';
+    }
+  }
   /* ⛔ PREFLIGHT : ON DEMANDE A LA CHAINE AVANT D OUVRIR LE WALLET.
    * Mesure du 2026-09-04 : `eth_call` sur `initialize` d une pool FRAICHE (Base mainnet) rend
    * `0x65316` sans rien ecrire — la chaine accepte nos octets avant toute signature. Un refus,
@@ -3015,7 +3107,7 @@ async function etatSwap() {
   const b20 = $('#swapToken').value.trim();
   if (!/^0x[0-9a-fA-F]{40}$/.test(b20)) { box.innerHTML = ligne('state', pastille('NOT AN ADDRESS', 'bad')); return null; }
   const dS = devise(chaine);
-  const v = dS ? { ...V4[chaine], quote: dS.adr, quoteNom: dS.nom } : null;
+  const v = dS ? { ...V4[chaine], quote: dS.adr, quoteNom: dS.nom, enveloppable: !!dS.enveloppable } : null;
   const ur = ROUTEUR[chaine], q = QUOTER[chaine];
   if (!v || !ur) { box.innerHTML = ligne('state', pastille('CHAIN NOT SUPPORTED', 'bad')); return null; }
   /* ⛔ Buy = depenser la devise (ETH/WETH/…) → recevoir des blocks. Sell = l inverse.
@@ -3056,6 +3148,18 @@ async function etatSwap() {
   }
   const montant = eM.etat === 'OK' ? eM.valeur : 0n;
   if (montant === 0n) { box.innerHTML = ligne('state', pastille('AMOUNT MUST BE > 0', 'bad')); return null; }
+  /* ⛔ Absurd human amount (same trap as Liquidity): raw-unit paste into human field. */
+  {
+    const unitesEntieres = montant / (10n ** BigInt(decIn));
+    if (unitesEntieres >= 1000000n) {
+      box.innerHTML = ligne('state', pastille('AMOUNT TOO LARGE — REFUSED', 'bad'))
+        + ligne('why', '≥ 1,000,000 whole units refused. If you pasted raw on-chain units '
+          + '(USDC decimals are typically 6: 1 USDC = 1000000 raw), type the human amount instead.'
+          + '<br><span class="dim">decimals in=' + enTexte(String(decIn)) + ' · typed '
+          + enTexte($('#swapMontant').value) + '</span>');
+      return null;
+    }
+  }
 
   /* ⛔⛔ MEME CLE QUE LAUNCH pour ETH natif — sinon Quoter lit une pool vide (NO QUOTE). */
   const cle = cleDePool(v.quote, b20, paramsClePourQuote(v.quote));
@@ -3070,6 +3174,7 @@ async function etatSwap() {
   const appel = (to, data) => rpc('eth_call', [{ to, data }, 'latest']);
   const valeurHex = entreeEstNatif ? ('0x' + montant.toString(16)) : null;
 
+  const quoteExterne = !quoteNatif && !v.enveloppable;
   let vue = ligne(acheter ? 'buying with' : 'selling',
       acheter
         ? (enTexte(formaterUnites(montant, decIn) + ' ' + v.quoteNom)
@@ -3085,7 +3190,15 @@ async function etatSwap() {
       + ' · ' + enTexte(v.quoteNom) + ' / block'
       + (quoteNatif
         ? '  <span class="dim">(Launch PoolKey)</span>'
-        : '  <span class="dim">(not the Launch pool unless you launched with this quote)</span>'));
+        : '  <span class="dim">(not the Launch pool unless you launched with this quote)</span>'))
+    + ligne('quote decimals', enTexte(String(decQuote))
+      + '  <span class="dim">(read on-chain'
+      + (quoteExterne ? ' — typically 6 for USDC, not 18' : '') + ')</span>')
+    + (quoteExterne && acheter
+        ? ligne('⚠ hold ' + v.quoteNom, '<b>Buy spends ' + enTexte(v.quoteNom)
+          + '.</b> ETH alone cannot fund this. You must already hold '
+          + enTexte(v.quoteNom) + '. This app does not buy or bridge it.')
+        : '');
 
   /* ── le quote : gratuit, et il dit si la pool est cotable AVANT tout le reste ── */
   let sortie = null;
@@ -3195,11 +3308,25 @@ async function etatSwap() {
   }
 
   const manque = solde !== null && solde < montant;
+  /* ⛔ Fail-closed on unread balance (Liquidity already did; Swap was still open on NOT MEASURED). */
+  const soldeInconnu = !!compte && solde === null;
   const b = $('#swapAgir');
   let empeche = null;
   if (!compte) empeche = 'Connect your wallet first (button below)';
-  else if (manque) empeche = acheter
-    ? ('Not enough ' + v.quoteNom + ' for that amount')
+  else if (soldeInconnu) {
+    empeche = acheter && quoteExterne
+      ? (v.quoteNom + ' balance NOT MEASURED — re-read; will not swap blind')
+      : 'Balance NOT MEASURED — re-read; will not swap blind';
+    vue += ligne('⛔', 'Your ' + (acheter ? v.quoteNom : 'block')
+      + ' balance could not be read. That is NOT the same as having enough.');
+  } else if (acheter && quoteExterne && solde === 0n) {
+    empeche = 'You hold 0 ' + v.quoteNom + ' — get some first (app does not buy it)';
+    vue += ligne('⛔ 0 ' + v.quoteNom, 'Measured balance is zero. ETH alone cannot fund a '
+      + enTexte(v.quoteNom) + ' buy. This app does not buy or bridge ' + enTexte(v.quoteNom) + '.');
+  } else if (manque) empeche = acheter
+    ? (quoteExterne
+        ? ('Not enough ' + v.quoteNom + ' — ETH cannot fund this buy')
+        : ('Not enough ' + v.quoteNom + ' for that amount'))
     : 'Not enough block for that amount';
   else if (sortie === null) empeche = acheter ? 'No quote — nothing to send' : 'No quote — try Buy first if pool has no ETH';
   else if (autorise && forme === null) empeche = 'The router rejected both encodings';
