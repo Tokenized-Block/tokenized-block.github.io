@@ -43,6 +43,10 @@ association becomes invalid**. Signing before the move means signing twice.
 
 ⇒ decide the final domain, move, then sign. Not the other way round.
 
+**2026-09-07 overnight:** public brand is **Tokenized-Block.app**, but DNS for that name is
+**not live** yet (no A/AAAA). Keep absolute URLs on `tokenized-block.github.io` until DNS works —
+do **not** flip `homeUrl` to a dead domain. **Never invent `accountAssociation`.**
+
 ## Checking it
 
 Once the domain is final and the association is signed, the manifest must be reachable at

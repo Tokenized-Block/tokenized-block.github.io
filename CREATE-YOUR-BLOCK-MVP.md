@@ -5,11 +5,17 @@ Ship an app where **anyone creates their own Block** (B-20 Instant Create → La
 Target **€10k/mo** is a **product ambition**, not a measured metric. METHODE: do not invent ARR/MRR until dated wallet+ledger evidence exists.
 
 ## What pays (attack flattering “creators = revenue”)
-People creating free on-chain blocks **does not** pay Tokenized Block by itself. B-20 path has **no platform fee / no custody** (keep that).
+People creating free Practice blocks **does not** pay Tokenized Block. **Custody:** still none.
 
-Honest monetization candidates (pick later with evidence, not hope):
+**Shipped 2026-09-07 overnight (subscription recovery, not gas):**
+- **Real Create** → separate visible **0.001 ETH** Tokenized Block service fee to
+  `0x37eb9b7ce0b51fe12fbf092026e001918128580a` **before** Create calldata. Fail-closed if transfer fails.
+- **Practice Create** → **0** Tokenized Block fee.
+- **Network gas** always → Base validators/builders — **cannot** be redirected to the fee wallet. Disclose loudly; never market the service fee as “gas”.
+
+Honest further monetization candidates (pick later with evidence, not hope):
 1. **Hosted Block skin** — creator pays for branded OpenLaunch `tokenized-block` config + Instant template hosting (SaaS / month).
-2. **Distribution** — Base / Farcaster mini-app placement once accountAssociation works (traffic, not cash by itself).
+2. **Distribution** — Base / Farcaster mini-app placement once accountAssociation works (traffic, not cash by itself). **Never invent accountAssociation.**
 3. **Creator CRM `/me`** — collect/share deep links, optional paid tier (after Core CRM exists).
 4. **Not in scope** — inventing trust scores, taking LP fees, admin keys, fictional “10k already”.
 
