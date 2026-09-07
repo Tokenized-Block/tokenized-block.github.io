@@ -234,6 +234,14 @@ padding:14px 15px;margin:0 0 12px}
 #gardeDoubleCreate label{display:flex;gap:10px;align-items:flex-start;color:var(--fg);font-size:13.5px;margin:0 0 8px}
 #gardeDoubleCreate input[type=checkbox]{width:20px;height:20px;flex:0 0 auto;margin-top:1px;accent-color:var(--or)}
 #gardeDoubleCreate .mono{word-break:break-all}
+/* Launch too-cheap valuation soft-gate (2026-09-07) — inside #ns-launch, not main band. */
+#gardeValoCheap{display:none;background:#3a1818;border:1px solid #7a2a2a;border-radius:12px;
+  padding:12px 14px;margin:10px 0 0}
+#gardeValoCheap.on{display:block}
+#gardeValoCheap .t{font-weight:800;color:var(--bad);font-size:13.5px;margin-bottom:6px}
+#gardeValoCheap p{margin:0 0 10px;font-size:12.5px;color:#f0d0d0;line-height:1.5}
+#gardeValoCheap label{display:flex;gap:10px;align-items:flex-start;color:var(--fg);font-size:13px;margin:0}
+#gardeValoCheap input[type=checkbox]{width:20px;height:20px;flex:0 0 auto;margin-top:1px;accent-color:var(--or)}
 #apercu{display:block;width:96px;height:106px;margin:2px auto 0;border-radius:10px}
 
 /* ══ RETOUR VISUEL DE TRANSACTION ═══════════════════════════════════════════════════════════
@@ -789,8 +797,16 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
     <input id="lancBlock" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
     <label for="lancValo">What the whole supply is worth at the start — in ETH</label>
     <input id="lancValo" value="10" inputmode="decimal">
-    <p class="expl" style="margin:6px 0 0;color:#f0c674">Fee is NONE forever — cannot be raised later. This valuation sets the irreversible start price.</p>
+    <p class="expl" style="margin:6px 0 0;color:#f0c674">Fee is NONE forever — cannot be raised later. This valuation sets the irreversible start price. <b>Below 1 ETH</b> whole-supply (floor documented 2026-09-07) Launch needs a second confirm — snipers can buy nearly free; this page does not invent a “correct” price.</p>
     <div id="lancPlan" class="fiche" style="margin-top:10px"></div>
+    <!-- ⛔ TOO-CHEAP VALO SOFT-GATE 2026-09-07. Default 10 ETH; only hard refuse was <=0.
+         Whole-supply < 1 ETH still computes a plan, but Launch stays closed until explicit
+         permanent/sniper confirm. 1–100 ETH Practice path stays one-click after Work out. -->
+    <div id="gardeValoCheap" role="region" aria-label="Too-cheap valuation soft-gate">
+      <div class="t">⚠ Too-cheap valuation — permanent sniper risk</div>
+      <p>Whole-supply start is <b>below 1 ETH</b> (threshold documented 2026-09-07). Initialize engraves that price forever; snipers can buy nearly free. Prefer raising the valuation — or tick below if you mean it. Fee stays NONE (unchanged).</p>
+      <label><input type="checkbox" id="gardeValoCheapCase"> I know this price is permanent and snipers can buy nearly free.</label>
+    </div>
     <button class="act sec" id="lancCalculer" style="margin-top:10px">Work out the launch</button>
     <!-- ⛔ PERMIT2 AVANT LE LANCEMENT — MESURE 2026-09-07. Le mint tire les blocks via Permit2 :
          ERC20 allowance owner→Permit2 = 0 ET Permit2→POSM = 0 ⇒ TRANSFER_FROM_FAILED apres
@@ -1009,7 +1025,7 @@ import { cleDePool, etatPool, encodeInitialize, encodeApprove, encodePermit2Appr
   /* ⛔ LES DEUX QUI PERMETTENT LA TRANSACTION UNIQUE. Sans elles, creer la pool et y placer la
    *    supply restent deux signatures — donc un etat intermediaire ou une pool vide survit. */
   encodeInitializePool, encodeMulticall } from './pool.js';
-import { parametresLancement, tickMinAligne } from './lancement.js';
+import { parametresLancement, tickMinAligne, VALO_PLANCHER_ETH, classementValoLancement } from './lancement.js';
 import { apparenceDepuisAdresse } from './apparence.js';
 import { consentementValide, marquerConsentement } from './consentement.js';
 import { verdictPhoto, chercherQualite, octetsUri, PHOTO_MAX } from './photo.js';
@@ -3432,6 +3448,9 @@ async function cribler_(adresse) {
 let plancement = null;
 /* ⛔ Approvals manquantes pour le Launch (block→Permit2 puis Permit2→POSM). Null = rien a faire. */
 let plancementAppro = null;
+/* ⛔ TOO-CHEAP VALO 2026-09-07: armed when Work out succeeds with whole-supply ETH < VALO_PLANCHER_ETH.
+ *    Launch stays disabled until #gardeValoCheapCase is checked. Cleared with plans. */
+let valoCheapArmee = false;
 
 /**
  * ⛔ STALE PLAN MID-FLOW (2026-09-07). Work out → Sign can span minutes. If the wallet account
@@ -3446,6 +3465,7 @@ function invaliderPlansTravail(pourquoi) {
   plancementAppro = null;
   plan = null;
   planSwap = null;
+  resetGardeValoCheap();
   for (const id of ['#lancLancer', '#lancApprouver']) {
     const b = $(id); if (b) { b.style.display = 'none'; b.disabled = true; }
   }
@@ -3456,6 +3476,31 @@ function invaliderPlansTravail(pourquoi) {
   if (pourquoi) console.info('[tblock] plans cleared:', pourquoi);
 }
 
+/** Hide + uncheck the too-cheap Launch soft-gate (session only). */
+function resetGardeValoCheap() {
+  valoCheapArmee = false;
+  const c = $('#gardeValoCheapCase');
+  if (c) c.checked = false;
+  const pan = $('#gardeValoCheap');
+  if (pan) pan.classList.remove('on');
+}
+
+/**
+ * Compose Launch enable: mainnet garde + too-cheap confirm.
+ * ⛔ Force-refuse only when a gate fails; when both clear, re-enable #lancLancer if a plan exists
+ *    (fixes post-#19 stuck disabled after plan clear → Work out again).
+ */
+function syncGardeValoCheap() {
+  const pan = $('#gardeValoCheap');
+  if (pan) pan.classList.toggle('on', !!valoCheapArmee);
+  const b = $('#lancLancer');
+  if (!b) return;
+  if (!plancement || b.style.display === 'none') return;
+  const cheapOk = !valoCheapArmee || !!( $('#gardeValoCheapCase') && $('#gardeValoCheapCase').checked );
+  const mainOk = chaine !== MAINNET || !!( $('#gardeCase') && $('#gardeCase').checked );
+  b.disabled = !(cheapOk && mainOk);
+}
+
 $('#lancCalculer').onclick = async () => {
   const box = $('#lancPlan');
   $('#lancLancer').style.display = 'none';
@@ -3463,12 +3508,15 @@ $('#lancCalculer').onclick = async () => {
   $('#lancApprouver').disabled = true;
   plancement = null;
   plancementAppro = null;
+  resetGardeValoCheap();
   const jeton = $('#lancBlock').value.trim();
   if (!/^0x[0-9a-fA-F]{40}$/.test(jeton)) return box.innerHTML = ligne('state', pastille('NOT AN ADDRESS', 'warn'));
   const valo = Number($('#lancValo').value);
   /* ⛔ UNE VALORISATION ILLISIBLE NE DONNE PAS UN DEFAUT : elle refuse. Un repli silencieux
    *    graverait un prix que personne n a choisi. */
   if (!Number.isFinite(valo) || valo <= 0) return box.innerHTML = ligne('state', pastille('VALUATION UNREADABLE', 'warn'));
+  /* Classify too-cheap early for UI honesty; hard refuse remains <=0 only. */
+  const classementValo = classementValoLancement(valo);
 
   box.innerHTML = ligne('state', 'asking the chain…');
   try {
@@ -3555,6 +3603,11 @@ $('#lancCalculer').onclick = async () => {
       /* ⛔ MAINNET DISCLOSE 2026-09-07 : fee 0% et valo gravent pour de bon. Une ligne douce
        *    (« NONE ») ne suffisait pas — Real doit lire l irreversible AVANT #lancLancer. */
       + ligne('locked forever', '<b>Fee cannot be raised later.</b> Valuation sets the <b>irreversible</b> start price.')
+      + (classementValo.etat === 'TROP_BON_MARCHE'
+        ? ligne('too-cheap gate', pastille('CONFIRM REQUIRED', 'warn')
+          + ' whole-supply &lt; ' + VALO_PLANCHER_ETH + ' ETH (floor 2026-09-07) — Launch stays closed until you tick the sniper confirm')
+        : ligne('too-cheap gate', pastille('OK', 'ok')
+          + ' ≥ ' + VALO_PLANCHER_ETH + ' ETH whole-supply — no extra confirm (threshold 2026-09-07)'))
       + ligne('range', '[' + p.tickBas + ', ' + p.tickHaut + ']' + (p.prixImpose ? '  ⚠️ upper tick forced by the existing pool' : ''))
       + ligne('this places', formaterUnites(blocksRequis, dec) + ' blocks')
       + ligne('you hold', formaterUnites(solde, dec) + ' blocks')
@@ -3719,10 +3772,17 @@ $('#lancCalculer').onclick = async () => {
         + ligne('note', 'checked against the chain as it is right now — not a promise about later');
     }
     plancement = { donnee, dejaCreee: sqrtExistant !== 0n };
+    /* Arm too-cheap soft-gate from the same classement shown in the fiche. */
+    valoCheapArmee = classementValo.etat === 'TROP_BON_MARCHE';
+    const caseValo = $('#gardeValoCheapCase');
+    if (caseValo) caseValo.checked = false;
     $('#lancLancer').style.display = '';
     $('#lancLancer').textContent = plancement.dejaCreee
       ? 'Place the supply — one transaction'
       : 'Launch — create the pool and place the supply, one transaction';
+    /* Start refused; syncGardeValoCheap / gardeMainnet re-enable only when gates clear. */
+    $('#lancLancer').disabled = true;
+    syncGardeValoCheap();
     /* Re-apply mainnet force-refuse after revealing the button (same gate as pool/swap). */
     gardeMainnet();
   } catch (e) {
@@ -3808,6 +3868,11 @@ $('#lancLancer').onclick = async () => {
    *    calldata QUI A ETE SIMULEE : la reconstruire ici la recalculerait sur un etat relu plus
    *    tard, et ce qui a ete MONTRE ne serait plus ce qui est SIGNE. */
   if (!plancement) return dire('Work out the launch first.', 'warn');
+  /* ⛔ TOO-CHEAP FAIL-CLOSED: disabled button is not enough if something re-enables it. */
+  if (valoCheapArmee && !($('#gardeValoCheapCase') && $('#gardeValoCheapCase').checked)) {
+    return dire('Too-cheap valuation — tick the sniper confirm first.\n'
+      + 'Whole-supply below ' + VALO_PLANCHER_ETH + ' ETH is permanent; snipers can buy nearly free.', 'bad');
+  }
   await envoyerLancement(plancement.dejaCreee
     ? 'placing almost all of your supply — this cannot be undone here'
     : 'creating the pool AND placing almost all of your supply, in one transaction — this cannot be undone here',
@@ -3989,6 +4054,10 @@ function gardeMainnet() {
   /* ⛔ Launch (#lancLancer) was missing from this list — comment said three buttons, code had two.
    *    On mainnet without the checkbox, Work out → Launch could still send. Force-refuse only. */
   if (!ok) for (const id of ['#poolAgir', '#swapAgir', '#lancLancer', '#lancApprouver']) { const b = $(id); if (b) b.disabled = true; }
+  else {
+    /* Mainnet consent OK (or Practice): re-compose Launch with too-cheap confirm — never blind-enable. */
+    syncGardeValoCheap();
+  }
 }
 /* ⛔ ON N ENREGISTRE QUE LE « OUI ». Decocher n efface pas la trace — ce serait un troisieme etat
  * (« a retire son consentement ») que personne n a demande, et qui ferait redemander a la
@@ -4019,6 +4088,17 @@ $('#gardeCase').onchange = () => {
 /* Soft-gate boxes: both required; unlocking is session-only and does not claim code exists. */
 $('#gardeDcExplorer').onchange = syncSoftGateCreateDepuisCases;
 $('#gardeDcSalt').onchange = syncSoftGateCreateDepuisCases;
+/* Too-cheap valuation confirm: unlocks Launch only when armed + checked (+ mainnet garde). */
+if ($('#gardeValoCheapCase')) $('#gardeValoCheapCase').onchange = () => { syncGardeValoCheap(); };
+/* Editing valuation after Work out must not leave a stale plan / armed gate for the old number. */
+if ($('#lancValo')) $('#lancValo').addEventListener('input', () => {
+  if (plancement || plancementAppro || valoCheapArmee) {
+    invaliderPlansTravail('valuation edited');
+    const box = $('#lancPlan');
+    if (box) box.innerHTML = ligne('state', pastille('VALUATION CHANGED', 'warn'))
+      + ligne('meaning', 'Plans cleared — Work out the launch again with the new number.');
+  }
+});
 
 /**
  * Restaure la case si CE compte a deja consenti.
