@@ -73,6 +73,7 @@ main{max-width:560px;margin:0 auto}
   main > #createZone,
   main > #carteLook,
   main > #ctaPacket,
+  main > #gardeDoubleCreate,
   main > #agir,
   main > #relire,
   main > #ouvrirLancement,
@@ -83,6 +84,7 @@ main{max-width:560px;margin:0 auto}
    *    use the full band; multi-col is for the block cards below, not for sparse Name/Symbol. */
   main > #createZone,
   main > #ctaPacket,
+  main > #gardeDoubleCreate,
   main > #agir,
   main > #relire,
   main > #ouvrirLancement,
@@ -223,6 +225,15 @@ padding:14px 15px;margin-bottom:12px}
 #gardeMainnet p{margin:0 0 10px;font-size:13px;color:#f0dcc0;line-height:1.5}
 #gardeMainnet label{display:flex;gap:10px;align-items:flex-start;color:var(--fg);font-size:13.5px;margin:0}
 #gardeMainnet input{width:20px;height:20px;flex:0 0 auto;margin-top:1px;accent-color:var(--or)}
+/* Soft-gate: empty fingerprint after a mined Create — stop blind second Create / new salt. */
+#gardeDoubleCreate{display:none;background:#3a1818;border:1px solid #7a2a2a;border-radius:14px;
+padding:14px 15px;margin:0 0 12px}
+#gardeDoubleCreate.on{display:block}
+#gardeDoubleCreate .t{font-weight:800;color:var(--bad);font-size:14px;margin-bottom:6px}
+#gardeDoubleCreate p{margin:0 0 10px;font-size:13px;color:#f0d0d0;line-height:1.5}
+#gardeDoubleCreate label{display:flex;gap:10px;align-items:flex-start;color:var(--fg);font-size:13.5px;margin:0 0 8px}
+#gardeDoubleCreate input[type=checkbox]{width:20px;height:20px;flex:0 0 auto;margin-top:1px;accent-color:var(--or)}
+#gardeDoubleCreate .mono{word-break:break-all}
 #apercu{display:block;width:96px;height:106px;margin:2px auto 0;border-radius:10px}
 
 /* ══ RETOUR VISUEL DE TRANSACTION ═══════════════════════════════════════════════════════════
@@ -705,6 +716,19 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
   <span class="ctaSep">·</span>
   <a class="ctaPtr" href="#carteASigner">What you will sign</a></p>
 </div>
+<!-- Soft-gate after Create mined + empty eth_getCode / Blocked: stop blind second Create.
+     Fail-closed honesty — no explorer API; user must confirm they checked the address link. -->
+<div id="gardeDoubleCreate" role="region" aria-label="Create soft-gate after empty fingerprint">
+  <div class="t">⚠ Soft-gate — empty fingerprint after a mined Create</div>
+  <p>A Create transaction already mined for this address, but this page still reads <b>no code</b>
+  there (Blocked). Clicking Create again can pick a <b>new salt</b> and burn a <b>second fee</b>
+  for a <b>different</b> block. This page does not invent an explorer answer — check the address
+  yourself, then confirm below.</p>
+  <p>Address: <a class="mono" id="gardeDcLien" href="#" target="_blank" rel="noopener">—</a></p>
+  <p class="dim" id="gardeDcTx" style="margin-top:-4px"></p>
+  <label><input type="checkbox" id="gardeDcExplorer"> I checked the explorer — this address has no code.</label>
+  <label><input type="checkbox" id="gardeDcSalt"> I understand Create again may use a new salt and burn a second fee for a different block.</label>
+</div>
 <button class="act" id="agir">Connect wallet</button>
 <button class="act sec" id="relire">Re-read the chain</button>
 <!-- ⛔ HANDOFF APRES CREATION CONFIRMEE (relecture code ≠ tx-success). Prefill Launch/LP/Swap;
@@ -1089,6 +1113,8 @@ const RESEAUX = {
 };
 const FACTORY = '0xb20f000000000000000000000000000000000000';
 let chaine = 84532, compte = null, dernier = null;
+/* Soft-gate session state — declared early so relireJeton (above) never hits TDZ. */
+let createSoftGate = null; /* { adr, hash, unlocked } | null */
 
 let n = 0;
 /**
@@ -1861,6 +1887,13 @@ async function relireJeton(adr) {
       box.innerHTML = ligne('state', pastille('NOT YET CREATED', 'warn'))
         + ligne('', 'Address reserved by this salt, and free.'); return;
     }
+    /* Soft-gate: if Re-read finally sees code at the gated address, drop the gate — honesty,
+     * not invention: we only clear when eth_getCode is non-empty for that same address. */
+    if (createSoftGate && createSoftGate.adr
+        && String(adr).toLowerCase() === String(createSoftGate.adr).toLowerCase()
+        && typeof leverSoftGateCreate === 'function') {
+      leverSoftGateCreate('re-read saw code');
+    }
     const un = async (sel, f) => { try { return f(await rpc('eth_call', [{ to: adr, data: sel }, 'latest'])); } catch (e) { return { err: e.message }; } };
     const sym = await un(S['symbol()'], chaineDe);
     const tot = await un(S['totalSupply()'], (h) => BigInt(h));
@@ -2064,6 +2097,8 @@ for (const id of [84532, 8453]) $('#t' + id).onclick = () => {
   $('#t8453').setAttribute('aria-selected', String(id === 8453));
   /* ⛔ le consentement ne survit PAS a un changement de reseau */
   $('#gardeCase').checked = false;
+  /* Soft-gate is per mined Create on THIS network — a tab switch drops it. */
+  if (typeof leverSoftGateCreate === 'function') leverSoftGateCreate('network change');
   peuplerDevises();
   /* ⛔ LA GALERIE SUIT LE RESEAU. Sans ce rappel, elle garderait les blocks de l ancien reseau
    *    sous une note qui nommerait le nouveau — un mensonge pire que l absence de note. */
@@ -2151,6 +2186,7 @@ $('#selLibre').onclick = () => chercherSelLibre();
  */
 function apresCreationConfirmee(adr) {
   if (!/^0x[0-9a-fA-F]{40}$/.test(adr)) return;
+  if (typeof leverSoftGateCreate === 'function') leverSoftGateCreate('creation confirmed');
   for (const id of ['lancBlock', 'poolToken', 'swapToken', 'lecture']) {
     const n = $('#' + id);
     if (n) n.value = adr;
@@ -3680,35 +3716,96 @@ async function memeChaineQueLaPage() {
   }
   return true;
 }
+/* ══ SOFT-GATE DOUBLE-CREATE (empty fingerprint after mined Create) ═══════════════════════════
+ * PRACTICE-FAILS §1.7 / evening OPEN #2: after Create mines for an address but eth_getCode stays
+ * empty → Blocked, a second Create click can auto-pick a free salt and burn a second fee for a
+ * different block. Soft-gate is fail-closed honesty: no explorer API, no claim that code exists.
+ * User must check the address link and confirm both boxes before Create is allowed again.
+ * Session-only (not localStorage) — a reload clears it; that is intentional and said in UX. */
+function softGateCreateArme() {
+  return !!(createSoftGate && createSoftGate.adr && !createSoftGate.unlocked);
+}
+
+function majDisableAgir() {
+  const btn = $('#agir');
+  if (!btn) return;
+  /* Connect wallet is never blocked by mainnet consent or soft-gate (nothing is signed). */
+  if (!compte) { btn.disabled = false; return; }
+  const mainnetOk = chaine !== MAINNET || $('#gardeCase').checked;
+  const softOk = !softGateCreateArme();
+  btn.disabled = !(mainnetOk && softOk);
+}
+
+function majPanneauSoftGateCreate() {
+  const pan = $('#gardeDoubleCreate');
+  if (!pan) return;
+  const on = !!(createSoftGate && createSoftGate.adr);
+  pan.classList.toggle('on', on);
+  if (!on) return;
+  const lien = $('#gardeDcLien');
+  const scan = RESEAUX[chaine] && RESEAUX[chaine].scan;
+  if (lien && scan) {
+    lien.href = scan + '/address/' + createSoftGate.adr;
+    lien.textContent = createSoftGate.adr;
+  }
+  const tx = $('#gardeDcTx');
+  if (tx) {
+    if (createSoftGate.hash && scan) {
+      tx.innerHTML = 'Mined Create tx: <a class="mono" href="' + scan + '/tx/' + createSoftGate.hash
+        + '" target="_blank" rel="noopener">' + createSoftGate.hash + '</a>';
+    } else {
+      tx.textContent = createSoftGate.hash ? ('Mined Create tx: ' + createSoftGate.hash) : '';
+    }
+  }
+}
+
+function armerSoftGateCreate(adr, hash) {
+  if (!adr || !/^0x[0-9a-fA-F]{40}$/.test(adr)) return;
+  createSoftGate = { adr, hash: hash || null, unlocked: false };
+  const c1 = $('#gardeDcExplorer'), c2 = $('#gardeDcSalt');
+  if (c1) c1.checked = false;
+  if (c2) c2.checked = false;
+  majPanneauSoftGateCreate();
+  majDisableAgir();
+}
+
+function leverSoftGateCreate(_pourquoi) {
+  createSoftGate = null;
+  const c1 = $('#gardeDcExplorer'), c2 = $('#gardeDcSalt');
+  if (c1) c1.checked = false;
+  if (c2) c2.checked = false;
+  majPanneauSoftGateCreate();
+  majDisableAgir();
+}
+
+function syncSoftGateCreateDepuisCases() {
+  if (!createSoftGate || !createSoftGate.adr) return;
+  const ok = !!( $('#gardeDcExplorer') && $('#gardeDcExplorer').checked
+    && $('#gardeDcSalt') && $('#gardeDcSalt').checked );
+  createSoftGate.unlocked = ok;
+  majDisableAgir();
+  if (ok) {
+    dire('Soft-gate cleared for one Create.\n'
+      + 'You confirmed explorer check for ' + createSoftGate.adr
+      + ' and that a new salt can mean a different block + second fee.\n'
+      + 'Prefer « Re-read the chain » if the block may still appear — do not invent success.', 'warn');
+  }
+}
+
 function gardeMainnet() {
   const surMainnet = chaine === MAINNET;
   $('#gardeMainnet').classList.toggle('on', surMainnet);
-  /* ⚠️ Hors mainnet la garde REND LA MAIN explicitement : sans cette ligne, un aller-retour
-   * laisserait le bouton desactive sur Sepolia, ou rien ne le justifie. */
-  if (!surMainnet) { $('#agir').disabled = false; return; }
   /* ⛔ LA GARDE REFUSE, ELLE NE REECRIT PAS. Une premiere version remplacait le TEXTE du
    * bouton -- et ne le restaurait jamais une fois la case cochee : le bouton restait bloque sur
    * « Tick the mainnet box above first » pour toujours. Une garde qui MUTE l etat de ce qu elle
    * protege finit par le corrompre. Elle pose `disabled`, rien de plus ; chaque section garde la
    * responsabilite de son propre libelle, et la banniere orange dit pourquoi. */
-  const ok = $('#gardeCase').checked;
-  /* ⛔ « #agir » n a AUCUN autre proprietaire de son etat desactive : la garde doit donc le poser
-   * ET le lever. Ne poser que le refus laissait le bouton mort meme apres consentement — une
-   * garde qui prend la main sans jamais la rendre est une panne, pas une protection.
-   *
-   * ⛔⛔ MAIS CE BOUTON A DEUX ROLES, ET LA GARDE LES CONFONDAIT. Tant que rien n est connecte,
-   *    `#agir` dit « Connect wallet » ; une fois connecte, il dit « Create the block ». La garde
-   *    le desactivait dans LES DEUX cas — donc sur mainnet, avant d avoir coche la case, on ne
-   *    pouvait meme pas SE CONNECTER. Signale par l utilisateur le 2026-09-05 : « le site n ouvre
-   *    plus mainnet et je n arrive plus a me connecter ». Le site n etait pas casse : la garde
-   *    enfermait.
-   * ⇒ SE CONNECTER NE SIGNE RIEN et ne depense rien : c est une lecture. Le consentement mainnet
-   *   protege ce qui ENGAGE — la creation, la pool, le swap — pas l ouverture du wallet. Une garde
-   *   qui bloque un geste inoffensif finit par etre contournee, et c est elle qu on desarmera le
-   *   jour ou elle protegera vraiment quelque chose.
-   * ⚠️ Des que `compte` existe, `#agir` redevient un bouton qui SIGNE : la garde le reprend. */
-  $('#agir').disabled = compte ? !ok : false;
-  /* Les deux autres sont recalcules par leur propre section a chaque lecture : on ne fait que
+  const ok = !surMainnet || $('#gardeCase').checked;
+  /* ⛔ « #agir » — Connect stays open without mainnet consent; Create is gated.
+   *    Soft-gate (empty fingerprint after mined Create) composes here via majDisableAgir —
+   *    mainnet alone must not re-enable Create while the soft-gate is still armed. */
+  majDisableAgir();
+  /* Les autres sont recalcules par leur propre section a chaque lecture : on ne fait que
    * FORCER le refus, jamais l autorisation. */
   /* ⛔ Launch (#lancLancer) was missing from this list — comment said three buttons, code had two.
    *    On mainnet without the checkbox, Work out → Launch could still send. Force-refuse only. */
@@ -3740,6 +3837,9 @@ $('#gardeCase').onchange = () => {
   }
   gardeMainnet(); if (chaine === MAINNET) { rafraichir(); }
 };
+/* Soft-gate boxes: both required; unlocking is session-only and does not claim code exists. */
+$('#gardeDcExplorer').onchange = syncSoftGateCreateDepuisCases;
+$('#gardeDcSalt').onchange = syncSoftGateCreateDepuisCases;
 
 /**
  * Restaure la case si CE compte a deja consenti.
@@ -3941,6 +4041,18 @@ $('#agir').onclick = async () => {
     }
     if (id !== chaine) return dire('Still on chain ' + id + '. Switch network in your wallet.', 'bad');
 
+    /* Soft-gate: after a mined Create left empty fingerprint / Blocked, refuse another Create
+     * until both confirms are checked (explorer check + new-salt = different block). */
+    if (softGateCreateArme()) {
+      majPanneauSoftGateCreate();
+      const a = createSoftGate.adr;
+      return dire('⛔ Soft-gate: a Create already mined for\n' + a
+        + '\nbut this page still reads no code there (Blocked).\n'
+        + 'Check that address on the explorer (link above Create), then tick BOTH boxes\n'
+        + 'before Create is allowed again. A new salt creates a different block and burns another fee.\n'
+        + 'Prefer « Re-read the chain » first — this page will not invent that code exists.', 'bad');
+    }
+
     await rafraichir();
     let vu = await adresseOuRefus(appelBrut, compte, dernier.data);
     let adr = vu.adresse;
@@ -4037,6 +4149,7 @@ $('#agir').onclick = async () => {
       const code = await rpc('eth_getCode', [adr, 'latest']);
       if (!codeEstVide(code)) {
         seenCode = true;
+        leverSoftGateCreate('code verified');
         await relireJeton(adr);
         apresCreationConfirmee(adr);
         afficherTx('ok', 'Your block lives at\n' + adr, hash);
@@ -4046,19 +4159,23 @@ $('#agir').onclick = async () => {
       const fp = 'empty:' + String(adr).toLowerCase() + ':' + String(code);
       if (prevEmptyFp !== null && fp === prevEmptyFp) {
         setFunnel('Blocked');
+        armerSoftGateCreate(adr, hash);
         afficherTx('fail', 'Blocked — empty on-chain state repeated\n' + adr, hash);
         return dire('Blocked: re-read saw the same empty code at this address twice.\n'
           + 'Not retrying RPC further (max 3, stop on repeated empty fingerprint).\n'
           + 'This is not a silent success — press « Re-read the chain » later, or check the explorer.\n'
+          + 'Create is soft-gated: confirm explorer check + new-salt risk above before another Create.\n'
           + adr + '\n' + hash, 'bad');
       }
       prevEmptyFp = fp;
     }
     if (!seenCode) {
       setFunnel('Blocked');
+      armerSoftGateCreate(adr, hash);
       afficherTx('fail', 'Blocked — code not visible after 3 re-reads\n' + adr, hash);
       return dire('Blocked: sent, but code still absent after 3 bounded re-reads.\n'
         + 'Not spam-retrying. Press « Re-read the chain » later, or check the explorer.\n'
+        + 'Create is soft-gated: confirm explorer check + new-salt risk above before another Create.\n'
         + adr + '\n' + hash, 'bad');
     }
   } catch (e) {
