@@ -251,6 +251,14 @@ padding:14px 15px;margin:0 0 12px}
 #gardeValoCheap p{margin:0 0 10px;font-size:12.5px;color:#f0d0d0;line-height:1.5}
 #gardeValoCheap label{display:flex;gap:10px;align-items:flex-start;color:var(--fg);font-size:13px;margin:0}
 #gardeValoCheap input[type=checkbox]{width:20px;height:20px;flex:0 0 auto;margin-top:1px;accent-color:var(--or)}
+/* After native Launch: WETH/USDC = different PoolKey (MAINNET-DEEP-DIG #7) — soft-gate. */
+#gardeDeviseHorsLaunch{display:none;background:#3a2410;border:1px solid #7a4a12;border-radius:12px;
+  padding:12px 14px;margin:10px 0 0}
+#gardeDeviseHorsLaunch.on{display:block}
+#gardeDeviseHorsLaunch .t{font-weight:800;color:var(--warn);font-size:13.5px;margin-bottom:6px}
+#gardeDeviseHorsLaunch p{margin:0 0 10px;font-size:12.5px;color:#f0dcc0;line-height:1.5}
+#gardeDeviseHorsLaunch label{display:flex;gap:10px;align-items:flex-start;color:var(--fg);font-size:13px;margin:0}
+#gardeDeviseHorsLaunch input[type=checkbox]{width:20px;height:20px;flex:0 0 auto;margin-top:1px;accent-color:var(--or)}
 /* Unlimited Permit2 / ERC20 MAX approve disclose (2026-09-07) — Launch / Liq / Swap. */
 .gardePermit2Max{display:none;background:#3a2410;border:1px solid #7a4a12;border-radius:12px;
   padding:12px 14px;margin:10px 0 0}
@@ -879,6 +887,17 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
     <label for="poolDevise">Quote currency</label>
     <select id="poolDevise" style="width:100%;padding:10px;border-radius:9px;background:#0d1220;color:#dce6f5;border:1px solid #1c2740;font-size:14px"></select>
     <p class="expl" id="poolDeviseNote" style="margin:6px 0 0;color:#f0c674"></p>
+    <!-- MAINNET-DEEP-DIG trap #7: after Instant Launch (native ETH · fee 0 · spacing 200),
+         WETH/USDC select a DIFFERENT PoolKey (3000/60) — often empty. Default/lock to ETH after
+         Launch success; require ack before Liquidity/Swap Run if user switches. -->
+    <div id="gardeDeviseHorsLaunch" role="region" aria-label="Quote currency differs from Launch PoolKey">
+      <div class="t">⚠ Not the Launch pool</div>
+      <p>This page just Launched with <b>native ETH · fee 0 · spacing 200</b>. <b>WETH</b> and
+      <b>USDC</b> use a <b>different PoolKey</b> (fee 3000 · spacing 60) — usually empty right after
+      Launch. Liquidity / Swap stay on <b>ETH</b> to match the pool that holds your supply, unless
+      you knowingly want a second pool.</p>
+      <label><input type="checkbox" id="gardeDeviseHorsLaunchCase"> I know this is a different pool than Launch — continue with WETH/USDC.</label>
+    </div>
     <label for="poolValeur">Starting value of the whole supply</label>
     <input id="poolValeur" value="10000" inputmode="numeric">
     <p class="expl" style="margin:6px 0 0;color:#f0c674">If the pool is empty, this starting value engraves the price forever — it cannot be reinitialized. Initialize + mint are ONE transaction (same as Launch) — refusing mid-way cannot leave an empty pool.</p>
@@ -2243,16 +2262,26 @@ function peuplerDevises() {
   }
   const note = $('#poolDeviseNote');
   if (note && d) {
+    const apresLanc = typeof lancementNatifConcerneTokenCourant === 'function'
+      && lancementNatifConcerneTokenCourant();
     if (estEthNatif(d.adr)) {
-      note.textContent = 'Same PoolKey as Launch (native ETH · fee 0 · spacing 200). No wrap.';
+      note.textContent = apresLanc
+        ? 'Locked default after Launch — same PoolKey (native ETH · fee 0 · spacing 200). No wrap.'
+        : 'Same PoolKey as Launch (native ETH · fee 0 · spacing 200). No wrap.';
     } else if (d.enveloppable) {
-      note.textContent = 'WETH path is distinct from Launch. Wrap uses your ETH — one tx, no exchange.';
+      note.textContent = apresLanc
+        ? '⚠ WETH ≠ Launch pool (fee 3000/60 vs fee 0/200). Soft-gate below — usually empty after native Launch.'
+        : 'WETH path is distinct from Launch. Wrap uses your ETH — one tx, no exchange.';
     } else {
-      note.textContent = '⚠ ' + d.nom + ' is not wrap-ETH. ETH alone cannot fund this pool. '
+      note.textContent = (apresLanc
+        ? '⚠ ' + d.nom + ' ≠ Launch pool (different PoolKey). Soft-gate below. '
+        : '⚠ ' + d.nom + ' is not wrap-ETH. ')
+        + 'ETH alone cannot fund this pool. '
         + 'You must already hold ' + d.nom + ' in this wallet. This app does not buy or bridge '
         + d.nom + '. Decimals are read on-chain at Check (USDC is typically 6, not 18).';
     }
   }
+  if (typeof syncGardeDeviseHorsLaunch === 'function') syncGardeDeviseHorsLaunch();
 }
 /* ⛔ CET APPEL EST DESCENDU EN BAS DU MODULE. Ici, il s executait AVANT la declaration de
  * `DEVISES` qu il lit — `Cannot access 'DEVISES' before initialization`, et toute la page restait
@@ -2262,7 +2291,97 @@ function peuplerDevises() {
 /* ⛔ L etiquette du champ de prix nomme la devise CHOISIE : changer de devise doit la remettre a
  * jour, sinon elle dirait « whole WETH » a quelqu un qui vient de prendre USDC — une unite fausse
  * sur le champ qui grave le prix. */
-$('#poolDevise').onchange = () => { plan = null; $('#poolVue').innerHTML = ''; peuplerDevises(); };
+$('#poolDevise').onchange = () => {
+  plan = null; planSwap = null;
+  const boxP = $('#poolVue'); if (boxP) boxP.innerHTML = '';
+  const boxS = $('#swapVue'); if (boxS) boxS.innerHTML = '';
+  const ca = $('#gardeDeviseHorsLaunchCase'); if (ca) ca.checked = false;
+  peuplerDevises();
+};
+
+/** True when this page session Launched native-ETH for the Liquidity or Swap token field. */
+function lancementNatifConcerneTokenCourant() {
+  if (!lancementNatifSession || lancementNatifSession.chaine !== chaine) return false;
+  const cible = String(lancementNatifSession.b20 || '').toLowerCase();
+  if (!/^0x[0-9a-f]{40}$/.test(cible)) return false;
+  for (const id of ['poolToken', 'swapToken', 'lancBlock']) {
+    const n = $('#' + id);
+    if (n && String(n.value || '').trim().toLowerCase() === cible) return true;
+  }
+  return false;
+}
+
+/** Soft-gate armed when quote ≠ native ETH after a matching native Launch this session. */
+function deviseHorsLaunchArmee() {
+  if (!lancementNatifConcerneTokenCourant()) return false;
+  const d = devise(chaine);
+  return !!(d && !estEthNatif(d.adr));
+}
+
+function syncGardeDeviseHorsLaunch() {
+  const pan = $('#gardeDeviseHorsLaunch');
+  if (!pan) return;
+  const arm = deviseHorsLaunchArmee();
+  pan.classList.toggle('on', arm);
+  if (!arm) {
+    const c = $('#gardeDeviseHorsLaunchCase');
+    if (c) c.checked = false;
+  }
+  /* Force-refuse Run while armed without ack — disabled alone is not enough on click. */
+  if (arm && !deviseHorsLaunchOk()) {
+    for (const id of ['#poolAgir', '#swapAgir']) {
+      const b = $(id); if (b) b.disabled = true;
+    }
+  }
+}
+
+function deviseHorsLaunchOk() {
+  if (!deviseHorsLaunchArmee()) return true;
+  return !!( $('#gardeDeviseHorsLaunchCase') && $('#gardeDeviseHorsLaunchCase').checked );
+}
+
+/**
+ * After a confirmed native-ETH Launch: lock Liquidity+Swap quote to ETH (Launch PoolKey),
+ * prefill tokens, clear stale WETH/USDC plans, open Liquidity with the honesty note.
+ */
+function apresLancementNatifConfirme(b20) {
+  if (!/^0x[0-9a-fA-F]{40}$/.test(b20)) return;
+  lancementNatifSession = { b20, chaine };
+  for (const id of ['lancBlock', 'poolToken', 'swapToken', 'lecture']) {
+    const n = $('#' + id); if (n) n.value = b20;
+  }
+  const sel = $('#poolDevise');
+  if (sel) sel.value = ETH_NATIF;
+  plan = null; planSwap = null;
+  const boxP = $('#poolVue'); if (boxP) boxP.innerHTML = '';
+  const boxS = $('#swapVue'); if (boxS) boxS.innerHTML = '';
+  const ca = $('#gardeDeviseHorsLaunchCase'); if (ca) ca.checked = false;
+  peuplerDevises();
+  const ns = $('#nextSteps');
+  if (ns) ns.open = true;
+  if (typeof selectNextStep === 'function') selectNextStep('liq');
+  dire('Launch confirmed — Liquidity / Swap quote locked to native ETH (same PoolKey as Launch).\n'
+    + 'Switching to WETH or USDC opens a different pool (usually empty). Soft-gate if you switch.', 'ok');
+}
+
+if ($('#gardeDeviseHorsLaunchCase')) {
+  $('#gardeDeviseHorsLaunchCase').onchange = () => {
+    syncGardeDeviseHorsLaunch();
+    /* Re-enable Run only after a fresh Check/Quote — do not revive a stale wrong-pool plan. */
+    if (deviseHorsLaunchOk()) {
+      /* Plans may still be for the other PoolKey if Check ran before the tick — clear them. */
+      plan = null; planSwap = null;
+      const boxP = $('#poolVue'); if (boxP) boxP.innerHTML = '';
+      const boxS = $('#swapVue'); if (boxS) boxS.innerHTML = '';
+      for (const id of ['#poolAgir', '#swapAgir']) {
+        const b = $(id);
+        if (b) { b.disabled = true; b.textContent = 'Run the next step'; }
+      }
+      dire('Different-pool ack noted — press Check / Quote again for the WETH or USDC PoolKey.', 'warn');
+    }
+  };
+}
+
 $('#relire').onclick = rafraichir;
 
 /**
@@ -2609,6 +2728,12 @@ let plan = null;
  * possibles) : on ne fake PAS un DONE / NFT id. On garde le hash confirme CETTE session pour un
  * affichage honnete, et on refuse de laisser « NOT TRIED » apres un envoi confirme. */
 let liqMintSession = null; /* { hash, b20, chaine } or null */
+/* ⛔ AFTER NATIVE LAUNCH (MAINNET-DEEP-DIG #7, 2026-09-07): Instant Launch always pairs
+ *    currency0=0x0 / fee=0 / spacing=200. Liquidity+Swap share #poolDevise — if the user
+ *    leaves WETH/USDC selected (or switches after Launch), Check/Quote hit a DIFFERENT
+ *    PoolKey (3000/60), often empty. Session remembers the launched block and defaults
+ *    quote to native ETH; switching away arms a soft-gate before Run. */
+let lancementNatifSession = null; /* { b20, chaine } or null */
 
 async function construirePlan() {
   const b20 = $('#poolToken').value.trim();
@@ -3196,9 +3321,17 @@ async function construirePlan() {
 }
 
 $('#poolEtat').onclick = async () => {
+  if (typeof syncGardeDeviseHorsLaunch === 'function') syncGardeDeviseHorsLaunch();
   dire('Reading the six steps on ' + RESEAUX[chaine].nom + '…');
   plan = await construirePlan();
-  if (plan) dire(plan.suivante ? 'Next: ' + plan.suivante.nom : 'Every step is done.', 'ok');
+  if (plan) {
+    if (deviseHorsLaunchArmee() && !deviseHorsLaunchOk()) {
+      const b = $('#poolAgir'); if (b) b.disabled = true;
+      dire('Next would use a PoolKey distinct from Launch — tick the different-pool ack (or switch quote back to ETH) before Run.', 'warn');
+    } else {
+      dire(plan.suivante ? 'Next: ' + plan.suivante.nom : 'Every step is done.', 'ok');
+    }
+  }
 };
 
 
@@ -3992,7 +4125,7 @@ $('#lancCalculer').onclick = async () => {
         + ligne('gas', BigInt(appels[0].gasUsed) + '   in ONE transaction')
         + ligne('note', 'checked against the chain as it is right now — not a promise about later');
     }
-    plancement = { donnee, dejaCreee: sqrtExistant !== 0n };
+    plancement = { donnee, dejaCreee: sqrtExistant !== 0n, jeton };
     /* Approvals present — no Run approve; drop Permit2 MAX gate for Launch. */
     resetGardePermit2Max('lanc');
     /* Arm too-cheap soft-gate from the same classement shown in the fiche. */
@@ -4083,6 +4216,9 @@ async function envoyerTx({ to, data, value = '0x0', nom }) {
 async function envoyerLancement(nom, to, data, apres) {
   const r = await envoyerTx({ to, data, value: '0x0', nom });
   if (!r || !r.ok) return;
+  /* Native Launch always uses ETH_NATIF PoolKey — lock Liquidity/Swap quote to match. */
+  const j = (plancement && plancement.jeton) || ($('#lancBlock') && $('#lancBlock').value.trim());
+  if (j) apresLancementNatifConfirme(j);
   return apres ? apres(r.hash) : dire('Confirmed: ' + nom + '\n' + r.hash, 'ok');
 }
 
@@ -4538,13 +4674,27 @@ document.querySelectorAll('.swapDirBtn').forEach((btn) => {
 });
 appliquerLabelSwap();
 
-$('#swapEtat').onclick = async () => { dire('Quoting on ' + RESEAUX[chaine].nom + '…'); planSwap = await etatSwap(); if (planSwap) dire('Read.', 'ok'); };
+$('#swapEtat').onclick = async () => {
+  if (typeof syncGardeDeviseHorsLaunch === 'function') syncGardeDeviseHorsLaunch();
+  dire('Quoting on ' + RESEAUX[chaine].nom + '…');
+  planSwap = await etatSwap();
+  if (planSwap) {
+    if (deviseHorsLaunchArmee() && !deviseHorsLaunchOk()) {
+      const b = $('#swapAgir'); if (b) b.disabled = true;
+      dire('Quote is for a PoolKey distinct from Launch — tick the different-pool ack (or switch quote back to ETH) before Run.', 'warn');
+    } else dire('Read.', 'ok');
+  }
+};
 
 $('#swapAgir').onclick = async () => {
   if (!compte) return dire('Connect your wallet first.', 'bad');
   if (!consentArgentOk()) {
     return dire('Mainnet consent restored — re-confirm before Swap.\n'
       + 'Tick « I re-confirm mainnet cost for Launch / Liquidity / Swap this session » above.', 'bad');
+  }
+  if (!deviseHorsLaunchOk()) {
+    return dire('Quote currency is not the Launch pool.\n'
+      + 'After native Launch, stay on ETH — or tick « I know this is a different pool » above.', 'bad');
   }
   if (!planSwap) { planSwap = await etatSwap(); if (!planSwap) return; }
   const p = planSwap;
@@ -4591,6 +4741,10 @@ $('#poolAgir').onclick = async () => {
   if (!consentArgentOk()) {
     return dire('Mainnet consent restored — re-confirm before Liquidity.\n'
       + 'Tick « I re-confirm mainnet cost for Launch / Liquidity / Swap this session » above.', 'bad');
+  }
+  if (!deviseHorsLaunchOk()) {
+    return dire('Quote currency is not the Launch pool.\n'
+      + 'After native Launch, stay on ETH — or tick « I know this is a different pool » above.', 'bad');
   }
   if (!plan || !plan.suivante) { plan = await construirePlan(); if (!plan || !plan.suivante) return; }
   const s = plan.suivante;
