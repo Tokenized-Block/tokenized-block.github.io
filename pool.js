@@ -31,6 +31,42 @@ const dyn = (h) => { const n = h.length / 2; return mot(n) + h + '00'.repeat((32
 /** PoolKey est une struct STATIQUE : ses 5 champs s inlinent, sans offset. */
 const cleInline = (k) => motAdr(k.currency0) + motAdr(k.currency1) + mot(k.fee) + motSigne(k.tickSpacing) + motAdr(k.hooks);
 
+/**
+ * `initializePool` SUR LE PositionManager, et `multicall` pour tout faire en UNE transaction.
+ * ================================================================================================
+ * ⛔ POURQUOI CA COMPTE. Un portefeuille n a qu un seul `to` par transaction : creer la pool
+ *    (PoolManager) puis y placer la supply (PositionManager) demandait donc DEUX signatures. Entre
+ *    les deux, l utilisateur peut fermer l onglet, refuser, ou se tromper de reseau — et il reste
+ *    alors une pool creee et VIDE que rien ne rattrape.
+ * ⛔ EUX FONT TOUT EN UNE TRANSACTION parce qu ils ont un contrat qui orchestre (13 681 octets).
+ *    Le PositionManager d Uniswap sait deja le faire : il expose `initializePool` ET `multicall`.
+ *    Selecteurs releves dans le bytecode SERVI, avec temoin positif (`modifyLiquidities`, dont on
+ *    sait qu il marche) et temoin negatif (une signature inventee, absente) — sans quoi quatre
+ *    octets se rencontrent par hasard dans 24 Ko et tous les resultats seraient du bruit.
+ * ⚠️ ET UN SELECTEUR PRESENT NE PROUVE RIEN DE PLUS QUE SA PRESENCE : ni ce que la fonction fait,
+ *    ni qui peut l appeler. C est la simulation qui tranche, pas cette liste.
+ */
+export function encodeInitializePool(cle, sqrtPriceX96) {
+  return '0x' + selecteur('initializePool((address,address,uint24,int24,address),uint160)')
+    + cleInline(cle) + mot(sqrtPriceX96);
+}
+
+/**
+ * `multicall(bytes[])` : plusieurs appels au MEME contrat, dans une seule transaction.
+ * ⛔ L ORDRE EST LE SENS. `[initializePool, modifyLiquidities]` cree puis remplit ; l inverse
+ *    tenterait de remplir une pool qui n existe pas encore, et le revert ne parlerait pas d ordre.
+ * ⚠️ `multicall` est ATOMIQUE : si le mint echoue, l initialize est annule avec lui. C est
+ *    precisement ce qui rend l enchainement sur : plus d etat intermediaire ou une pool vide
+ *    survit a un echec.
+ */
+export function encodeMulticall(appels) {
+  const elements = appels.map((a) => dyn(a.replace(/^0x/, '')));
+  let curseur = BigInt(32 * elements.length);
+  const offsets = elements.map((e) => { const o = mot(curseur); curseur += BigInt(e.length / 2); return o; });
+  return '0x' + selecteur('multicall(bytes[])') + mot(0x20)
+    + mot(elements.length) + offsets.join('') + elements.join('');
+}
+
 export function encodeInitialize(cle, sqrtPriceX96) {
   return '0x' + selecteur('initialize((address,address,uint24,int24,address),uint160)')
     + cleInline(cle) + mot(sqrtPriceX96);
