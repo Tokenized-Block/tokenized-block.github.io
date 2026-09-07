@@ -2355,7 +2355,18 @@ $('#lancCalculer').onclick = async () => {
     /* ⚠️ `pad` existe deja plus haut : j avais redefini le meme helper sous un autre nom. Deux
      *    copies d une meme conversion finissent par diverger, et c est le motif « helper canonique
      *    contre copie plus faible » qu on a deja paye huit fois dans ce depot. */
-    const cle = cleDePool(d0.adr, jeton, { fee: 30000, tickSpacing: 200 });
+    /* ⛔⛔ FRAIS A ZERO — CHOIX DE PHIL, ET IL EST DEFINITIF. Le frais est grave dans la PoolKey :
+     *    le changer creerait une AUTRE pool, pas la meme avec un autre reglage. Personne, nous
+     *    compris, ne pourra jamais le relever.
+     * ⚠️ CE QUE CA COUTE, MESURE : le frais revient au proprietaire de la position, donc au
+     *    createur. A 0 %, un lancement ne rapporte RIEN sur les echanges — c est un choix de
+     *    cout d entree contre revenu, pas un oubli.
+     * ⚠️ CE QUE CA DONNE, MESURE (simulation des achats, 2026-09-06) : sur un achat de 2,49 $ le
+     *    cout total tombe de 3,16 % a 0,17 %. Le reste etait le frais, pas la profondeur.
+     * ⛔ ET 0 AVEC UN ESPACEMENT DE 200 A ETE EXERCE, pas suppose : `initialize` et le mint
+     *    passent, et le Quoter rend des prix coherents. Une combinaison fee/tickSpacing non
+     *    verifiee se refuse APRES la signature. */
+    const cle = cleDePool(d0.adr, jeton, { fee: 0, tickSpacing: 200 });
     const blockEst1 = cle.currency1.toLowerCase() === jeton.toLowerCase();
     const supply = BigInt(await lire4(jeton, sel4('totalSupply()')));
     const dec = Number(BigInt(await lire4(jeton, sel4('decimals()'))));
@@ -2395,7 +2406,13 @@ $('#lancCalculer').onclick = async () => {
     const blocksRequis = blockEst1 ? m.montant1 : m.montant0;
 
     let vue = ligne('paired with', 'native ETH <span class="k">(buyers do NOT have to wrap — one less transaction)</span>')
-      + ligne('pool', 'fee 3% · spacing 200 · ' + (sqrtExistant === 0n ? 'to be created' : pastille('ALREADY EXISTS', 'warn')))
+      /* ⛔ LE LIBELLE SUIT LA CLE, IL NE LA DECRIT PAS DE MEMOIRE. Il affichait « fee 3% » en dur :
+       *    le jour ou la cle change, l ecran ment sans qu aucun test ne le voie. On le derive. */
+      + ligne('pool', 'fee ' + (cle.fee / 10000) + '% · spacing ' + cle.tickSpacing + ' · '
+        + (sqrtExistant === 0n ? 'to be created' : pastille('ALREADY EXISTS', 'warn')))
+      + ligne('trading fee', cle.fee === 0
+        ? 'NONE — buyers pay nothing extra, and the pool earns you nothing either'
+        : (cle.fee / 10000) + '% to the position owner')
       + ligne('valuation', valo + ' ETH for the whole supply')
       + ligne('range', '[' + p.tickBas + ', ' + p.tickHaut + ']' + (p.prixImpose ? '  ⚠️ upper tick forced by the existing pool' : ''))
       + ligne('this places', formaterUnites(blocksRequis, dec) + ' blocks')
