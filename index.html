@@ -1385,7 +1385,7 @@ const SITE_ORIGIN_FUTURE = 'https://tokenized-block.app'; /* DNS not live as of 
 /**
  * Tokenized Block Create service fee (subscription recovery) — NOT gas.
  * Network gas always goes to Base validators/builders; it CANNOT be redirected here.
- * Real (8453): fixed 0.001 ETH as a separate visible ETH transfer to FEE_WALLET before Create.
+ * Real (8453): fixed 0.00005 ETH as a separate visible ETH transfer to FEE_WALLET before Create.
  * Practice (84532): 0. Fail-closed if the fee transfer fails — Create is not sent.
  */
 const FEE_WALLET = '0x37eb9b7ce0b51fe12fbf092026e001918128580a';
@@ -5360,7 +5360,7 @@ $('#agir').onclick = async () => {
     if (!compte) {
       [compte] = await window.ethereum.request({ method: 'eth_requestAccounts' });
       $('#agir').textContent = (chaine === 8453)
-        ? 'Create — 0.001 ETH service fee + gas'
+        ? 'Create — 0.00005 ETH service fee + gas'
         : 'Create the block';
       /* ⛔ LE BLOCK DE CETTE PERSONNE, AVANT MEME QU ELLE TOUCHE QUOI QUE CE SOIT. Derive de son
        *    adresse, donc stable et reconnaissable. N ecrase rien si elle a deja regle l apparence. */
@@ -5489,29 +5489,29 @@ $('#agir').onclick = async () => {
      * Fail-closed: if fee transfer fails / is declined / receipt ≠ 0x1, Create is NOT sent. */
     const fraisWei = createServiceFeeWei();
     if (fraisWei > 0n) {
-      dire('Real Create: first a Tokenized Block service fee of 0.001 ETH to\n'
+      dire('Real Create: first a Tokenized Block service fee of 0.00005 ETH to\n'
         + FEE_WALLET
         + '\n(This is NOT network gas — gas still goes to Base validators.)\n'
         + 'Create will open only after this transfer confirms.', 'warn');
-      afficherTx('wallet', 'Confirm the 0.001 ETH Tokenized Block service fee (not gas).');
+      afficherTx('wallet', 'Confirm the 0.00005 ETH Tokenized Block service fee (not gas).');
       const frais = await envoyerTx({
         to: FEE_WALLET,
         data: '0x',
         value: '0x' + fraisWei.toString(16),
-        nom: 'Tokenized Block Create service fee 0.001 ETH (not gas)'
+        nom: 'Tokenized Block Create service fee 0.00005 ETH (not gas)'
       });
       if (!frais || !frais.ok) {
         setFunnel('Blocked');
         afficherTx('fail', 'Service fee failed — Create NOT sent');
         return dire('⛔ Create was NOT sent — Tokenized Block service fee did not confirm.\n'
           + 'No Create calldata was broadcast. Fix the fee transfer (or decline), then try again.\n'
-          + 'Fee wallet: ' + FEE_WALLET + '\nAmount: 0.001 ETH (service fee, not gas).', 'bad');
+          + 'Fee wallet: ' + FEE_WALLET + '\nAmount: 0.00005 ETH (service fee, not gas).', 'bad');
       }
       dire('Service fee confirmed: ' + frais.hash
         + '\nNext: Create the block (factory calldata, value 0 — network gas separate).', 'ok');
     }
     const feeNote = fraisWei > 0n
-      ? '\nTokenized Block service fee 0.001 ETH already confirmed (separate tx).'
+      ? '\nTokenized Block service fee 0.00005 ETH already confirmed (separate tx).'
       : '\nPractice: no Tokenized Block service fee.';
     dire('Your wallet will open.\nGas limit from estimate + 25% margin: ' + gaz.toString()
       + ' (estimate ' + mesure.gaz.toString() + ').'
