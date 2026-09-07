@@ -47,9 +47,19 @@ function chaineA(donnees, offsetOctets) {
   if (!Number.isFinite(len) || len < 0 || len > dispo) {
     throw new Error('longueur de chaine annoncee (' + len + ') > octets disponibles (' + dispo + ')');
   }
-  let s = '';
-  for (let i = 0; i < len; i++) s += String.fromCharCode(parseInt(donnees.slice(d + 64 + i * 2, d + 66 + i * 2), 16));
-  return s;
+  /* ⛔⛔ C ETAIT DU LATIN-1, ET CA RENDAIT LE NOM DES AUTRES EN CHARABIA. `String.fromCharCode`
+   * par octet fait « un octet = un caractere » ; un `string` Solidity est de l UTF-8, ou un
+   * caractere chinois pese TROIS octets. Des blocks reels de Base mainnet s affichaient
+   * « å°çç¶­å°¼ » et « â°«âĐ¤āĐ« » dans la galerie — leurs octets, pas leurs noms.
+   * ⚠️ EN ASCII PUR LES DEUX CHEMINS SONT IDENTIQUES : c est pourquoi ca a survecu. Tous nos
+   * essais etaient en ASCII ; le defaut n existait que sur les blocks DES AUTRES.
+   * ⚠️ Le MEME defaut vivait dans `chaineDe` d index.html — deux decodeurs, une seule erreur,
+   * corriges ensemble. La regle 12 de `verifie-coherence.mjs` interdit qu un troisieme apparaisse.
+   * ⚠️ Decodage NON STRICT : des octets invalides deviennent U+FFFD au lieu de lever. Un nom grave
+   * par un inconnu peut etre n importe quoi, et planter sur lui masquerait toute la galerie. */
+  const octets = new Uint8Array(len);
+  for (let i = 0; i < len; i++) octets[i] = parseInt(donnees.slice(d + 64 + i * 2, d + 66 + i * 2), 16);
+  return new TextDecoder('utf-8').decode(octets);
 }
 
 /**

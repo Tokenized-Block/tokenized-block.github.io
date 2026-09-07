@@ -835,9 +835,25 @@ async function appelBrut(tx) {
  * EIP-1193 4001 pour un refus explicite ; sans lui on ne PRESUME pas, on dit « failed ». */
 const refusUtilisateur = (e) => e && (e.code === 4001 || /user (rejected|denied)|reject(ed)? the request/i.test(String(e.message || e)));
 const pad = (a) => a.replace(/^0x/, '').toLowerCase().padStart(64, '0');
+/* ⛔⛔ CE DECODEUR RENDAIT DU CHARABIA SUR TOUT NOM NON-ASCII, ET IL L AFFICHAIT A L ECRAN.
+ * Il construisait la chaine avec `String.fromCharCode(octet)` — c est-a-dire du LATIN-1 : un octet
+ * = un caractere. Le Solidity `string` est de l UTF-8, ou un caractere chinois pese TROIS octets.
+ * Un block reellement cree sur Base mainnet et nomme en chinois s affichait
+ * « å°çç¶­å°¼ · ç¶­å°¼ä¾äº » — ses octets, pas son nom.
+ * ⛔ ET CE N EST PAS UN DEFAUT COSMETIQUE : ce nom est ce qu un CREATEUR a grave DEFINITIVEMENT
+ * dans une chaine (pas d admin, pas de renommage). Le lui rendre en charabia sur la page qui se
+ * vend comme un LECTEUR fiable, c est se tromper sur le travail de quelqu un d autre.
+ * ⚠️ ASCII PUR : les deux chemins donnent exactement la meme chose, c est pour ca que ca a survecu
+ * si longtemps — tous nos essais etaient en ASCII. Le defaut n apparait que sur les blocks DES
+ * AUTRES, mesures le 2026-09-07 : 3 des 12 de la galerie mainnet.
+ * ⚠️ On decode en UTF-8 NON STRICT : des octets invalides deviennent U+FFFD plutot que de lever.
+ * Une chaine gravee par quelqu un d autre peut etre n importe quoi, et une lecture qui PLANTE sur
+ * un nom malforme empecherait de lire le reste de la fiche — supply, mint, roles. */
 const chaineDe = (h) => { if (!h || h === '0x') return null;
-  const b = h.slice(2), len = parseInt(b.slice(64, 128), 16); let s = '';
-  for (let i = 0; i < len; i++) s += String.fromCharCode(parseInt(b.slice(128 + i*2, 130 + i*2), 16)); return s; };
+  const b = h.slice(2), len = parseInt(b.slice(64, 128), 16);
+  const octets = new Uint8Array(len);
+  for (let i = 0; i < len; i++) octets[i] = parseInt(b.slice(128 + i * 2, 130 + i * 2), 16);
+  return new TextDecoder('utf-8').decode(octets); };
 
 /* ⛔ UNE SEULE LECTURE DU FORMULAIRE, partagee par tous les appelants. Quand la signature de
  * logoSvg a change, QUATRE appelants passaient encore l ancienne — le motif exact que ce depot
