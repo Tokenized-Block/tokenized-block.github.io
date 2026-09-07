@@ -17,7 +17,7 @@
     "ogDescription": "Build a block. It becomes a B-20 token on Base — with no admin and no minter.",
     "ogImageUrl": "https://tokenized-block.github.io/embed.png",
     "tagline": "Your block, tokenized on Base",
-    "requiredChains": ["eip155:8453"],
+    "requiredChains": ["eip155:8453", "eip155:84532"],
     "requiredCapabilities": ["wallet.getEthereumProvider"]
   }
 }
