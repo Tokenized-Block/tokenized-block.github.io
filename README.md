@@ -48,3 +48,11 @@ precomputed selectors.
 
 Every encoder is compared byte-for-byte against `forge` output in the development repository; the
 references are read from simulation artifacts, never transcribed by hand.
+
+## Layout (desktop)
+
+The app uses **CSS multi-column** (`columns`) on wide screens — not CSS grid — so cards pack
+without empty row height beside a tall neighbour. Measured on the live site **2026-09-07**
+(branch that introduced it: multi-colonnes, ~5.4 screens → ~2.8 on 1440×900; phone unchanged).
+This branch does **not** remeasure that layout; Instant Create / Launch handoff keep the same
+multi-column rules on purpose.
