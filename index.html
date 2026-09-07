@@ -74,6 +74,7 @@ main{max-width:560px;margin:0 auto}
   main > #carteLook,
   main > #ctaPacket,
   main > #gardeDoubleCreate,
+  main > #gardeAdrCreate,
   main > #agir,
   main > #relire,
   main > #ouvrirLancement,
@@ -85,6 +86,7 @@ main{max-width:560px;margin:0 auto}
   main > #createZone,
   main > #ctaPacket,
   main > #gardeDoubleCreate,
+  main > #gardeAdrCreate,
   main > #agir,
   main > #relire,
   main > #ouvrirLancement,
@@ -226,14 +228,14 @@ padding:14px 15px;margin-bottom:12px}
 #gardeMainnet label{display:flex;gap:10px;align-items:flex-start;color:var(--fg);font-size:13.5px;margin:0}
 #gardeMainnet input{width:20px;height:20px;flex:0 0 auto;margin-top:1px;accent-color:var(--or)}
 /* Soft-gate: empty fingerprint after a mined Create — stop blind second Create / new salt. */
-#gardeDoubleCreate{display:none;background:#3a1818;border:1px solid #7a2a2a;border-radius:14px;
+#gardeDoubleCreate,#gardeAdrCreate{display:none;background:#3a1818;border:1px solid #7a2a2a;border-radius:14px;
 padding:14px 15px;margin:0 0 12px}
-#gardeDoubleCreate.on{display:block}
-#gardeDoubleCreate .t{font-weight:800;color:var(--bad);font-size:14px;margin-bottom:6px}
-#gardeDoubleCreate p{margin:0 0 10px;font-size:13px;color:#f0d0d0;line-height:1.5}
-#gardeDoubleCreate label{display:flex;gap:10px;align-items:flex-start;color:var(--fg);font-size:13.5px;margin:0 0 8px}
-#gardeDoubleCreate input[type=checkbox]{width:20px;height:20px;flex:0 0 auto;margin-top:1px;accent-color:var(--or)}
-#gardeDoubleCreate .mono{word-break:break-all}
+#gardeDoubleCreate.on,#gardeAdrCreate.on{display:block}
+#gardeDoubleCreate .t,#gardeAdrCreate .t{font-weight:800;color:var(--bad);font-size:14px;margin-bottom:6px}
+#gardeDoubleCreate p,#gardeAdrCreate p{margin:0 0 10px;font-size:13px;color:#f0d0d0;line-height:1.5}
+#gardeDoubleCreate label,#gardeAdrCreate label{display:flex;gap:10px;align-items:flex-start;color:var(--fg);font-size:13.5px;margin:0 0 8px}
+#gardeDoubleCreate input[type=checkbox],#gardeAdrCreate input[type=checkbox]{width:20px;height:20px;flex:0 0 auto;margin-top:1px;accent-color:var(--or)}
+#gardeDoubleCreate .mono,#gardeAdrCreate .mono{word-break:break-all}
 /* Launch too-cheap valuation soft-gate (2026-09-07) — inside #ns-launch, not main band. */
 #gardeValoCheap{display:none;background:#3a1818;border:1px solid #7a2a2a;border-radius:12px;
   padding:12px 14px;margin:10px 0 0}
@@ -242,6 +244,16 @@ padding:14px 15px;margin:0 0 12px}
 #gardeValoCheap p{margin:0 0 10px;font-size:12.5px;color:#f0d0d0;line-height:1.5}
 #gardeValoCheap label{display:flex;gap:10px;align-items:flex-start;color:var(--fg);font-size:13px;margin:0}
 #gardeValoCheap input[type=checkbox]{width:20px;height:20px;flex:0 0 auto;margin-top:1px;accent-color:var(--or)}
+/* Unlimited Permit2 / ERC20 MAX approve disclose (2026-09-07) — Launch / Liq / Swap. */
+.gardePermit2Max{display:none;background:#3a2410;border:1px solid #7a4a12;border-radius:12px;
+  padding:12px 14px;margin:10px 0 0}
+.gardePermit2Max.on{display:block}
+.gardePermit2Max .t{font-weight:800;color:var(--warn);font-size:13.5px;margin-bottom:6px}
+.gardePermit2Max p{margin:0 0 8px;font-size:12.5px;color:#f0dcc0;line-height:1.5}
+.gardePermit2Max a{color:var(--or);text-decoration:underline}
+.gardePermit2Max label.permit2Ack{display:none;gap:10px;align-items:flex-start;color:var(--fg);font-size:13px;margin:8px 0 0}
+.gardePermit2Max label.permit2Ack.on{display:flex}
+.gardePermit2Max input[type=checkbox]{width:20px;height:20px;flex:0 0 auto;margin-top:1px;accent-color:var(--or)}
 #apercu{display:block;width:96px;height:106px;margin:2px auto 0;border-radius:10px}
 
 /* ══ RETOUR VISUEL DE TRANSACTION ═══════════════════════════════════════════════════════════
@@ -737,6 +749,17 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
   <label><input type="checkbox" id="gardeDcExplorer"> I checked the explorer — this address has no code.</label>
   <label><input type="checkbox" id="gardeDcSalt"> I understand Create again may use a new salt and burn a second fee for a different block.</label>
 </div>
+<!-- MAINNET-DEEP-DIG trap #4 / open #3: Instant Create auto free-salt must not open wallet
+     until the NEW reserved address is shown and the user re-acks it. Happy path (salt free
+     on first try) skips this panel. Fail-closed before eth_sendTransaction. -->
+<div id="gardeAdrCreate" role="region" aria-label="Create address changed — re-ack required">
+  <div class="t">⚠ Address changed — check before Create</div>
+  <p>Free-salt (or a salt edit) reserved a <b>different</b> block address than the one you last
+  previewed in « What you will sign ». This page will <b>not</b> open your wallet until you
+  confirm the new address below.</p>
+  <p>New address: <a class="mono" id="gardeAdrCreateLien" href="#" target="_blank" rel="noopener">—</a></p>
+  <label><input type="checkbox" id="gardeAdrCreateCase"> Address changed — I checked this new address.</label>
+</div>
 <button class="act" id="agir">Connect wallet</button>
 <button class="act sec" id="relire">Re-read the chain</button>
 <!-- ⛔ HANDOFF APRES CREATION CONFIRMEE (relecture code ≠ tx-success). Prefill Launch/LP/Swap;
@@ -813,6 +836,14 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
          eth_simulateV1, affiche comme « THE CHAIN REFUSES THIS / execution reverted ». La liquidite
          a deja les etapes 2+4 ; le Launch (ETH natif) n a besoin QUE du block — pas d approve quote.
          ⇒ On MESURE, on NOMME, on offre Run, et on garde Launch FERME tant que ce n est pas pose. -->
+    <!-- ⛔ PERMIT2 MAX DISCLOSE 2026-09-07. Approves use MAX_UINT256 / MAX_UINT160 — lasts until revoked.
+         Always show before Run approve. Checkbox required only on Real (mainnet); Practice stays one less click. -->
+    <div id="gardePermit2MaxLanc" class="gardePermit2Max" role="region" aria-label="Unlimited Permit2 approve disclose — Launch">
+      <div class="t">⚠ Unlimited allowance — lasts until you revoke</div>
+      <p>This step asks for an <b>unlimited</b> token allowance to <b>Permit2</b> (and/or the Uniswap router / PositionManager via Permit2). It is not limited to this one Launch / Liquidity / Swap. It stays until you revoke it.</p>
+      <p class="permit2RevokeLinks" style="margin:0 0 0;font-size:12.5px;color:#f0dcc0;line-height:1.5">Revoke later: links appear when this gate arms (chain-correct explorer + revoke.cash).</p>
+      <label class="permit2Ack"><input type="checkbox" id="gardePermit2MaxCaseLanc"> I understand this is an unlimited allowance until I revoke it.</label>
+    </div>
     <button class="act" id="lancApprouver" style="margin-top:8px;display:none" disabled>Run the next approval</button>
     <!-- ⛔ UN SEUL BOUTON DE LANCEMENT, ET C EST L ATOMICITE QUI COMPTE PLUS QUE LE CONFORT. En deux
          etapes, quelqu un pouvait creer la pool puis refuser le mint : il restait une pool VIDE au
@@ -848,6 +879,14 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
     <input id="poolLiq" value="0.001" inputmode="decimal" placeholder="0.001">
     <button class="act sec" id="poolEtat" style="margin-top:10px">Check the 6 steps</button>
     <div id="poolVue"></div>
+    <!-- ⛔ PERMIT2 MAX DISCLOSE 2026-09-07. Approves use MAX_UINT256 / MAX_UINT160 — lasts until revoked.
+         Always show before Run approve. Checkbox required only on Real (mainnet); Practice stays one less click. -->
+    <div id="gardePermit2MaxPool" class="gardePermit2Max" role="region" aria-label="Unlimited Permit2 approve disclose — Liquidity">
+      <div class="t">⚠ Unlimited allowance — lasts until you revoke</div>
+      <p>This step asks for an <b>unlimited</b> token allowance to <b>Permit2</b> (and/or the Uniswap router / PositionManager via Permit2). It is not limited to this one Launch / Liquidity / Swap. It stays until you revoke it.</p>
+      <p class="permit2RevokeLinks" style="margin:0 0 0;font-size:12.5px;color:#f0dcc0;line-height:1.5">Revoke later: links appear when this gate arms (chain-correct explorer + revoke.cash).</p>
+      <label class="permit2Ack"><input type="checkbox" id="gardePermit2MaxCasePool"> I understand this is an unlimited allowance until I revoke it.</label>
+    </div>
     <button class="act" id="poolAgir" disabled>Run the next step</button>
   </div>
 
@@ -865,6 +904,14 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
     <input id="swapMontant" value="0.0001" inputmode="decimal" placeholder="0.0001">
     <button class="act sec" id="swapEtat" style="margin-top:10px">Quote it</button>
     <div id="swapVue"></div>
+    <!-- ⛔ PERMIT2 MAX DISCLOSE 2026-09-07. Approves use MAX_UINT256 / MAX_UINT160 — lasts until revoked.
+         Always show before Run approve. Checkbox required only on Real (mainnet); Practice stays one less click. -->
+    <div id="gardePermit2MaxSwap" class="gardePermit2Max" role="region" aria-label="Unlimited Permit2 approve disclose — Swap">
+      <div class="t">⚠ Unlimited allowance — lasts until you revoke</div>
+      <p>This step asks for an <b>unlimited</b> token allowance to <b>Permit2</b> (and/or the Uniswap router / PositionManager via Permit2). It is not limited to this one Launch / Liquidity / Swap. It stays until you revoke it.</p>
+      <p class="permit2RevokeLinks" style="margin:0 0 0;font-size:12.5px;color:#f0dcc0;line-height:1.5">Revoke later: links appear when this gate arms (chain-correct explorer + revoke.cash).</p>
+      <label class="permit2Ack"><input type="checkbox" id="gardePermit2MaxCaseSwap"> I understand this is an unlimited allowance until I revoke it.</label>
+    </div>
     <button class="act" id="swapAgir" disabled>Run the next step</button>
   </div>
 </details>
@@ -1132,6 +1179,12 @@ const FACTORY = '0xb20f000000000000000000000000000000000000';
 let chaine = 84532, compte = null, dernier = null;
 /* Soft-gate session state — declared early so relireJeton (above) never hits TDZ. */
 let createSoftGate = null; /* { adr, hash, unlocked } | null */
+/* Free-salt / salt-edit address honesty (MAINNET-DEEP-DIG #4):
+ * adresseAfficheeCreate = last creatable address rendered in #fiche (« What you will sign »).
+ * adresseAckCreate = address user may Create for (must equal adresseAfficheeCreate).
+ * First quiet preview auto-acks; chercherSelLibre / address change clears ack until checkbox. */
+let adresseAfficheeCreate = null;
+let adresseAckCreate = null;
 
 let n = 0;
 /**
@@ -1808,6 +1861,8 @@ async function rafraichir() {
     deb.textContent = on ? 'Hide full data' : 'Show full data';
   };
   if (adr) await relireJeton(adr);
+  /* Track address shown in « What you will sign » for Create honesty gate. */
+  if (adr) noterAdresseCreateAffichee(adr);
   gardeMainnet();
 }
 
@@ -2116,6 +2171,7 @@ for (const id of [84532, 8453]) $('#t' + id).onclick = () => {
   $('#gardeCase').checked = false;
   /* Soft-gate is per mined Create on THIS network — a tab switch drops it. */
   if (typeof leverSoftGateCreate === 'function') leverSoftGateCreate('network change');
+  if (typeof resetGardeAdrCreate === 'function') resetGardeAdrCreate('network change');
   /* ⛔ STALE PLAN 2026-09-07: Work out / Check / Quote bake PoolKey + calldata for THIS chain.
    *    Switching Practice↔Real without clearing left Launch/Liq/Swap able to Sign octets
    *    simulated on the other network (page chaine updates; plancement.donnee does not). */
@@ -2211,7 +2267,12 @@ async function chercherSelLibre({ direEtat = true } = {}) {
     const r = await adresseOuRefus(appelBrut, compte, calldata(f, compte));
     if (r.adresse) {
       await rafraichir();
-      if (direEtat) dire('« ' + essai + ' » is free for your address.', 'ok');
+      /* Always require re-ack after free-salt pick — salt text changed → new reserved address.
+       * Even if this is the first creatable address after a taken salt, wallet must not open
+       * in the same Create click without a human check of the NEW address. */
+      noterAdresseCreateAffichee(r.adresse, { exigerAck: true });
+      if (direEtat) dire('« ' + essai + ' » is free for your address.\n'
+        + 'New reserved address is in « What you will sign » — confirm it before Create.', 'ok');
       return essai;
     }
   }
@@ -3094,8 +3155,19 @@ async function construirePlan() {
   b.disabled = empeche !== null;
   b.textContent = empeche ? empeche : 'Run: ' + suivante.nom;
   if (empeche && !compte) vue += ligne('next', pastille('CONNECT YOUR WALLET', 'warn'));
+  /* Unlimited MAX disclose when next step is approve — banner always; checkbox Real-only. */
+  {
+    const poolApproMax = !empeche && estEtapeApproveMax(suivante);
+    if (poolApproMax) {
+      vue += ligne('unlimited approve', pastille('DISCLOSE', 'warn')
+        + ' This Run asks for MAX allowance (ERC20→Permit2 and/or Permit2→spender). '
+        + htmlLiensRevokePermit2(compte));
+    }
+    syncGardePermit2Max('pool', poolApproMax);
+  }
   box.innerHTML = vue;
   gardeMainnet();
+  if (!empeche && estEtapeApproveMax(suivante)) syncGardePermit2Max('pool', true);
   /* ⛔ LE PLAN PORTE LES BESOINS, pour que le mint pose de VRAIES bornes plutot que MAX_UINT128.
    * Les recalculer au moment de signer les recalculerait sur un etat relu plus tard : ce qui a
    * ete MONTRE a l utilisateur doit etre ce qui est SIGNE. */
@@ -3353,8 +3425,17 @@ async function etatSwap() {
   b.disabled = empeche !== null;
   b.textContent = empeche ? empeche
     : (autorise ? 'Run: 2. swap' : 'Run: 1. approve Permit2 → Router');
+  /* Native ETH buy: no Permit2 approve. ERC20 in: MAX Permit2→Router disclose. */
+  const swapApproMax = !empeche && !autorise && !entreeEstNatif;
+  if (swapApproMax) {
+    vue += ligne('unlimited approve', pastille('DISCLOSE', 'warn')
+      + ' Permit2→Router uses MAX_UINT160 (until revoked). '
+      + htmlLiensRevokePermit2(compte));
+  }
   box.innerHTML = vue;
+  syncGardePermit2Max('swap', swapApproMax);
   gardeMainnet();
+  if (swapApproMax) syncGardePermit2Max('swap', true);
   return {
     b20, cle, zeroForOne, montant, ur, autorise, forme, sortie,
     acheter, entreeEstNatif, jetonEntree, valeur: valeurHex || '0x0',
@@ -3466,6 +3547,7 @@ function invaliderPlansTravail(pourquoi) {
   plan = null;
   planSwap = null;
   resetGardeValoCheap();
+  resetGardePermit2Max();
   for (const id of ['#lancLancer', '#lancApprouver']) {
     const b = $(id); if (b) { b.style.display = 'none'; b.disabled = true; }
   }
@@ -3501,6 +3583,111 @@ function syncGardeValoCheap() {
   b.disabled = !(cheapOk && mainOk);
 }
 
+
+/**
+ * ⛔ UNLIMITED PERMIT2 / ERC20 MAX APPROVE DISCLOSE (2026-09-07).
+ * ================================================================================================
+ * Launch + Liquidity still encode MAX_UINT256 (ERC20→Permit2) and MAX_UINT160+MAX_UINT48
+ * (Permit2→POSM/Router). Finite amounts can expire mid-flow and break Launch mint — prefer
+ * honest disclose over changing MAX.
+ * ⇒ Always show a hard banner + revoke links before Run approve.
+ * ⇒ Require a one-line checkbox ONLY on Real (mainnet). Practice stays without that extra click
+ *    so E2E is not blocked on every approve — banner remains impossible to miss.
+ * Force-refuse only (never blind-enable a button that another gate closed).
+ */
+const PERMIT2_MAX_GATES = {
+  lanc: { pan: '#gardePermit2MaxLanc', caseId: '#gardePermit2MaxCaseLanc', btn: '#lancApprouver' },
+  pool: { pan: '#gardePermit2MaxPool', caseId: '#gardePermit2MaxCasePool', btn: '#poolAgir' },
+  swap: { pan: '#gardePermit2MaxSwap', caseId: '#gardePermit2MaxCaseSwap', btn: '#swapAgir' },
+};
+let permit2MaxArmee = { lanc: false, pool: false, swap: false };
+
+/** Chain-correct revoke helpers — Basescan family tokenapprovalchecker + revoke.cash. */
+function liensRevokePermit2(adresse) {
+  const R = RESEAUX[chaine] || RESEAUX[84532];
+  const scan = (R && R.scan) || 'https://sepolia.basescan.org';
+  const adr = (adresse && /^0x[0-9a-fA-F]{40}$/.test(adresse)) ? adresse : null;
+  const checker = adr
+    ? (scan + '/tokenapprovalchecker?search=' + adr)
+    : (scan + '/tokenapprovalchecker');
+  const revoke = adr
+    ? ('https://revoke.cash/address/' + adr + '?chainId=' + chaine)
+    : ('https://revoke.cash/');
+  return { checker, revoke, scanNom: (R && R.nom) || 'explorer' };
+}
+
+function htmlLiensRevokePermit2(adresse) {
+  const u = liensRevokePermit2(adresse);
+  return 'Revoke later: <a href="' + u.revoke + '" target="_blank" rel="noopener">revoke.cash</a>'
+    + ' · <a href="' + u.checker + '" target="_blank" rel="noopener">'
+    + enTexte(u.scanNom) + ' token approval checker</a>'
+    + (adresse ? '' : ' <span class="dim">(connect wallet to pre-fill your address)</span>');
+}
+
+/** True when the next runnable step is an ERC20→Permit2 or Permit2→spender MAX approve. */
+function estEtapeApproveMax(s) {
+  if (!s || s.mint || s.bundled) return false;
+  if (s.nom && /wrap\s/i.test(s.nom)) return false;
+  if (s.to && String(s.to).toLowerCase() === PERMIT2.toLowerCase()) return true;
+  if (s.nom && /approve/i.test(s.nom)) return true;
+  return false;
+}
+
+function resetGardePermit2Max(section) {
+  const sections = section ? [section] : Object.keys(PERMIT2_MAX_GATES);
+  for (const k of sections) {
+    permit2MaxArmee[k] = false;
+    const g = PERMIT2_MAX_GATES[k];
+    const c = $(g.caseId);
+    if (c) c.checked = false;
+    const pan = $(g.pan);
+    if (pan) {
+      pan.classList.remove('on');
+      const lab = pan.querySelector('label.permit2Ack');
+      if (lab) lab.classList.remove('on');
+    }
+  }
+}
+
+/**
+ * Arm / disarm one section's Permit2 MAX disclose.
+ * @param {'lanc'|'pool'|'swap'} section
+ * @param {boolean} armee
+ * ⛔ Force-disable Run on Real until checkbox; Practice shows banner only.
+ *    Never force-enables a button disabled by another gate.
+ */
+function syncGardePermit2Max(section, armee) {
+  if (!PERMIT2_MAX_GATES[section]) return;
+  permit2MaxArmee[section] = !!armee;
+  const g = PERMIT2_MAX_GATES[section];
+  const pan = $(g.pan);
+  const c = $(g.caseId);
+  const b = $(g.btn);
+  const surMainnet = chaine === MAINNET;
+  if (pan) {
+    pan.classList.toggle('on', !!armee);
+    const links = pan.querySelector('.permit2RevokeLinks');
+    if (links) links.innerHTML = htmlLiensRevokePermit2(compte);
+    const lab = pan.querySelector('label.permit2Ack');
+    if (lab) lab.classList.toggle('on', !!armee && surMainnet);
+  }
+  if (!armee) {
+    if (c) c.checked = false;
+    return;
+  }
+  if (surMainnet && b && !(c && c.checked)) {
+    b.disabled = true;
+  }
+}
+
+/** Fail-closed click path on Real — disabled attribute is not enough. */
+function permit2MaxAckOk(section) {
+  if (chaine !== MAINNET) return true;
+  if (!permit2MaxArmee[section]) return true;
+  const g = PERMIT2_MAX_GATES[section];
+  return !!( $(g.caseId) && $(g.caseId).checked );
+}
+
 $('#lancCalculer').onclick = async () => {
   const box = $('#lancPlan');
   $('#lancLancer').style.display = 'none';
@@ -3509,6 +3696,7 @@ $('#lancCalculer').onclick = async () => {
   plancement = null;
   plancementAppro = null;
   resetGardeValoCheap();
+  resetGardePermit2Max('lanc');
   const jeton = $('#lancBlock').value.trim();
   if (!/^0x[0-9a-fA-F]{40}$/.test(jeton)) return box.innerHTML = ligne('state', pastille('NOT AN ADDRESS', 'warn'));
   const valo = Number($('#lancValo').value);
@@ -3706,8 +3894,15 @@ $('#lancCalculer').onclick = async () => {
         $('#lancApprouver').style.display = '';
         $('#lancApprouver').disabled = false;
         $('#lancApprouver').textContent = 'Run: ' + suivante.nom;
+        syncGardePermit2Max('lanc', true);
+      } else {
+        resetGardePermit2Max('lanc');
       }
+      box.innerHTML += ligne('unlimited approve', pastille('DISCLOSE', 'warn')
+        + ' ERC20→Permit2 uses MAX_UINT256; Permit2→POSM uses MAX_UINT160 (until revoked). '
+        + htmlLiensRevokePermit2(compte));
       gardeMainnet();
+      if (suivante) syncGardePermit2Max('lanc', true);
       return;
     }
 
@@ -3772,6 +3967,8 @@ $('#lancCalculer').onclick = async () => {
         + ligne('note', 'checked against the chain as it is right now — not a promise about later');
     }
     plancement = { donnee, dejaCreee: sqrtExistant !== 0n };
+    /* Approvals present — no Run approve; drop Permit2 MAX gate for Launch. */
+    resetGardePermit2Max('lanc');
     /* Arm too-cheap soft-gate from the same classement shown in the fiche. */
     valoCheapArmee = classementValo.etat === 'TROP_BON_MARCHE';
     const caseValo = $('#gardeValoCheapCase');
@@ -3888,6 +4085,11 @@ $('#lancApprouver').onclick = async () => {
   if (!plancementAppro || !plancementAppro.suivante) {
     return dire('Work out the launch first — approvals are measured there.', 'warn');
   }
+  /* ⛔ PERMIT2 MAX FAIL-CLOSED on Real — disabled is not enough. */
+  if (!permit2MaxAckOk('lanc')) {
+    return dire('Unlimited Permit2 / ERC20 approve — tick the acknowledge on Real first.\n'
+      + 'This allowance lasts until you revoke it (revoke.cash or the explorer approval checker).', 'bad');
+  }
   const s = plancementAppro.suivante;
   afficherTx('wallet', s.nom);
   const r = await envoyerTx({ to: s.to, data: s.data, value: '0x0', nom: s.nom });
@@ -3977,7 +4179,81 @@ function majDisableAgir() {
   if (!compte) { btn.disabled = false; return; }
   const mainnetOk = chaine !== MAINNET || $('#gardeCase').checked;
   const softOk = !softGateCreateArme();
-  btn.disabled = !(mainnetOk && softOk);
+  const adrOk = !createAdrGateArme();
+  btn.disabled = !(mainnetOk && softOk && adrOk);
+}
+
+/* ══ CREATE ADDRESS RE-ACK (free-salt / salt-edit) — MAINNET-DEEP-DIG trap #4 ═══════════════
+ * Fail-closed: never eth_sendTransaction Create for an address the UI has not displayed in
+ * « What you will sign » after the last salt/address change, and that the user has not acked.
+ * Happy path: first quiet preview of a free salt auto-acks — no extra friction. */
+function createAdrGateArme() {
+  return !!(adresseAfficheeCreate && adresseAckCreate !== adresseAfficheeCreate);
+}
+
+function createPeutEnvoyerPour(adr) {
+  const nrm = adr && String(adr).toLowerCase();
+  return !!(nrm && adresseAfficheeCreate === nrm && adresseAckCreate === nrm);
+}
+
+function majPanneauGardeAdrCreate() {
+  const pan = $('#gardeAdrCreate');
+  if (!pan) return;
+  const on = createAdrGateArme();
+  pan.classList.toggle('on', on);
+  if (!on) return;
+  const lien = $('#gardeAdrCreateLien');
+  const scan = RESEAUX[chaine] && RESEAUX[chaine].scan;
+  if (lien && adresseAfficheeCreate) {
+    if (scan) {
+      lien.href = scan + '/address/' + adresseAfficheeCreate;
+      lien.textContent = adresseAfficheeCreate;
+    } else {
+      lien.removeAttribute('href');
+      lien.textContent = adresseAfficheeCreate;
+    }
+  }
+}
+
+/**
+ * @param {string} adr
+ * @param {{ exigerAck?: boolean }} [opts] exigerAck:true after free-salt pick (always re-ack)
+ */
+function noterAdresseCreateAffichee(adr, opts) {
+  if (!adr || !/^0x[0-9a-fA-F]{40}$/.test(adr)) return;
+  const exigerAck = !!(opts && opts.exigerAck);
+  const norm = String(adr).toLowerCase();
+  const changed = !!(adresseAfficheeCreate && adresseAfficheeCreate !== norm);
+  adresseAfficheeCreate = norm;
+  if (exigerAck || changed) {
+    adresseAckCreate = null;
+    const c = $('#gardeAdrCreateCase'); if (c) c.checked = false;
+    const sd = $('#signDetails'); if (sd) sd.open = true;
+  } else if (adresseAckCreate == null) {
+    /* First quiet preview of this address — no extra Create friction. */
+    adresseAckCreate = norm;
+  }
+  majPanneauGardeAdrCreate();
+  majDisableAgir();
+}
+
+function resetGardeAdrCreate(_pourquoi) {
+  adresseAfficheeCreate = null;
+  adresseAckCreate = null;
+  const c = $('#gardeAdrCreateCase'); if (c) c.checked = false;
+  majPanneauGardeAdrCreate();
+  majDisableAgir();
+}
+
+function syncGardeAdrCreateDepuisCase() {
+  if (!adresseAfficheeCreate) return;
+  const ok = !!( $('#gardeAdrCreateCase') && $('#gardeAdrCreateCase').checked );
+  adresseAckCreate = ok ? adresseAfficheeCreate : null;
+  majDisableAgir();
+  if (ok) {
+    dire('New address acknowledged for Create.\n' + adresseAfficheeCreate
+      + '\nRe-check « What you will sign », then press Create again.', 'ok');
+  }
 }
 
 function majPanneauSoftGateCreate() {
@@ -4058,6 +4334,10 @@ function gardeMainnet() {
     /* Mainnet consent OK (or Practice): re-compose Launch with too-cheap confirm — never blind-enable. */
     syncGardeValoCheap();
   }
+  /* Re-apply Permit2 MAX Real checkboxes (force-refuse only) after mainnet composition. */
+  for (const sec of ['lanc', 'pool', 'swap']) {
+    if (permit2MaxArmee[sec]) syncGardePermit2Max(sec, true);
+  }
 }
 /* ⛔ ON N ENREGISTRE QUE LE « OUI ». Decocher n efface pas la trace — ce serait un troisieme etat
  * (« a retire son consentement ») que personne n a demande, et qui ferait redemander a la
@@ -4088,8 +4368,27 @@ $('#gardeCase').onchange = () => {
 /* Soft-gate boxes: both required; unlocking is session-only and does not claim code exists. */
 $('#gardeDcExplorer').onchange = syncSoftGateCreateDepuisCases;
 $('#gardeDcSalt').onchange = syncSoftGateCreateDepuisCases;
+if ($('#gardeAdrCreateCase')) $('#gardeAdrCreateCase').onchange = syncGardeAdrCreateDepuisCase;
 /* Too-cheap valuation confirm: unlocks Launch only when armed + checked (+ mainnet garde). */
 if ($('#gardeValoCheapCase')) $('#gardeValoCheapCase').onchange = () => { syncGardeValoCheap(); };
+/* Permit2 MAX ack (Real only shown): unlock the matching Run approve button. */
+for (const sec of ['lanc', 'pool', 'swap']) {
+  const g = PERMIT2_MAX_GATES[sec];
+  const el = $(g.caseId);
+  if (el) el.onchange = () => {
+    if (!permit2MaxArmee[sec]) return;
+    const b = $(g.btn);
+    const mainOk = chaine !== MAINNET || !!( $('#gardeCase') && $('#gardeCase').checked );
+    const ackOk = chaine !== MAINNET || !!el.checked;
+    if (b && mainOk && ackOk) {
+      if (sec === 'lanc' && plancementAppro && plancementAppro.suivante) b.disabled = false;
+      if (sec === 'pool' && plan && plan.suivante && estEtapeApproveMax(plan.suivante)) b.disabled = false;
+      if (sec === 'swap' && planSwap && !planSwap.autorise && !planSwap.entreeEstNatif) b.disabled = false;
+    } else if (b && permit2MaxArmee[sec]) {
+      b.disabled = true;
+    }
+  };
+}
 /* Editing valuation after Work out must not leave a stale plan / armed gate for the old number. */
 if ($('#lancValo')) $('#lancValo').addEventListener('input', () => {
   if (plancement || plancementAppro || valoCheapArmee) {
@@ -4156,6 +4455,7 @@ document.querySelectorAll('.swapDirBtn').forEach((btn) => {
     $('#swapSell')?.setAttribute('aria-pressed', buy ? 'false' : 'true');
     appliquerLabelSwap();
     planSwap = null;
+    resetGardePermit2Max('swap');
     const box = $('#swapVue');
     if (box) box.innerHTML = '';
     const b = $('#swapAgir');
@@ -4170,6 +4470,10 @@ $('#swapAgir').onclick = async () => {
   if (!compte) return dire('Connect your wallet first.', 'bad');
   if (!planSwap) { planSwap = await etatSwap(); if (!planSwap) return; }
   const p = planSwap;
+  if (!p.autorise && !p.entreeEstNatif && !permit2MaxAckOk('swap')) {
+    return dire('Unlimited Permit2 approve — tick the acknowledge on Real first.\n'
+      + 'This allowance lasts until you revoke it (revoke.cash or the explorer approval checker).', 'bad');
+  }
   try {
     let to, data, quoi, valeur = '0x0';
     if (!p.autorise) {
@@ -4208,6 +4512,10 @@ $('#poolAgir').onclick = async () => {
   if (!compte) return dire('Connect your wallet first.', 'bad');
   if (!plan || !plan.suivante) { plan = await construirePlan(); if (!plan || !plan.suivante) return; }
   const s = plan.suivante;
+  if (estEtapeApproveMax(s) && !permit2MaxAckOk('pool')) {
+    return dire('Unlimited Permit2 / ERC20 approve — tick the acknowledge on Real first.\n'
+      + 'This allowance lasts until you revoke it (revoke.cash or the explorer approval checker).', 'bad');
+  }
   try {
     let data = s.data;
     if (s.mint) {
@@ -4338,6 +4646,15 @@ $('#agir').onclick = async () => {
       if (!codeEstVide(await rpc('eth_getCode', [adr, 'latest']))) {
         return dire('Still taken after search: ' + adr + '\nType a salt of your own in advanced settings.', 'warn');
       }
+      /* ⛔ FREE-SALT HONESTY: never continue to wallet in the SAME click after a new address.
+       * chercherSelLibre already forced re-ack + opened « What you will sign ». */
+      majPanneauGardeAdrCreate();
+      majDisableAgir();
+      const sdLibre = $('#signDetails'); if (sdLibre) sdLibre.open = true;
+      return dire('⛔ Free salt reserved a NEW address — wallet was NOT opened.\n'
+        + 'New address is shown above Create and in « What you will sign ».\n'
+        + 'Tick « Address changed — I checked this new address », then press Create again.\n'
+        + adr, 'warn');
     } else if (!adr) {
       return dire('The chain refuses this block:\n' + vu.refus + (vu.brut ? '\n(' + vu.brut + ')' : ''), 'bad');
     }
@@ -4371,6 +4688,19 @@ $('#agir').onclick = async () => {
           + (mesure.texte ? ('Detail: ' + String(mesure.texte).replace(/<[^>]+>/g, ' ')) : ''), 'bad');
     }
     const gaz = mesure.gaz * 125n / 100n;
+    /* Fail-closed: never send Create for an address not displayed+acked after last salt change. */
+    if (!createPeutEnvoyerPour(adr)) {
+      setFunnel('Ready');
+      if (adr) noterAdresseCreateAffichee(adr, { exigerAck: true });
+      majPanneauGardeAdrCreate();
+      majDisableAgir();
+      const sdAck = $('#signDetails'); if (sdAck) sdAck.open = true;
+      afficherTx('fail', 'Address changed — nothing sent');
+      return dire('⛔ Create blocked — reserved address was not re-acknowledged.\n'
+        + 'Salt/address changed since the last preview you confirmed.\n'
+        + 'Check the new address in « What you will sign », tick the gate, then Create again.\n'
+        + (adr || ''), 'bad');
+    }
     dire('Your wallet will open.\nGas limit from estimate + 25% margin: ' + gaz.toString()
       + ' (estimate ' + mesure.gaz.toString() + ').\nRe-read the destination and the start of `data` before accepting.', 'warn');
     afficherTx('wallet', 'Confirm the creation in your wallet.');
@@ -4463,6 +4793,7 @@ await rafraichir();
     if (compte && nouveau && compte.toLowerCase() === nouveau.toLowerCase()) return;
     compte = nouveau;
     invaliderPlansTravail('accountsChanged');
+    if (typeof resetGardeAdrCreate === 'function') resetGardeAdrCreate('accountsChanged');
     $('#gardeCase').checked = false;
     if (compte) restaurerConsentement();
     dire('Wallet account changed'
