@@ -733,7 +733,11 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
 <!-- ⛔ MESURE, PAS INTUITION : simple mode folds Advanced; signed plan identical. -->
 <button class="bascule" id="bascule" aria-expanded="false">Advanced · supply, salt, decimals</button>
 
-<!-- Next steps: Launch / Liquidity / Swap — one panel at a time; collapsed by default -->
+<!-- Next steps: Launch / Liquidity / Swap — one panel at a time; collapsed by default
+     Quick audit: tabs Launch/Liq/Swap → #ns-launch/#ns-liq/#ns-swap;
+     Work out → #lancCalculer then #lancLancer (one tx); Check 6 steps → #poolEtat then #poolAgir;
+     Quote → #swapEtat then #swapAgir; prefill via apresCreationConfirmee (lancBlock/poolToken/swapToken).
+     All three send paths use envoyerTx (eth_estimateGas + 25% + explicit gas + OOG on fail receipt). -->
 <details class="card" id="nextSteps">
   <summary class="nsSum">
     <span class="secHead">Next steps</span>
@@ -3236,6 +3240,8 @@ $('#lancCalculer').onclick = async () => {
     $('#lancLancer').textContent = plancement.dejaCreee
       ? 'Place the supply — one transaction'
       : 'Launch — create the pool and place the supply, one transaction';
+    /* Re-apply mainnet force-refuse after revealing the button (same gate as pool/swap). */
+    gardeMainnet();
   } catch (e) {
     /* ⛔ FAIL-CLOSED : toute lecture qui echoue laisse les boutons FERMES. « Je n ai pas pu
      *    mesurer » ne doit jamais ouvrir un geste definitif. */
@@ -3247,34 +3253,71 @@ $('#lancCalculer').onclick = async () => {
  *    partir dans la console : un utilisateur qui refuse dans son portefeuille voyait l app figee
  *    sur « Your wallet will open… », sans savoir si quelque chose etait parti. Le reste de la
  *    page distingue deja « j ai refuse » de « ca a plante » (code EIP-1193 4001) — ce chemin ne
- *    le faisait pas. */
-async function envoyerLancement(nom, to, data, apres) {
+ *    le faisait pas.
+ *
+ * ⛔ NEXT-STEPS SANS `gas` : meme risque que Create avant PR #7 — wallet plafonne (souvent 1M) et
+ *    OOG on-chain. Launch / Liquidity / Swap passent tous par `envoyerTx` : estimate → abort si
+ *    echec → limite = estimate × 125/100 → `gas` explicite → receipt → OOG si gasUsed==limit. */
+async function envoyerTx({ to, data, value = '0x0', nom }) {
   try {
     /* ⛔ LA GARDE DE CHAINE EST ICI, PAS CHEZ L APPELANT — et la regle 8 me l a impose. Un helper
      *    d envoi peut etre appele depuis un endroit qui a oublie de verifier ; la garde appartient
      *    donc a l endroit ou la TRANSACTION part. Meme lecon que « la garde SSRF appartient la ou
      *    la connexion se fait ». C est ici qu ont coute quatre approbations parties sur Sepolia. */
-    if (!(await memeChaineQueLaPage())) return;
-    dire('Your wallet will open — ' + nom + '\nThe destination must be ' + to, 'warn');
+    if (!(await memeChaineQueLaPage())) return null;
+    dire('Estimating gas for ' + nom + ' (will not send without a limit)…', 'warn');
+    let estimate;
+    try {
+      const raw = await rpc('eth_estimateGas', [{ from: compte, to, data, value }]);
+      estimate = BigInt(raw);
+    } catch (e) {
+      dire('⛔ Could not estimate gas — ' + nom + ' was NOT sent.\n'
+        + 'Sending without an explicit gas limit lets the wallet under-cap and OOG on-chain.\n'
+        + (e.message || String(e)), 'bad');
+      return null;
+    }
+    const gaz = estimate * 125n / 100n;
+    dire('Your wallet will open — ' + nom
+      + '\nGas limit from estimate + 25% margin: ' + gaz.toString()
+      + ' (estimate ' + estimate.toString() + ').\nThe destination must be ' + to, 'warn');
     const hash = await window.ethereum.request({ method: 'eth_sendTransaction',
-      params: [{ from: compte, to, value: '0x0', data }] });
-    dire('Sent: ' + hash + '\nRe-reading the chain…', 'ok');
+      params: [{ from: compte, to, value, data, gas: '0x' + gaz.toString(16) }] });
+    dire('Sent: ' + hash + '\nWaiting for receipt…', 'ok');
     /* ⛔ ON RELIT AU LIEU DE SUPPOSER. Traiter un envoi accepte comme un fait accompli offrirait
      *    l etape suivante sur une pool qui n existe peut-etre pas encore. */
+    let receipt = null;
     for (let i = 0; i < 30; i++) {
       await new Promise((r) => setTimeout(r, 2000));
-      const r = await rpc('eth_getTransactionReceipt', [hash]).catch(() => null);
-      if (r) {
-        if (r.status !== '0x1') return dire('⛔ REVERTED on-chain — ' + nom + '\n' + hash, 'bad');
-        return apres ? apres(hash) : dire('Confirmed: ' + nom + '\n' + hash, 'ok');
-      }
+      receipt = await rpc('eth_getTransactionReceipt', [hash]).catch(() => null);
+      if (receipt) break;
     }
-    dire('⚠️ Not confirmed yet: ' + hash + '\nDo NOT send the next step until this one is mined.', 'warn');
+    if (!receipt) {
+      dire('⚠️ Not confirmed yet: ' + hash + '\nDo NOT send the next step until this one is mined.', 'warn');
+      return { hash, receipt: null, gaz, ok: false };
+    }
+    if (receipt.status !== '0x1') {
+      const used = receipt.gasUsed != null ? BigInt(receipt.gasUsed) : null;
+      const oog = used !== null && used === gaz;
+      dire('⛔ REVERTED on-chain — ' + nom + '\n'
+        + 'gasUsed=' + (used !== null ? used.toString() : '?')
+        + ' vs gas limit=' + gaz.toString()
+        + (oog ? ' — looks like out-of-gas (OOG).' : '.')
+        + '\n' + hash, 'bad');
+      return { hash, receipt, gaz, ok: false };
+    }
+    return { hash, receipt, gaz, ok: true };
   } catch (e) {
     dire(refusUtilisateur(e) ? 'You refused in your wallet. NOTHING was sent.'
       : '⛔ The send failed. Check your wallet before retrying — it may or may not have gone out.\n'
         + (e.message || String(e)), refusUtilisateur(e) ? 'warn' : 'bad');
+    return null;
   }
+}
+
+async function envoyerLancement(nom, to, data, apres) {
+  const r = await envoyerTx({ to, data, value: '0x0', nom });
+  if (!r || !r.ok) return;
+  return apres ? apres(r.hash) : dire('Confirmed: ' + nom + '\n' + r.hash, 'ok');
 }
 
 $('#lancLancer').onclick = async () => {
@@ -3348,7 +3391,9 @@ function gardeMainnet() {
   $('#agir').disabled = compte ? !ok : false;
   /* Les deux autres sont recalcules par leur propre section a chaque lecture : on ne fait que
    * FORCER le refus, jamais l autorisation. */
-  if (!ok) for (const id of ['#poolAgir', '#swapAgir']) { const b = $(id); if (b) b.disabled = true; }
+  /* ⛔ Launch (#lancLancer) was missing from this list — comment said three buttons, code had two.
+   *    On mainnet without the checkbox, Work out → Launch could still send. Force-refuse only. */
+  if (!ok) for (const id of ['#poolAgir', '#swapAgir', '#lancLancer']) { const b = $(id); if (b) b.disabled = true; }
 }
 /* ⛔ ON N ENREGISTRE QUE LE « OUI ». Decocher n efface pas la trace — ce serait un troisieme etat
  * (« a retire son consentement ») que personne n a demande, et qui ferait redemander a la
@@ -3439,22 +3484,17 @@ $('#swapAgir').onclick = async () => {
       data = encodeSwapExactInSingle({ cle: p.cle, zeroForOne: p.zeroForOne, montant: p.montant,
         sortieMin: min, deadline: BigInt(bloc0.timestamp) + 600n, forme: p.forme });
     }
-    /* ⛔ MEME CHAINE QUE LA PAGE, sinon rien ne part. Voir `memeChaineQueLaPage`. */
-    if (!(await memeChaineQueLaPage())) return;
-    dire("Your wallet will open — " + quoi + "\nRe-read the destination before accepting.", 'warn');
     afficherTx('wallet', quoi);
-    const hash = await window.ethereum.request({ method: 'eth_sendTransaction', params: [{ from: compte, to, value: '0x0', data }] });
-    dire('Sent: ' + hash + '\nRe-reading the chain…', 'ok');
-    afficherTx('pending', quoi, hash);
-    for (let i = 0; i < 30; i++) {
-      await new Promise((r) => setTimeout(r, 2000));
-      const r = await rpc('eth_getTransactionReceipt', [hash]).catch(() => null);
-      if (r) { planSwap = await etatSwap();
-        afficherTx(r.status === '0x1' ? 'ok' : 'fail', quoi, hash);
-        return dire(r.status === '0x1' ? 'Confirmed on-chain: ' + quoi : '⛔ REVERTED on-chain: ' + quoi + '\n' + hash,
-          r.status === '0x1' ? 'ok' : 'bad'); }
+    /* Gas + chain guard live in envoyerTx (parity with Create / Launch / Liquidity). */
+    const r = await envoyerTx({ to, data, value: '0x0', nom: quoi });
+    if (!r) { afficherTx('fail', quoi); return; }
+    if (!r.receipt) {
+      afficherTx('pending', quoi, r.hash);
+      return dire('Press « Quote it » when ready.\n' + r.hash, 'warn');
     }
-    dire('Sent but no receipt yet. Press « Quote it ».\n' + hash, 'warn');
+    planSwap = await etatSwap();
+    afficherTx(r.ok ? 'ok' : 'fail', quoi, r.hash);
+    if (r.ok) dire('Confirmed on-chain: ' + quoi, 'ok');
   } catch (e) { dire(refusUtilisateur(e) ? 'You declined the transaction.' : 'Failed: ' + (e.message || e), 'bad'); }
 };
 
@@ -3484,31 +3524,23 @@ $('#poolAgir').onclick = async () => {
           : ((plan.quoteEst0 ? plan.besoinB : plan.besoinQ) * 102n) / 100n,
         proprietaire: compte, deadline });
     }
-    dire('Your wallet will open — ' + s.nom + '\nRe-read the destination before accepting.', 'warn');
     afficherTx('wallet', s.nom);
     /* ⛔ SEULE L ETAPE D ENVELOPPE PORTE DE LA VALEUR, et elle porte EXACTEMENT ce qui manque.
      * Le defaut reste zero : une etape qui enverrait de l ETH par accident serait une perte
      * silencieuse, et rien dans l interface ne l aurait annoncee. */
     const valeur = s.valeur || '0x0';
     if (valeur !== '0x0') dire('This step SENDS ' + (Number(BigInt(valeur)) / 1e18).toFixed(9) + ' ETH, to wrap it into WETH.', 'warn');
-    /* ⛔ MEME CHAINE QUE LA PAGE. C est ICI que le defaut a coute : quatre approbations parties
-     * sur Sepolia avec des adresses mainnet, « confirmees », et sans effet. */
-    if (!(await memeChaineQueLaPage())) return;
-    const hash = await window.ethereum.request({ method: 'eth_sendTransaction', params: [{ from: compte, to: s.to, value: valeur, data }] });
-    dire('Sent: ' + hash + '\nRe-reading the chain…', 'ok');
-    afficherTx('pending', s.nom, hash);
+    /* Gas + chain guard in envoyerTx; value preserved for wrap-ETH step. */
+    const r = await envoyerTx({ to: s.to, data, value: valeur, nom: s.nom });
+    if (!r) { afficherTx('fail', s.nom); return; }
     /* ⛔ On ne coche pas l etape parce que l envoi a reussi : on RELIT jusqu a voir le changement. */
-    for (let i = 0; i < 30; i++) {
-      await new Promise((r) => setTimeout(r, 2000));
-      const r = await rpc('eth_getTransactionReceipt', [hash]).catch(() => null);
-      if (r) {
-        plan = await construirePlan();
-        afficherTx(r.status === '0x1' ? 'ok' : 'fail', s.nom, hash);
-        return dire(r.status === '0x1' ? 'Confirmed on-chain: ' + s.nom : '⛔ REVERTED on-chain: ' + s.nom + '\n' + hash,
-          r.status === '0x1' ? 'ok' : 'bad');
-      }
+    if (!r.receipt) {
+      afficherTx('pending', s.nom, r.hash);
+      return dire('Press « Check the 6 steps » when ready.\n' + r.hash, 'warn');
     }
-    dire('Sent but no receipt yet. Press « Check the 6 steps ».\n' + hash, 'warn');
+    plan = await construirePlan();
+    afficherTx(r.ok ? 'ok' : 'fail', s.nom, r.hash);
+    if (r.ok) dire('Confirmed on-chain: ' + s.nom, 'ok');
   } catch (e) { dire(refusUtilisateur(e) ? 'You declined the transaction.' : 'Failed: ' + (e.message || e), 'bad'); }
 };
 
