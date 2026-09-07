@@ -543,6 +543,14 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
 <div class="card" id="createZone">
   <h2 class="secHead">Create your block</h2>
   <p class="secWhy">Name and symbol first — everything else is optional or comes after.</p>
+  <!-- CHAMPS:DEBUT — ⛔ CETTE BORNE EXISTE POUR QU UNE REGLE PUISSE MORDRE, NE PAS LA RETIRER.
+       La regle 3 verifiait que chaque champ de ce formulaire est branche sur `rafraichir` : sans
+       elle, un champ ajoute ne redessine rien, sans erreur ni signe a l ecran. Elle se reperait
+       sur le TITRE « Your block » — donc sur de la cosmetique. Le 2026-09-07 trois PR de mise en
+       page l ont renomme, et la regle a cesse de trouver son objet : elle ne DETECTAIT plus rien,
+       elle ne REGARDAIT plus. Un controle qui perd son ancrage se tait, et son silence ressemble
+       a un succes. Une borne dont l unique role est d etre un ancrage ne se supprime pas par
+       accident dans un redesign. -->
   <label for="nom">Name</label><input id="nom" value="Tokenized Block" maxlength="32">
   <div class="duo">
     <div><label for="sym">Symbol</label><input id="sym" value="TBLOCK" maxlength="11"></div>
@@ -575,6 +583,18 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
     <div class="photoCorps">
       <label for="photo">Photo</label>
       <input id="photo" type="file" accept="image/*">
+      <!-- ⛔ AVANT, UNE PHOTO FAISAIT DISPARAITRE LE BLOCK. `image = photoChoisie || svg` : des
+           qu on ajoutait une image, tout le dessin genere — teinte, matiere, eclats, coins —
+           n existait plus. On choisissait entre « son block » et « sa photo ».
+           ⇒ Posee SUR UNE FACE, elle garde les deux : le block reste le block, et la photo est
+           dessus. « Replace » reste disponible : des blocks ont deja ete graves ainsi. -->
+      <label for="photoOu" style="margin-top:8px;display:block">Where the photo goes</label>
+      <select id="photoOu">
+        <option value="haut">On the top face of the block</option>
+        <option value="gauche">On the left face</option>
+        <option value="droite">On the right face</option>
+        <option value="remplace">Replace the whole logo — no block, just the photo</option>
+      </select>
       <div id="photoEtat" class="fiche" style="margin-top:8px"></div>
       <button class="act sec" id="photoRetirer" style="margin-top:8px;display:none">Remove the photo, go back to the generated logo</button>
     </div>
@@ -666,6 +686,8 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
         </select></div>
     </div>
   </div>
+  <!-- CHAMPS:FIN — voir la note sur CHAMPS:DEBUT. Au-dela vivent les champs du LANCEMENT et du
+       swap, qui n ont rien a faire dans `CHAMPS` : ils ne decrivent pas le block a graver. -->
 </details>
 
 <!-- ⛔ P1/P4 dig-adapt: evidence packet on the Create CTA — network, irreversibility, link to
@@ -1174,7 +1196,19 @@ function paramsLogo(symbole) {
   return { teinte: $('#teinte').value, accent: $('#accent').value, division: $('#division').value,
     eclats: $('#eclats').value, orbite: $('#orbite').value, facette: $('#facette').value,
     matiere: $('#matiere').value, ornement: $('#ornement').value, ecart: $('#ecart').value,
+    photoOu: $('#photoOu').value,
+    /* ⚠️ La photo n est PAS lue par `$(...).value` : elle vit dans `photoChoisie`, deja mesuree et
+     *    acceptee. La regle 13 ne la reclamera donc pas dans CHAMPS — et c est correct, le champ
+     *    `#photo` y est deja pour son propre compte. */
+    photo: photoChoisie,
     lettre: symbole !== undefined ? symbole : $('#sym').value };
+}
+
+/** Les memes parametres, SANS la photo : sert a mesurer le corps du SVG qui va la porter. */
+function paramsLogoSansPhoto(symbole) {
+  const p = paramsLogo(symbole);
+  p.photo = null;
+  return p;
 }
 
 /* ── le logo, DERIVE des champs : chaque block a le sien, et il tient dans la transaction ──────
@@ -1304,7 +1338,49 @@ function logoSvg(o) {
       + `<path d="M0-40 46-13 46 40 0 66-46 40-46-13Z" fill="none" stroke="${ca(90, 72)}" stroke-width="5" stroke-linejoin="round"/></g>`;
   }
 
+  /* ── LA PHOTO POSEE SUR UNE FACE ──────────────────────────────────────────────────────────────
+   * ⛔ AVANT, UNE PHOTO EFFACAIT LE BLOCK. `image = photoChoisie || svg` : ajouter une image
+   *    supprimait tout le dessin genere. On choisissait entre son block et sa photo, alors que
+   *    l interet du produit est justement le block.
+   * ⛔ L IDENTIFIANT DU clipPath NE DEPEND QUE DE LA FACE, ET C EST VOULU. Douze vignettes plus
+   *    l apercu plus la marque coexistent dans le MEME document : un identifiant fixe serait
+   *    capture par le premier SVG et tous les autres pointeraient dessus. Ici la collision est
+   *    INOFFENSIVE — deux blocks qui utilisent la face « haut » referencent un decoupage
+   *    IDENTIQUE. Un identifiant unique par rendu (compteur, aleatoire) aurait resolu la collision
+   *    mais casse la REPRODUCTIBILITE : le SVG est GRAVE, et le meme block doit rendre le meme
+   *    texte a chaque fois.
+   * ⚠️ `slice` et non `meet` : la photo remplit la face quitte a etre rognee. `meet` laisserait des
+   *    bandes vides a l interieur du losange, qui se liraient comme un defaut d affichage. */
+  const FACES = {
+    haut: { d: 'M100 30 170 70 100 110 30 70Z', x: 30, y: 30, w: 140, h: 80 },
+    gauche: { d: 'M30 70 100 110 100 190 30 150Z', x: 30, y: 70, w: 70, h: 120 },
+    droite: { d: 'M170 70 100 110 100 190 170 150Z', x: 100, y: 70, w: 70, h: 120 },
+  };
+  const face = FACES[o.photoOu];
+  const photo = typeof o.photo === 'string' && o.photo.startsWith('data:image/') ? o.photo : null;
+  const surFace = face && photo
+    ? `<clipPath id="tbf-${o.photoOu}"><path d="${face.d}"/></clipPath>`
+      + `<image href="${photo}" x="${face.x}" y="${face.y}" width="${face.w}" height="${face.h}"`
+      + ` preserveAspectRatio="xMidYMid slice" clip-path="url(#tbf-${o.photoOu})"/>`
+      /* ⚠️ On retrace l arete APRES l image : sans elle, la photo mange le contour et le cube
+       *    perd sa forme — c est l arete qui fait lire un losange comme une face. */
+      + `<path d="${face.d}" fill="none" stroke="${ca(90, 70)}" stroke-width="2" stroke-linejoin="round" opacity=".9"/>`
+    : '';
 
+  /* ── LES COINS ────────────────────────────────────────────────────────────────────────────────
+   * ⛔ ILS ETAIENT VIDES, ET C EST LA MOITIE DE L IMAGE. Le bloc occupe le centre ; tout autour ne
+   *    portait rien. Deux blocs de meme teinte se ressemblaient donc bien plus que le compte de
+   *    combinaisons ne le laissait croire : le CATALOGUE etait grand, la SILHOUETTE etait unique.
+   * ⚠️ UN SEUL MOTIF, QUATRE FOIS, MIROITE. Dessiner les quatre coins a la main aurait fait quatre
+   *    occasions de se tromper de signe — et un coin decale d un pixel se voit immediatement,
+   *    parce que l oeil compare les symetries avant les formes.
+   * ⚠️ « aucun » rend une chaine VIDE, pas un dessin transparent : un ornement invisible pese
+   *    quand meme dans le contractURI, qui est GRAVE et se paie au gas. */
+  /* ⛔ NOMMEE `COINS` ET PAS `ORNEMENTS`, ET LA VALEUR `motifCoin` ET PAS `motif` : il existe DEJA
+   *    un `const motif` dans cette meme fonction (ligne ~856), la fabrique des motifs de FACE.
+   *    Deux `const` du meme nom dans la meme portee, c est une SyntaxError — la page entiere
+   *    n aurait pas demarre, pas seulement les coins. Attrape avant deploiement, par relecture du
+   *    point d assemblage et non par le test : aucun test ne charge le HTML. */
   const COINS = {
     aucun: '',
     points: '<circle cx="0" cy="0" r="5"/>',
@@ -1365,7 +1441,13 @@ function logoSvg(o) {
     + `<path d="M30 70 100 110 100 190 30 150Z" fill="${M.gauche}"/>`
     + `<path d="M170 70 100 110 100 190 170 150Z" fill="${M.droite}"/>`
     + (grille ? `<path d="${grille}" fill="none" stroke="#cfe6ff" stroke-width="1" opacity=".32"/>` : '')
-    + motif('.866 .5 -.866 .5 100 70', ca(92, 56)) + motif('.866 .5 0 1 65 130', ca(90, 48)) + motif('.866 -.5 0 1 135 130', ca(88, 38))
+    /* ⛔ LA PHOTO REMPLACE LE MOTIF DE SA FACE, elle ne se pose pas DESSUS. Superposer une croix
+     *    ou une cible a un visage donne une image sale que personne n a choisie — et elle serait
+     *    GRAVEE. Les deux autres faces gardent le leur : le block reste reconnaissable. */
+    + (o.photoOu === 'haut' && surFace ? '' : motif('.866 .5 -.866 .5 100 70', ca(92, 56)))
+    + (o.photoOu === 'gauche' && surFace ? '' : motif('.866 .5 0 1 65 130', ca(90, 48)))
+    + (o.photoOu === 'droite' && surFace ? '' : motif('.866 -.5 0 1 135 130', ca(88, 38)))
+    + surFace
     + (M.lustre ? `<path d="M100 30 170 70 100 110 30 70Z" fill="#fff" opacity=".10"/>` : '')
     + `<g fill="none" stroke="${M.trait}" stroke-width="${M.ep}" stroke-linejoin="round">`
     + `<path d="M100 30 170 70 170 150 100 190 30 150 30 70Z"/>`
@@ -1394,7 +1476,12 @@ function lire() {
    * ne vaut jamais autre chose qu un data: URI deja MESURE sous le plafond — la validation vit
    * dans le gestionnaire du champ, pas ici. Une valeur non verifiee qui arriverait jusqu a
    * `calldata()` ferait echouer la creation APRES la signature. */
-  const image = photoChoisie || ('data:image/svg+xml;base64,' + b64(svg));
+  /* ⛔ SUR UNE FACE, C EST LE SVG QU ON GRAVE — il PORTE la photo. Graver `photoChoisie` ici
+   * publierait la photo nue alors que l apercu montre un block : l ecran et les octets signes
+   * diraient deux choses differentes, sur la seule valeur qu on ne peut plus corriger. */
+  const image = (photoChoisie && $('#photoOu').value === 'remplace')
+    ? photoChoisie
+    : ('data:image/svg+xml;base64,' + b64(svg));
   const meta = { name: nom, symbol: sym, description: $('#desc').value.trim()
       || `Block created with no administrator: no account holds DEFAULT_ADMIN_ROLE or MINT_ROLE, at any point, including at creation. The supply of ${unites} ${sym} is minted in the creation transaction itself and equals the cap. No further unit can ever exist.`,
     image };
@@ -1446,8 +1533,30 @@ async function preparerPhoto(fichier) {
   const enrobage = JSON.stringify({ name: f0.nom, symbol: f0.sym,
     description: $('#desc').value.trim() || '' }).length;
 
+  /* ⛔⛔ LE BUDGET DEPEND DU PLACEMENT, ET LE REUTILISER TEL QUEL AURAIT COUTE DE L ARGENT REEL.
+   * Posee sur une face, la photo subit TROIS inflations base64 au lieu de deux : son data: URI
+   * vit dans le TEXTE du SVG, et ce SVG est encode a son tour avant d entrer dans le JSON.
+   * 2,37 au lieu de 1,78 par octet. Accepter la meme taille dans les deux cas ferait echouer la
+   * creation APRES la signature — le seul moment ou se tromper se paie.
+   * ⚠️ Le corps du SVG compte aussi, et il est inflate deux fois : on le MESURE (le SVG reel, sans
+   * photo) au lieu de l estimer. */
+  const surFace = $('#photoOu').value !== 'remplace';
+  /* ⚠️ `paramsLogoSansPhoto()` EXISTE POUR QUE LA REGLE 2 CONTINUE DE MORDRE. Elle exige que tout
+   * appel a `logoSvg` parte d un constructeur nomme — c est ce qui avait rattrape quatre appelants
+   * restes sur une ancienne signature. J avais d abord passe un objet etale, construit sur place a
+   * partir de paramsLogo : correct a l execution, invisible pour la regle. Plutot que d elargir la
+   * regle pour qu elle accepte mon cas, on ecrit le cas dans la forme qu elle sait lire. Affaiblir
+   * une garde pour faire passer son propre code, c est la desactiver a la premiere occasion.
+   * ⚠️ ET LA REGLE 2 LIT LE HTML BRUT, COMMENTAIRES COMPRIS : ecrire l appel fautif ICI, meme pour
+   * l expliquer, la faisait echouer sur sa propre documentation. La regle 10 avait deja rencontre
+   * ce mur et le contourne en blanchissant les commentaires ; la 2 ne le fait pas encore. */
+  const corpsSvg = surFace ? logoSvg(paramsLogoSansPhoto()).length : 0;
+  const coutDe = (uriImage) => surFace
+    ? octetsUri(0, JSON.stringify({ image: 'd'.repeat(26 + 4 * Math.ceil((corpsSvg + uriImage.length) / 3)) }).length + enrobage)
+    : octetsUri(0, JSON.stringify({ image: uriImage }).length + enrobage);
+
   for (const cote of [512, 384, 256, 192, 160]) {
-    const r = await essayerA(cote, bitmap, enrobage);
+    const r = await essayerA(cote, bitmap, coutDe);
     if (r) return r;
   }
   return { etat: 'TROP_GROSSE',
@@ -1455,7 +1564,7 @@ async function preparerPhoto(fichier) {
 }
 
 /** Un essai a une taille donnee : rend le resultat, ou null si rien ne tient. */
-async function essayerA(cote_, bitmap, enrobage) {
+async function essayerA(cote_, bitmap, coutDe) {
   const cote = Math.min(cote_, bitmap.width, bitmap.height);
   /* ⚠️ Carre et centre : un avatar non carre se fait rogner n importe comment par les afficheurs,
    *    et on ne controle pas les afficheurs. Autant choisir le cadrage nous-memes et le MONTRER. */
@@ -1480,7 +1589,7 @@ async function essayerA(cote_, bitmap, enrobage) {
     /* ⛔ ON MESURE L URI COMPLET, PAS LE FICHIER. C est l URI qui part dans la calldata, et il
      *    subit une SECONDE inflation base64 quand il entre dans le JSON. Mesurer le blob
      *    sous-estimerait d un tiers — et le refus tomberait a la signature. */
-    return octetsUri(0, JSON.stringify({ image: dernierUri }).length + enrobage);
+    return coutDe(dernierUri);
   }, PHOTO_MAX);
 
   /* ⚠️ `null` ici veut dire « pas a CETTE taille » — l appelant descendra d un cran. Ce n est pas
@@ -1490,8 +1599,7 @@ async function essayerA(cote_, bitmap, enrobage) {
    *    DERNIER essai de la dichotomie, qui n est pas forcement celui qu on a retenu — retourner
    *    l un pour l autre graverait une image plus lourde que celle qu on a validee. */
   const uri = c.toDataURL('image/jpeg', r.qualite);
-  return { etat: 'ACCEPTEE', uri, cote,
-    octets: octetsUri(0, JSON.stringify({ image: uri }).length + enrobage) };
+  return { etat: 'ACCEPTEE', uri, cote, octets: coutDe(uri) };
 }
 
 function montrerPhoto(r) {
@@ -1518,8 +1626,24 @@ function montrerPhoto(r) {
   rafraichir();
 }
 
+/* ⛔ LE FICHIER EST RETENU, PARCE QUE LE BUDGET DEPEND DU PLACEMENT. Une photo acceptee pour
+ * « remplace » ne tient PAS forcement sur une face : trois inflations base64 au lieu de deux.
+ * Sans re-preparation, changer de face garderait une image trop lourde deja marquee READY, et le
+ * refus serait tombe A LA SIGNATURE. On refait donc la recherche de qualite a chaque changement.
+ * ⚠️ C est du travail refait, et c est assume : quelques centaines de millisecondes contre une
+ * transaction qui echoue apres avoir coute du gas. */
+let fichierPhoto = null;
+async function preparerEtMontrer(f) {
+  const det = $('#photoDetails'); if (det) det.open = true;
+  $('#photoEtat').innerHTML = ligne('photo', 'resizing…');
+  try { montrerPhoto(await preparerPhoto(f)); }
+  catch (err) { montrerPhoto({ etat: 'NON_MESURE', pourquoi: 'this file could not be read — ' + (err.message || err) }); }
+}
+$('#photoOu').addEventListener('change', () => { if (fichierPhoto) preparerEtMontrer(fichierPhoto); });
+
 $('#photo').onchange = async (e) => {
   const f = e.target.files && e.target.files[0];
+  fichierPhoto = f || null;
   if (!f) return montrerPhoto(null);
   const det = $('#photoDetails'); if (det) det.open = true;
   $('#photoEtat').innerHTML = ligne('photo', 'resizing…');
@@ -1530,7 +1654,9 @@ $('#photo').onchange = async (e) => {
     montrerPhoto({ etat: 'NON_MESURE', pourquoi: 'this file could not be read — ' + (err.message || err) });
   }
 };
-$('#photoRetirer').onclick = () => { $('#photo').value = ''; photoChoisie = null; montrerPhoto(null); rafraichir(); };
+/* ⚠️ `fichierPhoto` est remis a null AUSSI : sinon changer de face aprus un retrait re-preparerait
+ * la photo qu on vient d enlever, et elle reviendrait toute seule. */
+$('#photoRetirer').onclick = () => { $('#photo').value = ''; photoChoisie = null; fichierPhoto = null; montrerPhoto(null); rafraichir(); };
 
 function calldata(f, porteur) {
   return encodeCreateB20({
@@ -1757,7 +1883,11 @@ appliquerMode();
  *    de ne rien proposer — c est le defaut qu on reproche a toutes les interfaces « intelligentes ».
  * ⚠️ Elle ne s applique qu UNE FOIS par session : se reconnecter ne doit pas defaire ce qu on
  *    vient de regler. */
-const APPARENCE = ['teinte', 'accent', 'division', 'eclats', 'orbite', 'facette', 'matiere', 'ornement', 'ecart'];
+/* ⛔ ET CELLE-CI GARDE UNE AUTRE CHOSE : elle dit ce qui compte comme « l utilisateur a touche ».
+ * Un reglage absent d ici serait ECRASE par l apparence derivee de l adresse a la connexion —
+ * quelqu un choisirait ses coins, brancherait son wallet, et les verrait changer sans comprendre.
+ * Ecraser un choix explicite est pire que ne rien proposer. */
+const APPARENCE = ['teinte', 'accent', 'division', 'eclats', 'orbite', 'facette', 'matiere', 'ornement', 'ecart', 'photoOu'];
 let aTouche = false, personnelApplique = false;
 for (const el of APPARENCE) {
   const n = $('#' + el);
@@ -1872,7 +2002,14 @@ async function remplirGalerie() {
 /* ⚠️ Apres le premier rendu, jamais avant. */
 setTimeout(remplirGalerie, 400);
 
-const CHAMPS = ['nom','sym','dec','supply','sel','desc','teinte','accent','division','eclats','orbite','facette','matiere','photo'];
+/* ⛔ TROIS LISTES DOIVENT BOUGER ENSEMBLE QUAND UN REGLAGE EST AJOUTE, ET J EN AI OUBLIE DEUX.
+ * Le 2026-09-07, `ornement` et `ecart` ont ete ajoutes au formulaire, a `paramsLogo` et au
+ * tirage — mais pas ici ni dans `APPARENCE`. Resultat mesure dans le navigateur : les huit
+ * ornements rendaient le MEME SVG de 3 313 octets, les cinq ecarts le meme `translate`. Le
+ * controle existait, paraissait branche, et ne changeait RIEN. Aucune erreur, rien a l ecran —
+ * la classe exacte du module non declare dans `serveur.js`.
+ * ⇒ La regle 13 de `verifie-coherence.mjs` compare desormais les trois listes a `paramsLogo`. */
+const CHAMPS = ['nom','sym','dec','supply','sel','desc','teinte','accent','division','eclats','orbite','facette','matiere','ornement','ecart','photoOu','photo'];
 /* ⛔ `addEventListener` ET NON `n.onchange = …` — LA GARDE VIENT D EVITER LE BUG. `#photo` a deja
  * son propre gestionnaire, assigne plus haut, qui redimensionne et mesure l image. Une affectation
  * de propriete l aurait ECRASE en silence : le champ aurait paru branche, la photo n aurait jamais

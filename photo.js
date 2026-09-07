@@ -56,6 +56,52 @@ export const URI_MESURE_OK = octetsUri(PHOTO_MESUREE_OK, 120);
 export const PHOTO_MAX = Math.floor(URI_MESURE_OK * 0.875);
 
 /**
+ * Taille du data: URI JSON final quand la photo est posee SUR UNE FACE du block.
+ * ⛔⛔ TROIS INFLATIONS, PAS DEUX, ET C EST LA DIFFERENCE QUI COMPTE. Quand la photo REMPLACE le
+ *    logo, le fichier est encode une fois pour son data: URI puis une fois avec le JSON : deux.
+ *    Quand elle est posee sur une face, son data: URI vit DANS LE TEXTE DU SVG, et ce SVG est a
+ *    son tour encode en base64 avant d entrer dans le JSON, qui est encode a son tour : TROIS.
+ *    Chaque inflation multiplie par 4/3 ; trois font 2,37 au lieu de 1,78. Reutiliser le budget
+ *    de `PHOTO_MAX` ici ferait accepter une photo qui ferait ECHOUER la creation APRES la
+ *    signature — le seul moment ou une erreur coute de l argent reel.
+ * ⚠️ `corpsSvg` est le SVG SANS la photo. Il est inflate lui aussi, deux fois : le compter pour sa
+ *    taille brute sous-estimerait de pres d un tiers.
+ * @param {number} n octets du fichier image
+ * @param {number} corpsSvg octets du SVG hors image (le block dessine)
+ * @param {number} enrobage octets du JSON hors image (nom, symbole, description…)
+ */
+export function octetsUriSurFace(n, corpsSvg = 0, enrobage = 0) {
+  if (!Number.isInteger(n) || n < 0) return null;
+  if (!Number.isInteger(corpsSvg) || corpsSvg < 0) return null;
+  /* 1. le fichier devient un data: URI — le prefixe `data:image/jpeg;base64,` compte */
+  const uriPhoto = 4 * Math.ceil(n / 3) + 23;
+  /* 2. cet URI est ECRIT dans le SVG, qui est encode en entier */
+  const uriSvg = 4 * Math.ceil((corpsSvg + uriPhoto) / 3) + 26;
+  /* 3. et le JSON qui le porte est encode a son tour */
+  return 4 * Math.ceil((uriSvg + enrobage) / 3);
+}
+
+/**
+ * Le plus gros FICHIER acceptable quand la photo est sur une face, pour un SVG donne.
+ * ⛔ ON CHERCHE, ON NE DIVISE PAS. J allais ecrire `PHOTO_MAX / 1.33` : faux, parce que les
+ *    arrondis au multiple de 3, les trois prefixes et le corps du SVG ne se factorisent pas. On
+ *    fait donc croitre jusqu au refus et on rend le dernier qui passe — la meme discipline que
+ *    `chercherQualite`, qui mesure au lieu de modeliser.
+ * ⚠️ Rend 0 si meme une photo vide ne tient pas : un SVG deja trop gros pour le precompile ne
+ *    laisse aucune place, et il faut le DIRE plutot que de rendre un budget negatif.
+ */
+export function budgetSurFace(corpsSvg, enrobage = 120, plafond = PHOTO_MAX) {
+  if (!Number.isInteger(corpsSvg) || corpsSvg < 0) return null;
+  if (octetsUriSurFace(0, corpsSvg, enrobage) > plafond) return 0;
+  let bas = 0, haut = plafond;
+  while (bas < haut) {
+    const m = Math.ceil((bas + haut + 1) / 2);
+    if (octetsUriSurFace(m, corpsSvg, enrobage) <= plafond) bas = m; else haut = m - 1;
+  }
+  return bas;
+}
+
+/**
  * Le verdict sur UNE photo. Quatre etats — jamais un booleen.
  * ⛔ UN BOOLEEN MENTIRAIT ICI. « false » confondrait « trop grosse » (l utilisateur peut agir :
  *    recadrer, recompresser) avec « ce n est pas une image » (il doit changer de fichier) et avec
