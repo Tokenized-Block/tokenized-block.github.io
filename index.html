@@ -2100,6 +2100,10 @@ for (const id of [84532, 8453]) $('#t' + id).onclick = () => {
   $('#gardeCase').checked = false;
   /* Soft-gate is per mined Create on THIS network — a tab switch drops it. */
   if (typeof leverSoftGateCreate === 'function') leverSoftGateCreate('network change');
+  /* ⛔ STALE PLAN 2026-09-07: Work out / Check / Quote bake PoolKey + calldata for THIS chain.
+   *    Switching Practice↔Real without clearing left Launch/Liq/Swap able to Sign octets
+   *    simulated on the other network (page chaine updates; plancement.donnee does not). */
+  if (typeof invaliderPlansTravail === 'function') invaliderPlansTravail('page Practice/Real tab');
   peuplerDevises();
   /* ⛔ LA GALERIE SUIT LE RESEAU. Sans ce rappel, elle garderait les blocks de l ancien reseau
    *    sous une note qui nommerait le nouveau — un mensonge pire que l absence de note. */
@@ -3429,6 +3433,29 @@ let plancement = null;
 /* ⛔ Approvals manquantes pour le Launch (block→Permit2 puis Permit2→POSM). Null = rien a faire. */
 let plancementAppro = null;
 
+/**
+ * ⛔ STALE PLAN MID-FLOW (2026-09-07). Work out → Sign can span minutes. If the wallet account
+ *    or chain changes — or the page Practice/Real tab flips — `plancement` / `plan` / `planSwap`
+ *    still hold calldata simulated for the OLD identity. Signing that after a switch is how you
+ *    burn gas on the wrong network or mint with the wrong owner/Permit2 path.
+ * ⇒ Clear every worked-out plan and close the Sign buttons. Caller must say why (for the log).
+ * ⚠️ Does NOT claim on-chain state; only forgets what THIS page was about to send.
+ */
+function invaliderPlansTravail(pourquoi) {
+  plancement = null;
+  plancementAppro = null;
+  plan = null;
+  planSwap = null;
+  for (const id of ['#lancLancer', '#lancApprouver']) {
+    const b = $(id); if (b) { b.style.display = 'none'; b.disabled = true; }
+  }
+  for (const id of ['#poolAgir', '#swapAgir']) {
+    const b = $(id);
+    if (b) { b.disabled = true; b.textContent = 'Run the next step'; }
+  }
+  if (pourquoi) console.info('[tblock] plans cleared:', pourquoi);
+}
+
 $('#lancCalculer').onclick = async () => {
   const box = $('#lancPlan');
   $('#lancLancer').style.display = 'none';
@@ -3822,7 +3849,38 @@ async function memeChaineQueLaPage() {
   let id;
   try { id = parseInt(await window.ethereum.request({ method: 'eth_chainId' }), 16); }
   catch (e) { dire('⛔ Could not read your wallet network. Nothing was sent.\n' + e.message, 'bad'); return false; }
-  if (id === chaine) return true;
+
+  /* ⛔ TOUJOURS RELIRE LE COMPTE — y compris quand la chaine matche. Avant 2026-09-07 ce garde
+   *    faisait `if (id === chaine) return true` SANS eth_accounts : un accountsChanged entre
+   *    Work out et Sign laissait `plancement` / `plan` / `planSwap` + `compte` sur l ancienne
+   *    identite alors que le wallet actif avait change. La verif compte n existait qu apres un
+   *    switch de reseau. */
+  async function memeCompteQueLaPage() {
+    let a = null;
+    try {
+      const accs = await window.ethereum.request({ method: 'eth_accounts' });
+      a = (accs && accs[0]) || null;
+    } catch (e) {
+      dire('⛔ Could not read your wallet account. Nothing was sent.\n' + (e.message || e), 'bad');
+      return false;
+    }
+    if (!a || !compte || a.toLowerCase() !== compte.toLowerCase()) {
+      const avant = compte;
+      compte = a;
+      invaliderPlansTravail('account mismatch at send');
+      $('#gardeCase').checked = false;
+      if (compte) restaurerConsentement();
+      dire('⛔ Your wallet account does not match what this page worked out'
+        + (avant ? (' (page had ' + avant.slice(0, 10) + '…)') : '')
+        + '.\nNothing was sent. Plans cleared — Work out / Check / Quote again, then press the button.', 'bad');
+      try { await rafraichir(); } catch { /* ignore */ }
+      gardeMainnet();
+      return false;
+    }
+    return true;
+  }
+
+  if (id === chaine) return await memeCompteQueLaPage();
   const nomAutre = (RESEAUX[id] && RESEAUX[id].nom) || ('chain ' + id);
   dire('⛔ Your wallet is on ' + nomAutre + ', this page is showing ' + R.nom + '.'
     + '\nAsking your wallet to switch — nothing has been sent.', 'warn');
@@ -3834,14 +3892,8 @@ async function memeChaineQueLaPage() {
   }
   const id2 = parseInt(await window.ethereum.request({ method: 'eth_chainId' }), 16);
   if (id2 !== chaine) { dire('⛔ Wallet is still not on ' + R.nom + '. Nothing was sent.', 'bad'); return false; }
-  const [a] = await window.ethereum.request({ method: 'eth_accounts' });
-  if (!a || !compte || a.toLowerCase() !== compte.toLowerCase()) {
-    compte = a || null;
-    dire('⛔ Your wallet switched account while changing network. Nothing was sent —'
-      + ' read the steps again, then press the button.', 'bad');
-    return false;
-  }
-  return true;
+  /* After a network switch the wallet may also have changed account — same refuse + clear. */
+  return await memeCompteQueLaPage();
 }
 /* ══ SOFT-GATE DOUBLE-CREATE (empty fingerprint after mined Create) ═══════════════════════════
  * PRACTICE-FAILS §1.7 / evening OPEN #2: after Create mines for an address but eth_getCode stays
@@ -4317,6 +4369,40 @@ peuplerDevises();
 setFunnel('Idle');
 majCtaPacket();
 await rafraichir();
+
+/* ══ WALLET accountsChanged / chainChanged — INVALIDATE STALE PLANS ═══════════════════════════
+ * ⛔ Mesure de trou 2026-09-07 : aucun listener. Work out Launch → switch MetaMask account →
+ *    Sign still held plancement for the previous owner. memeChaineQueLaPage now re-checks at
+ *    send, but clearing ASAP avoids a green Sign button for a plan that is already wrong.
+ * ⚠️ chainChanged from the wallet does NOT flip the page Practice/Real tab — we clear plans and
+ *    say so; we do not silently rewrite `#t8453` (that would surprise). */
+(function ecouterPortefeuille() {
+  if (!window.ethereum || typeof window.ethereum.on !== 'function') return;
+  window.ethereum.on('accountsChanged', async (accs) => {
+    const nouveau = (accs && accs[0]) || null;
+    if (compte && nouveau && compte.toLowerCase() === nouveau.toLowerCase()) return;
+    compte = nouveau;
+    invaliderPlansTravail('accountsChanged');
+    $('#gardeCase').checked = false;
+    if (compte) restaurerConsentement();
+    dire('Wallet account changed'
+      + (compte ? (' → ' + compte) : ' (disconnected)')
+      + '.\nLaunch / Liquidity / Swap plans cleared — Work out / Check / Quote again before signing.',
+      'warn');
+    try { await rafraichir(); } catch { /* ignore */ }
+    gardeMainnet();
+  });
+  window.ethereum.on('chainChanged', (hex) => {
+    invaliderPlansTravail('chainChanged');
+    let id = NaN;
+    try { id = parseInt(hex, 16); } catch { id = NaN; }
+    const nom = (RESEAUX[id] && RESEAUX[id].nom) || ('chain ' + hex);
+    dire('Wallet network changed to ' + nom + '.'
+      + '\nThis page is still on ' + RESEAUX[chaine].nom + '.'
+      + '\nPlans cleared — match Practice/Real to your wallet, then Work out / Check / Quote again.',
+      'warn');
+  });
+})();
 
 /* ══ MINI APP : RETIRER L ECRAN DE CHARGEMENT DE L HOTE ═════════════════════════════════════════
  * ⛔ SANS CET APPEL, UNE MINI APP PARFAITEMENT CONFIGUREE RESTE BLOQUEE SUR UN SPLASH. Le
