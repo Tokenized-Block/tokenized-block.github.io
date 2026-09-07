@@ -846,7 +846,7 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
 <div id="warningsStrip" role="note">
   <div class="wItem"><b>No key here</b> — this page presents the tx; your wallet signs. No custody.</div>
   <div class="wItem"><b>No admin / no minter</b> — supply = cap; name, logo, description permanent.</div>
-  <div class="wItem"><b>Fees</b> — network gas → Base validators (not us). Real Create: separate 0.001 ETH Tokenized Block service fee → fee wallet. Practice: 0.</div>
+  <div class="wItem"><b>Fees</b> — network gas → Base validators (not us). Real Create: separate 0.00005 ETH Tokenized Block service fee → fee wallet. Practice: 0.</div>
   <div class="wItem"><b>Re-read only</b> — state comes from the chain, not from “sent”.</div>
 </div>
 
@@ -1215,14 +1215,14 @@ function majCtaPacket() {
   if (irr) {
     irr.textContent = practice
       ? 'Permanent · Practice: no Tokenized Block fee · no admin'
-      : 'Permanent · Real: 0.001 ETH service fee + network gas · no admin';
+      : 'Permanent · Real: 0.00005 ETH service fee + network gas · no admin';
   }
   majCtaFee();
   const btn = $('#agir');
   if (btn && compte) {
     btn.textContent = practice
       ? 'Create the block'
-      : 'Create — 0.001 ETH service fee + gas';
+      : 'Create — 0.00005 ETH service fee + gas';
   }
 }
 
@@ -1252,7 +1252,7 @@ function majCtaFee() {
       + 'it cannot be redirected to Tokenized Block. Fee wallet (Real only): ' + lien + '.</span>';
   } else {
     el.innerHTML = '<span class="ctaFeeLab">Tokenized Block service fee</span>'
-      + '<b>0.001 ETH</b> — separate transfer to ' + lien
+      + '<b>0.00005 ETH</b> — separate transfer to ' + lien
       + ' <span class="dim">(Basescan)</span>'
       + '<br><span class="dim">This is a Tokenized Block service fee (subscription recovery), '
       + '<b>not</b> network gas. Network gas still goes to Base validators/builders and cannot '
@@ -1389,7 +1389,7 @@ const SITE_ORIGIN_FUTURE = 'https://tokenized-block.app'; /* DNS not live as of 
  * Practice (84532): 0. Fail-closed if the fee transfer fails — Create is not sent.
  */
 const FEE_WALLET = '0x37eb9b7ce0b51fe12fbf092026e001918128580a';
-const REAL_CREATE_SERVICE_FEE_WEI = 1000000000000000n; /* 0.001 ETH */
+const REAL_CREATE_SERVICE_FEE_WEI = 50000000000000n; /* 0.00005 ETH — fits ~$1 Real smoke; still to FEE_WALLET */
 function createServiceFeeWei() {
   return chaine === 8453 ? REAL_CREATE_SERVICE_FEE_WEI : 0n;
 }
@@ -2055,7 +2055,7 @@ async function rafraichir() {
         const w = createServiceFeeWei();
         if (w === 0n) return pastille('0 — Practice', 'ok')
           + '<br><span class="dim">No Tokenized Block fee on Practice. Network gas ≠ TB fee.</span>';
-        return pastille('0.001 ETH', 'warn')
+        return pastille('0.00005 ETH', 'warn')
           + ' → <a class="mono" href="' + feeWalletScanUrl() + '" target="_blank" rel="noopener">'
           + FEE_WALLET + '</a>'
           + '<br><span class="dim">Separate ETH transfer <b>before</b> Create. Not gas. '
