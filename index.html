@@ -1791,7 +1791,22 @@ async function estimerCout(data, de) {
   let prix = null;
   try { prix = BigInt(await rpc('eth_gasPrice', [])); } catch { /* prix inconnu : on le dira */ }
   const unites = formaterGas(gaz);
-  if (prix === null) return { texte: unites + ' gas  ' + pastille('price NOT MEASURED', 'warn') };
+  /* ⛔ `gaz` EST RENDU MEME ICI, ET C EST UNE CORRECTION. Cette branche est atteinte quand
+   * `eth_estimateGas` a REUSSI et que seul `eth_gasPrice` a echoue — deux appels distincts au meme
+   * noeud public, le second peut tomber tout seul. Sans `gaz` dans le retour, l appelant lit
+   * `mesure.gaz == null` et annonce « Could not estimate gas — creation was NOT sent », alors que
+   * l estimation a parfaitement marche : seul le PRIX D AFFICHAGE manque. Deux etats opposes —
+   * « je n ai pas su estimer » et « je n ai pas su chiffrer le cout » — ecrases dans une meme
+   * forme de retour, et l appelant ne pouvait pas les distinguer.
+   * ⛔⛔ ET `prixInconnu` EXISTE PARCE QUE RENDRE `gaz` SEUL AURAIT DEBLOQUE L ENVOI. Ma premiere
+   * version ajoutait `gaz` et s arretait la : le garde `mesure.gaz == null` cessait de mordre, et
+   * la creation serait partie SANS que le cout soit affiche. J ai ecrit dans le meme commentaire
+   * « elle ne debloque PAS l envoi » — c etait faux, et c est le genre de correctif qui change une
+   * garde en croyant ne toucher qu un message.
+   * ⇒ Le drapeau laisse l appelant refuser EXACTEMENT comme avant, en disant la vraie cause.
+   * ⚠️ Envoyer quand meme, sans prix affiche, serait une SEMANTIQUE PRODUIT : une page qui signe
+   * de l irreversible sans montrer ce que ca coute, c est la decision de Phil, pas la mienne. */
+  if (prix === null) return { gaz, prixInconnu: true, texte: unites + ' gas  ' + pastille('price NOT MEASURED', 'warn') };
   const wei = gaz * prix;
   /* ⛔ `≈` seulement si l affichage a REELLEMENT arrondi. Ecrire « ≈ » sur une valeur exacte, ou
    * « = » sur une valeur arrondie, sont deux petits mensonges evitables. */
@@ -3613,12 +3628,22 @@ $('#agir').onclick = async () => {
     setFunnel('Signing');
     dire('Estimating gas for creation (will not send without a limit)…', 'warn');
     const mesure = await estimerCout(dernier.data, compte);
-    if (mesure.gaz == null) {
+    /* ⛔ DEUX CAUSES, DEUX MESSAGES — ET LE REFUS EST LE MEME DANS LES DEUX. Avant, un echec de
+     * `eth_gasPrice` seul (l estimation ayant REUSSI) sortait ici en annoncant « Could not estimate
+     * gas ». C etait faux : ce qui manquait etait le PRIX D AFFICHAGE. Dire la mauvaise cause
+     * envoie chercher au mauvais endroit — changer de noeud plutot que de reessayer. */
+    if (mesure.gaz == null || mesure.prixInconnu) {
       setFunnel('Blocked');
-      afficherTx('fail', 'Gas estimate failed — nothing sent');
-      return dire('⛔ Could not estimate gas — creation was NOT sent.\n'
-        + 'Sending without an explicit gas limit lets the wallet under-cap (e.g. 1M) and OOG on-chain.\n'
-        + (mesure.texte ? ('Detail: ' + String(mesure.texte).replace(/<[^>]+>/g, ' ')) : ''), 'bad');
+      const sansPrix = mesure.gaz != null && mesure.prixInconnu;
+      afficherTx('fail', sansPrix ? 'Gas price unreadable — nothing sent' : 'Gas estimate failed — nothing sent');
+      return dire(sansPrix
+        ? '⛔ Nothing was sent — the cost cannot be shown.\n'
+          + 'The gas estimate SUCCEEDED (' + mesure.gaz.toString() + ' gas), but the node did not return a gas price,\n'
+          + 'so this page cannot tell you what the creation will cost. It will not ask you to sign a price it has not read.\n'
+          + 'Try again in a moment.'
+        : '⛔ Could not estimate gas — creation was NOT sent.\n'
+          + 'Sending without an explicit gas limit lets the wallet under-cap (e.g. 1M) and OOG on-chain.\n'
+          + (mesure.texte ? ('Detail: ' + String(mesure.texte).replace(/<[^>]+>/g, ' ')) : ''), 'bad');
     }
     const gaz = mesure.gaz * 125n / 100n;
     dire('Your wallet will open.\nGas limit from estimate + 25% margin: ' + gaz.toString()
