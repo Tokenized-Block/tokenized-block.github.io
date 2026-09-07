@@ -4025,8 +4025,9 @@ async function etatSwap() {
     vue += ligne('unlimited approve', pastille('DISCLOSE', 'warn')
       + ' Permit2→Router uses <b>MAX_UINT160</b> (until revoked; distinct from ERC20 MAX_UINT256). '
       + htmlLiensRevokePermit2(compte));
-  } else if (autorise) {
-    /* C2 #6–7: after approve done, keep MAX-still-active pill visible. */
+  } else if (!entreeEstNatif && autorise && perm !== null && perm >= MAX_UINT160) {
+    /* C2 re-revue: native ETH sets autorise=true without Permit2 — no false MAX pill.
+     * Only when Permit2→Router is actually MAX_UINT160 (finite≥need alone is not MAX). */
     vue += ligne('MAX still active', htmlPermit2MaxStill(compte)
       + ' Permit2→Router allowance remains unlimited until revoke.');
   }
@@ -4620,10 +4621,15 @@ $('#lancCalculer').onclick = async () => {
     }
     plancement = { donnee, dejaCreee: sqrtExistant !== 0n, jeton };
     /* Approvals present — no Run approve; drop Permit2 MAX gate for Launch.
-     * C2 #6–7: still show « MAX still active » so revoke is one glance away. */
+     * C2 re-revue: « MAX still active » only when allowance is actually MAX
+     * (finite≥need still shows DONE above — no false unlimited claim). */
     resetGardePermit2Max('lanc');
-    box.innerHTML += ligne('MAX still active', htmlPermit2MaxStill(compte)
-      + ' ERC20→Permit2 (MAX_UINT256) and/or Permit2→POSM (MAX_UINT160) already granted — stays until revoke.');
+    const maxDejaLanc = (allP2 !== null && allP2 >= MAX_UINT256)
+      || (allPosm !== null && allPosm >= MAX_UINT160);
+    if (maxDejaLanc) {
+      box.innerHTML += ligne('MAX still active', htmlPermit2MaxStill(compte)
+        + ' ERC20→Permit2 (MAX_UINT256) and/or Permit2→POSM (MAX_UINT160) already granted — stays until revoke.');
+    }
     /* Arm too-cheap soft-gate from the same classement shown in the fiche. */
     valoCheapArmee = classementValo.etat === 'TROP_BON_MARCHE';
     const caseValo = $('#gardeValoCheapCase');
