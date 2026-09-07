@@ -2650,9 +2650,25 @@ function gardeMainnet() {
  * (« a retire son consentement ») que personne n a demande, et qui ferait redemander a la
  * prochaine visite sans que l utilisateur comprenne pourquoi. Cocher enregistre, decocher agit
  * seulement sur la session en cours. */
+/* ⛔⛔ `window.localStorage` LEVE A L ACCES, PAS A L APPEL — et c est ce qui rendait ces deux
+ *    lignes dangereuses. `consentement.js` protege bien `getItem`/`setItem` par try/catch, mais
+ *    l exception se produit AVANT d entrer dans le module : au moment de LIRE `window.localStorage`
+ *    pour le passer en argument. Le catch du module ne pouvait donc jamais l attraper.
+ * ⛔ QUAND CA CASSE : iframe tierce — c est-a-dire le contexte MINI APP —, navigation privee, ou
+ *    donnees de site bloquees, ET un wallet connecte. Le gestionnaire de la case levait, donc
+ *    `gardeMainnet()` ne s executait plus : la garde qui protege les transactions REELLES cessait
+ *    de s appliquer, sans une erreur visible.
+ * ⚠️ TROUVE PAR LA REGLE 10, pas par mon essai a la main : mon test en iframe etait SANS compte,
+ *    et ces deux lignes exigent un compte. Une verification manuelle rate ce qu elle n a pas
+ *    pense a mettre en place ; une regle statique regarde partout.
+ * ⇒ `stockageSur()` rend `null` plutot que de lever, et les deux modules savent deja quoi faire
+ *   d un stockage qui refuse — c est exactement le meme etat que « getItem a leve ». */
+function stockageSur() {
+  try { return window.localStorage; } catch { return null; }
+}
 $('#gardeCase').onchange = () => {
   if ($('#gardeCase').checked && compte) {
-    marquerConsentement({ stockage: window.localStorage, compte });
+    marquerConsentement({ stockage: stockageSur(), compte });
   }
   gardeMainnet(); if (chaine === MAINNET) { rafraichir(); }
 };
@@ -2667,7 +2683,7 @@ $('#gardeCase').onchange = () => {
  */
 function restaurerConsentement() {
   if (chaine !== MAINNET || !compte) return;
-  if (!consentementValide({ stockage: window.localStorage, compte })) return;
+  if (!consentementValide({ stockage: stockageSur(), compte })) return;
   $('#gardeCase').checked = true;
   gardeMainnet();
 }

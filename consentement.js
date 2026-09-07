@@ -29,6 +29,10 @@ export function consentementValide({ stockage, compte, maintenant = new Date() }
   /* ⛔ `localStorage` LEVE en navigation privee, cookies bloques, ou quota plein. Un catch qui
    * rendrait `true` inventerait un consentement jamais donne — le motif « un retour neutre avale
    * un echec », applique a la pire chose possible. */
+  /* ⛔ UN STOCKAGE ABSENT EST UN STOCKAGE QUI REFUSE. L appelant rend `null` quand l acces meme a
+   *    `window.localStorage` leve (iframe tierce, navigation privee) : sans ce cas, on planterait
+   *    sur `null.getItem` — le plantage aurait juste change d endroit. */
+  if (!stockage) return false;
   try { brut = stockage.getItem(CLE); } catch { return false; }
   if (!brut) return false;
   let doc = null;
@@ -51,6 +55,8 @@ export function consentementValide({ stockage, compte, maintenant = new Date() }
 /** Enregistre le consentement de CE compte. ⚠️ Ne leve jamais : un stockage refuse n est pas une panne. */
 export function marquerConsentement({ stockage, compte, maintenant = new Date() }) {
   if (!compte) return;
+  /* ⛔ Meme raison qu au-dessus : un stockage `null` doit ne RIEN faire, pas planter. */
+  if (!stockage) return;
   try {
     stockage.setItem(CLE, JSON.stringify({ compte: String(compte).toLowerCase(), le: maintenant.toISOString() }));
   } catch { /* ⚠️ silencieux ET sans consequence : la case restera simplement a cocher. */ }
