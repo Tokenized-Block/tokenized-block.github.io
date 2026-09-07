@@ -227,7 +227,7 @@ padding:14px 15px;margin-bottom:12px}
 #gardeMainnet p{margin:0 0 10px;font-size:13px;color:#f0dcc0;line-height:1.5}
 #gardeMainnet label{display:flex;gap:10px;align-items:flex-start;color:var(--fg);font-size:13.5px;margin:0}
 #gardeMainnet input{width:20px;height:20px;flex:0 0 auto;margin-top:1px;accent-color:var(--or)}
-/* Restored 30d consent — Create may stay pre-checked; Launch/LP/Swap need session re-ack. */
+/* Restored 30d consent — `#gardeCase` may stay pre-checked; Create/Launch/LP/Swap need session money re-ack. */
 #gardeConsentRestored{display:none;margin-top:12px;padding-top:10px;border-top:1px dashed #7a4a12}
 #gardeConsentRestored.on{display:block}
 #gardeConsentRestored .t{font-weight:800;color:var(--warn);font-size:13px;margin-bottom:6px}
@@ -590,14 +590,15 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
   admin, no minter, no way to change the name, the logo or the description afterwards. Nobody can
   undo it — not you, not us.</p>
   <label><input type="checkbox" id="gardeCase"> I understand this is mainnet and I accept the cost.</label>
-  <!-- ⛔ MAINNET-DEEP-DIG trap #5: 30d restore pre-checks Create, but habit-clicks Launch/LP/Swap
-       without re-reading cost. Session re-ack is required for irreversible money buttons. -->
+  <!-- ⛔ MAINNET-DEEP-DIG trap #5 (extended Create): 30d restore may pre-check `#gardeCase`, but
+       habit-click Create fee / Launch / LP / Swap without re-reading cost is refused. Session
+       re-ack (`#gardeCaseArgent` or fresh `#gardeCase`) required for irreversible money buttons. -->
   <div id="gardeConsentRestored" role="region" aria-label="Consent restored — re-confirm money actions">
-    <div class="t">Consent restored — re-confirm before Launch / LP / Swap</div>
-    <p>This account accepted mainnet cost within the last 30 days. Create may use that restore.
-    <b>Launch, Liquidity, and Swap stay closed</b> until you re-confirm for this visit — a pre-checked
-    box alone must not authorize irreversible sends.</p>
-    <label><input type="checkbox" id="gardeCaseArgent"> I re-confirm mainnet cost for Launch / Liquidity / Swap this session.</label>
+    <div class="t">Consent restored — re-confirm before Create / Launch / LP / Swap</div>
+    <p>This account accepted mainnet cost within the last 30 days. A pre-checked box is only a reminder.
+    <b>Create, Launch, Liquidity, and Swap stay closed</b> until you re-confirm for this visit —
+    restore alone must not authorize irreversible sends (Create fee included).</p>
+    <label><input type="checkbox" id="gardeCaseArgent"> I re-confirm mainnet cost for Create / Launch / Liquidity / Swap this session.</label>
   </div>
 </div>
 
@@ -3608,12 +3609,13 @@ async function etatSwap() {
  * ⛔ ET LA CASE SE DECOCHE A CHAQUE CHANGEMENT DE RESEAU. Une case cochee sur mainnet, puis un
  *    retour sur Sepolia, puis un retour sur mainnet, ne doit PAS retrouver un consentement
  *    donne pour une autre session d attention.
- * ⛔ RESTORE 30j ≠ ACK LAUNCH/LP/SWAP (2026-09-07). `restaurerConsentement` peut pre-cocher
- *    `#gardeCase` (Create). Les boutons d argent irrevocable exigent `consentArgentOk()` —
- *    re-ack de session `#gardeCaseArgent`, ou un tick frais de `#gardeCase` (pas le restore). */
+ * ⛔ RESTORE 30j ≠ ACK CREATE/LAUNCH/LP/SWAP (2026-09-07, étendu Create). `restaurerConsentement`
+ *    peut pre-cocher `#gardeCase` (souvenir UI). Create + boutons d argent irrevocable exigent
+ *    `consentArgentOk()` — re-ack de session `#gardeCaseArgent`, ou un tick frais de `#gardeCase`
+ *    (pas le restore). */
 const MAINNET = 8453;
 
-/** True when storage restore pre-checked `#gardeCase` this page session (Create may stay open). */
+/** True when storage restore pre-checked `#gardeCase` this page session (money still needs re-ack). */
 let consentRestaureCetteSession = false;
 
 /**
@@ -4230,7 +4232,7 @@ $('#lancLancer').onclick = async () => {
   /* ⛔ CONSENT MONEY RE-ACK FAIL-CLOSED: restored 30d pre-check alone must not Launch. */
   if (!consentArgentOk()) {
     return dire('Mainnet consent restored — re-confirm before Launch.\n'
-      + 'Tick « I re-confirm mainnet cost for Launch / Liquidity / Swap this session » above.', 'bad');
+      + 'Tick « I re-confirm mainnet cost for Create / Launch / Liquidity / Swap this session » above.', 'bad');
   }
   /* ⛔ TOO-CHEAP FAIL-CLOSED: disabled button is not enough if something re-enables it. */
   if (valoCheapArmee && !($('#gardeValoCheapCase') && $('#gardeValoCheapCase').checked)) {
@@ -4254,7 +4256,7 @@ $('#lancApprouver').onclick = async () => {
   }
   if (!consentArgentOk()) {
     return dire('Mainnet consent restored — re-confirm before Launch approvals.\n'
-      + 'Tick « I re-confirm mainnet cost for Launch / Liquidity / Swap this session » above.', 'bad');
+      + 'Tick « I re-confirm mainnet cost for Create / Launch / Liquidity / Swap this session » above.', 'bad');
   }
   /* ⛔ PERMIT2 MAX FAIL-CLOSED on Real — disabled is not enough. */
   if (!permit2MaxAckOk('lanc')) {
@@ -4350,7 +4352,8 @@ function majDisableAgir() {
   if (!btn) return;
   /* Connect wallet is never blocked by mainnet consent or soft-gate (nothing is signed). */
   if (!compte) { btn.disabled = false; return; }
-  const mainnetOk = chaine !== MAINNET || $('#gardeCase').checked;
+  /* Restore alone must not enable Create — same money re-ack as Launch/LP/Swap. Connect (!compte) stays open. */
+  const mainnetOk = consentArgentOk();
   const softOk = !softGateCreateArme();
   const adrOk = !createAdrGateArme();
   btn.disabled = !(mainnetOk && softOk && adrOk);
@@ -4511,14 +4514,14 @@ function gardeMainnet() {
    * protege finit par le corrompre. Elle pose `disabled`, rien de plus ; chaque section garde la
    * responsabilite de son propre libelle, et la banniere orange dit pourquoi. */
   const ok = !surMainnet || $('#gardeCase').checked;
-  /* ⛔ « #agir » — Connect stays open without mainnet consent; Create is gated (may use restore).
-   *    Soft-gate (empty fingerprint after mined Create) composes here via majDisableAgir —
-   *    mainnet alone must not re-enable Create while the soft-gate is still armed. */
+  /* ⛔ « #agir » — Connect stays open without mainnet consent; Create uses consentArgentOk
+   *    (restore alone ≠ Create fee ack). Soft-gate (empty fingerprint after mined Create)
+   *    composes here via majDisableAgir — money ack alone must not re-enable Create while armed. */
   majDisableAgir();
   majBanniereConsentRestaure();
   /* Les autres sont recalcules par leur propre section a chaque lecture : on ne fait que
    * FORCER le refus, jamais l autorisation.
-   * ⛔ Launch/LP/Swap use consentArgentOk — restore alone must not unlock irreversible sends. */
+   * ⛔ Create/Launch/LP/Swap use consentArgentOk — restore alone must not unlock irreversible sends. */
   /* ⛔ Launch (#lancLancer) was missing from this list — comment said three buttons, code had two.
    *    On mainnet without the checkbox, Work out → Launch could still send. Force-refuse only. */
   const argentOk = consentArgentOk();
@@ -4609,9 +4612,10 @@ if ($('#lancValo')) $('#lancValo').addEventListener('input', () => {
  *    bien plus lourde, et personne ne l a prise.
  * ⚠️ Lie au COMPTE et borne a 30 jours — voir `consentement.js`. Un consentement qui survivrait a
  *    un changement de wallet vaudrait pour quelqu un qui ne l a jamais donne.
- * ⛔ PRE-COCHE ≠ ACK ARGENT (2026-09-07 / MAINNET-DEEP-DIG #5). Create may use the restore.
- *    Launch / Liquidity / Swap stay force-refused until `#gardeCaseArgent` this session (or a
- *    fresh `#gardeCase` tick that clears `consentRestaureCetteSession`). Habit-click on
+ * ⛔ PRE-COCHE ≠ ACK ARGENT (2026-09-07 / MAINNET-DEEP-DIG #5, étendu Create). Restore may
+ *    pre-check `#gardeCase` (banner reminder only). Create / Launch / Liquidity / Swap stay
+ *    force-refused until `#gardeCaseArgent` this session (or a fresh `#gardeCase` tick that
+ *    clears `consentRestaureCetteSession`). Habit-click on
  *    irreversible sends must not ride a ≤30d memory alone.
  */
 function restaurerConsentement() {
@@ -4690,7 +4694,7 @@ $('#swapAgir').onclick = async () => {
   if (!compte) return dire('Connect your wallet first.', 'bad');
   if (!consentArgentOk()) {
     return dire('Mainnet consent restored — re-confirm before Swap.\n'
-      + 'Tick « I re-confirm mainnet cost for Launch / Liquidity / Swap this session » above.', 'bad');
+      + 'Tick « I re-confirm mainnet cost for Create / Launch / Liquidity / Swap this session » above.', 'bad');
   }
   if (!deviseHorsLaunchOk()) {
     return dire('Quote currency is not the Launch pool.\n'
@@ -4740,7 +4744,7 @@ $('#poolAgir').onclick = async () => {
   if (!compte) return dire('Connect your wallet first.', 'bad');
   if (!consentArgentOk()) {
     return dire('Mainnet consent restored — re-confirm before Liquidity.\n'
-      + 'Tick « I re-confirm mainnet cost for Launch / Liquidity / Swap this session » above.', 'bad');
+      + 'Tick « I re-confirm mainnet cost for Create / Launch / Liquidity / Swap this session » above.', 'bad');
   }
   if (!deviseHorsLaunchOk()) {
     return dire('Quote currency is not the Launch pool.\n'
@@ -4854,6 +4858,13 @@ $('#agir').onclick = async () => {
         + 'Check that address on the explorer (link above Create), then tick BOTH boxes\n'
         + 'before Create is allowed again. A new salt creates a different block and burns another fee.\n'
         + 'Prefer « Re-read the chain » first — this page will not invent that code exists.', 'bad');
+    }
+
+    /* ⛔ CONSENT MONEY RE-ACK FAIL-CLOSED: restored 30d pre-check alone must not Create (fee).
+     * Connect path above returns before this. Practice: consentArgentOk() is true off mainnet. */
+    if (!consentArgentOk()) {
+      return dire('Mainnet consent restored — re-confirm before Create.\n'
+        + 'Tick « I re-confirm mainnet cost for Create / Launch / Liquidity / Swap this session » above.', 'bad');
     }
 
     await rafraichir();
