@@ -2435,7 +2435,53 @@ $('#lancCalculer').onclick = async () => {
      *    laisse une part dehors : sur un geste definitif, une phrase inexacte est un defaut, pas
      *    un raccourci. */
     vue += ligne('warning', 'this places almost all of your supply, and it cannot be taken back out by this app');
-    box.innerHTML = vue;
+    box.innerHTML = vue + ligne('chain check', 'asking the chain to run both steps…');
+
+    /* ══ ON DEMANDE A LA CHAINE D EXECUTER LES DEUX ETAPES AVANT D OUVRIR QUOI QUE CE SOIT ══════
+     * ⛔ C EST CETTE VERIFICATION QUI A TROUVE LE SEUL VRAI PIEGE DU LANCEMENT. Le calcul disait
+     *    « 0 ETH requis, tout est coherent » ; la chaine repondait TRANSFER_FROM_FAILED au mint,
+     *    APRES un `initialize` reussi — donc une pool creee, vide, et un createur bloque. Aucun
+     *    bouton ne rattrape cet etat.
+     * ⛔ ET ON SIMULE LES OCTETS QUE LES BOUTONS ENVERRONT, pas un equivalent. Verifier une
+     *    transaction voisine validerait autre chose que ce qui sera signe. */
+    const deadlineV = BigInt(Math.floor(Date.now() / 1000) + 1800);
+    const tx1 = { from: compte, to: V.poolm, data: encodeInitialize(cle, sqrtVise) };
+    const tx2 = { from: compte, to: V.posm, data: encodeMintPosition({ cle, tickBas: p.tickBas,
+      tickHaut: p.tickHaut, liquidite: L,
+      max0: blockEst1 ? 0n : (blocksRequis * 102n) / 100n,
+      max1: blockEst1 ? (blocksRequis * 102n) / 100n : 0n,
+      proprietaire: compte, deadline: deadlineV }) };
+    let sim = null, simIndispo = null;
+    try {
+      sim = await rpc('eth_simulateV1', [{ blockStateCalls: [{ calls: [tx1, tx2] }],
+        validation: false, traceTransfers: false }, 'latest']);
+    } catch (e) { simIndispo = e.message || String(e); }
+
+    const appels = sim?.[0]?.calls || [];
+    if (simIndispo || appels.length < 2) {
+      /* ⛔⛔ « JE N AI PAS PU VERIFIER » N EST PAS « C EST REFUSE ». Fermer les boutons parce que
+       *    la simulation est indisponible bloquerait un lancement parfaitement valide le jour ou
+       *    le noeud cesse d exposer la methode. On le DIT, et on laisse la decision a l humain —
+       *    mais on ne fait jamais passer une absence de mesure pour un feu vert. */
+      box.innerHTML = vue + ligne('chain check', pastille('NOT MEASURED', 'warn'))
+        + ligne('why', enTexte(simIndispo || 'the node returned fewer results than steps'))
+        + ligne('meaning', 'the chain was NOT asked. The plan above may still be right — nothing checked it.');
+    } else {
+      const ok1 = appels[0].status === '0x1', ok2 = appels[1].status === '0x1';
+      if (!ok1 || !ok2) {
+        /* ⛔ REFUS MESURE : les boutons restent FERMES, et on nomme l etape qui casse. */
+        box.innerHTML = vue + ligne('chain check', pastille('THE CHAIN REFUSES THIS', 'bad'))
+          + ligne('step 1 · create the pool', ok1 ? '✅' : enTexte(appels[0].error?.message || 'reverted'))
+          + ligne('step 2 · place the supply', ok2 ? '✅' : enTexte(appels[1].error?.message || 'reverted'))
+          + ligne('meaning', ok1 && !ok2
+            ? 'creating the pool would SUCCEED and placing the supply would then FAIL — you would be left with an empty pool. Nothing was sent.'
+            : 'nothing was sent.');
+        return;
+      }
+      box.innerHTML = vue + ligne('chain check', pastille('BOTH STEPS PASS', 'ok'))
+        + ligne('gas', BigInt(appels[0].gasUsed) + ' + ' + BigInt(appels[1].gasUsed))
+        + ligne('note', 'checked against the chain as it is right now — not a promise about later');
+    }
     plancement = { cle, sqrtVise, tickBas: p.tickBas, tickHaut: p.tickHaut, L, blocksRequis,
       blockEst1, dejaCreee: sqrtExistant !== 0n };
     $('#lancEtape1').style.display = plancement.dejaCreee ? 'none' : '';
