@@ -1,0 +1,299 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Prove your X account owns this wallet</title>
+<!--
+  ⛔ PAGE SEPAREE, ET C EST DELIBERE. `index.html` envoie des transactions ; cette page ne fait que
+     SIGNER UN MESSAGE. Les melanger ferait cohabiter deux gestes de nature differente sous les
+     memes boutons — et j ai deja casse trois fois le chemin qui signe en y touchant.
+
+  ⛔⛔ POURQUOI DEUX SENS, ET POURQUOI UN SEUL NE VAUT RIEN :
+       · une SIGNATURE seule : n importe qui signe « je suis @quelquun ». Le compte n a rien dit.
+       · un POST seul : n importe qui publie une adresse qu il ne possede pas.
+     Ensemble elles se lient. Et c est ce qui rend un outil « anti-scam » possible : un handle
+     AUTO-DECLARE designerait la victime comme la source — le fraudeur inscrit le handle d un
+     compte de confiance, et l outil accuse ce compte.
+
+  ⚠️ CE QUE CETTE PAGE NE PROUVE PAS : que le titulaire soit honnete. Un fraudeur peut parfaitement
+     prouver SON PROPRE lien. Ce lien sert a ATTRIBUER, jamais a absoudre.
+-->
+<style>
+:root{--bg:#050d24;--bg2:#0a1633;--card:#0f1d3d;--line:#1e2f57;--fg:#e9f0ff;--dim:#8ba0c9;
+--or:#f7a318;--ok:#22c55e;--warn:#f5a317;--bad:#ef4444}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:radial-gradient(120% 80% at 50% 0%,#0b2a7a 0%,var(--bg) 60%) no-repeat fixed;
+color:var(--fg);font:15px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:16px}
+main{max-width:640px;margin:0 auto}
+h1{font-size:20px;margin:0 0 4px}.sub{color:var(--dim);font-size:13px;margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:15px;margin-bottom:12px}
+h2{font-size:12.5px;margin:0 0 12px;color:var(--dim);font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+label{display:block;font-size:13px;color:var(--dim);margin:12px 0 5px}label:first-of-type{margin-top:0}
+input,textarea{width:100%;background:var(--bg2);color:var(--fg);border:1px solid var(--line);
+border-radius:8px;padding:12px;font:inherit;min-height:44px}
+textarea{min-height:150px;white-space:pre;overflow-x:auto}
+button{width:100%;background:var(--or);color:#20160a;border:0;border-radius:8px;padding:15px;
+font:inherit;font-weight:700;margin-top:10px;min-height:44px;cursor:pointer}
+button.sec{background:transparent;color:var(--fg);border:1px solid var(--line)}
+button:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);align-items:baseline}
+.row:last-child{border-bottom:0}.k{color:var(--dim);flex:0 0 130px;font-size:12px}
+.v{flex:1;font-size:12.5px;word-break:break-all}
+.pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:700}
+.p-ok{background:#0d3b23;color:#7ff0b0}.p-bad{background:#4a1414;color:#ffb3b3}
+.p-warn{background:#3a2a10;color:#ffd48a}.p-dim{background:var(--bg2);color:var(--dim)}
+.note{color:var(--dim);font-size:12px;margin-top:10px}
+a{color:var(--fg)}
+</style>
+
+<main>
+<h1>Prove your X account owns this wallet</h1>
+<p class="sub">Two halves. The wallet names the account, the account publishes the signature.
+Neither half alone proves anything — and a self-declared handle proves nothing at all.</p>
+
+<div class="card">
+  <h2>1 · which X account</h2>
+  <label for="post">Link to any post from your account</label>
+  <input id="post" placeholder="https://x.com/…/status/123…" spellcheck="false">
+  <label for="xid">Your account's numeric id</label>
+  <input id="xid" placeholder="1502785716446797831" inputmode="numeric" spellcheck="false">
+  <p class="note">⛔ It is the <b>numeric id</b> that gets signed, never the @handle. A handle can be
+  abandoned and taken by someone else, who would then inherit your proof. The numeric id never
+  changes hands.<br>
+  ⚠️ <b>A browser cannot read it.</b> Measured 2026-09-07: X serves the id only to
+  <code>platform.twitter.com</code> — every other origin is refused by CORS. Get it with
+  <code>node prepare-lien-x.mjs &lt;post-id&gt; &lt;wallet&gt;</code>, which reads it directly.
+  The link below only confirms the <b>handle</b>, which a browser is allowed to read.</p>
+  <button class="sec" id="lireCompte">Read the account</button>
+  <div id="vueCompte" style="margin-top:10px"></div>
+</div>
+
+<div class="card">
+  <h2>2 · the exact message</h2>
+  <div id="vueDefi"><span class="k">read the account first</span></div>
+  <textarea id="message" readonly placeholder="the message will appear here"></textarea>
+  <p class="note">⚠️ This is a <b>message</b> signature, not a transaction: no funds move, no gas is
+  paid, nothing is sent to any chain. It is still a signature — read it before accepting.</p>
+  <button id="signer" disabled>Sign it with my wallet</button>
+  <div id="vueSignature" style="margin-top:10px"></div>
+</div>
+
+<div class="card">
+  <h2>3 · publish it, then verify</h2>
+  <div id="vuePublier"><span class="k">sign it first</span></div>
+  <label for="preuve">Link to the post that contains the signature</label>
+  <input id="preuve" placeholder="https://x.com/…/status/456…" spellcheck="false">
+  <button class="sec" id="verifier" disabled>Verify the link</button>
+  <div id="vueVerdict" style="margin-top:10px"></div>
+</div>
+
+<div class="card">
+  <h2>what this can and cannot say</h2>
+  <div class="row"><span class="k">it proves</span><span class="v">this account and this key
+    acknowledge each other, <b>at the time you check</b></span></div>
+  <div class="row"><span class="k">it does not prove</span><span class="v">that the holder is
+    honest. A scammer can prove their own link perfectly well — this attributes, it never
+    absolves.</span></div>
+  <div class="row"><span class="k">it can vanish</span><span class="v">the post can be deleted.
+    A verification is valid on a date, never "for ever".</span></div>
+  <div class="row"><span class="k">not covered</span><span class="v">smart-contract wallets
+    (EIP-1271) do not sign like a key — they will read as NOT MEASURED, never as false.</span></div>
+</div>
+</main>
+
+<script type="module">
+import { messageDefi, signatureDansTexte, verdictLien, handleNormalise } from './lien-x.js';
+import { keccak256 } from './keccak.js';
+
+const $ = (s) => document.querySelector(s);
+const ligne = (k, v) => `<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`;
+const pastille = (t, c) => `<span class="pill p-${c}">${t}</span>`;
+/* ⛔ TOUT CE QUI VIENT DE X EST DU TEXTE D INCONNU : il est ECHAPPE, jamais insere en HTML. */
+const enTexte = (s) => { const d = document.createElement('div'); d.textContent = String(s ?? ''); return d.innerHTML; };
+
+const enc = new TextEncoder();
+const hex = (o) => [...o].map((b) => b.toString(16).padStart(2, '0')).join('');
+
+/* ⛔ L IDENTIFIANT D UN POST SE LIT DANS L URL, ET ON REFUSE CE QU ON NE SAIT PAS LIRE. Deviner
+ *    un identifiant a partir d une URL inconnue interrogerait un AUTRE post que celui montre. */
+function idDePost(v) {
+  const t = String(v || '').trim();
+  if (/^\d{5,25}$/.test(t)) return t;
+  const m = t.match(/(?:twitter|x)\.com\/[^/]+\/status(?:es)?\/(\d{5,25})/i);
+  return m ? m[1] : null;
+}
+
+/**
+ * Lit un post depuis un NAVIGATEUR — donc par oEmbed, la seule voie que X laisse ouverte.
+ * ================================================================================================
+ * ⛔⛔ ET J AI REFAIT CE MATIN L ERREUR QUE J AVAIS DOCUMENTEE CE MATIN. J avais mesure que
+ *    l endpoint de syndication rend l identifiant numerique « sans cle » — depuis NODE, qui ignore
+ *    CORS. Mesure des en-tetes le 2026-09-07 :
+ *      cdn.syndication.twimg.com -> Access-Control-Allow-Origin: https://platform.twitter.com
+ *      publish.twitter.com/oembed -> reflete NOTRE origine
+ *    Un navigateur ne peut donc PAS lire l identifiant numerique. Un test fait depuis Node validait
+ *    exactement le cas que le navigateur refuse — la meme faute que pour les passerelles IPFS,
+ *    commise le meme jour, apres l avoir ecrite dans un fichier.
+ *
+ * ⛔ CE QUE CA CHANGE, ET ON NE LE CACHE PAS : oEmbed rend le HANDLE et le TEXTE, jamais l id.
+ *    Se rabattre sur le handle serait exploitable — quelqu un qui prend un handle abandonne
+ *    heriterait de la preuve. La page demande donc l id, et dit ou l obtenir.
+ */
+async function lirePost(id) {
+  try {
+    const u = 'https://publish.twitter.com/oembed?omit_script=1&url='
+      + encodeURIComponent('https://x.com/i/status/' + id);
+    const r = await fetch(u, { signal: AbortSignal.timeout(20000) });
+    if (!r.ok) return { absent: true, pourquoi: 'X answered HTTP ' + r.status };
+    const j = await r.json();
+    const handle = handleNormalise(j.author_url || '');
+    if (!handle) return { absent: true, pourquoi: 'no readable author in what X returned' };
+    /* ⛔ `auteurId` RESTE NULL, DELIBEREMENT. Y mettre le handle ferait passer une donnee faible
+     *    pour la forte : `verdictLien` compare `auteurId` a l id attendu, et la comparaison
+     *    echouerait — ce qui est le bon comportement, mais pour la mauvaise raison. On rend donc
+     *    l absence EXPLICITE, et l appelant decide quoi en dire. */
+    const texte = String(j.html || '').replace(/<[^>]*>/g, ' ');
+    return { auteurId: null, handle, texte, idIndisponible: true };
+  } catch (e) { return { absent: true, pourquoi: String(e.message || e) }; }
+}
+
+/* ⛔ ecrecover EST LE PRECOMPILE 0x01 : on ne reimplemente pas secp256k1 dans une page. La
+ *    recuperation a ete VALIDEE contre 4 transactions reelles de Base (valide-ecrecover.mjs),
+ *    temoin negatif compris. */
+async function recuperer(digest, signature) {
+  const s = signature.replace(/^0x/, '');
+  if (s.length !== 130) return null;
+  let v = parseInt(s.slice(128, 130), 16);
+  if (v < 27) v += 27;
+  const data = '0x' + digest.slice(2) + v.toString(16).padStart(64, '0') + s.slice(0, 64) + s.slice(64, 128);
+  try {
+    const r = await fetch('https://mainnet.base.org', { method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call',
+        params: [{ to: '0x0000000000000000000000000000000000000001', data }, 'latest'] }) });
+    const j = await r.json();
+    if (j.error || !j.result || j.result === '0x' || BigInt(j.result) === 0n) return null;
+    return '0x' + j.result.slice(-40);
+  } catch { return null; }
+}
+
+function digestEip191(texte) {
+  const corps = enc.encode(texte);
+  const entete = enc.encode('\x19Ethereum Signed Message:\n' + corps.length);
+  const tout = new Uint8Array(entete.length + corps.length);
+  tout.set(entete); tout.set(corps, entete.length);
+  return '0x' + hex(keccak256(tout));
+}
+
+let etat = null;   // { xId, handle, adresse, chaineId, nonce, expire, texte, signature }
+
+$('#lireCompte').onclick = async () => {
+  const box = $('#vueCompte');
+  $('#signer').disabled = true; $('#verifier').disabled = true; etat = null;
+  const id = idDePost($('#post').value);
+  if (!id) return box.innerHTML = ligne('state', pastille('NOT A POST LINK', 'warn'))
+    + ligne('expected', 'https://x.com/&lt;name&gt;/status/&lt;numbers&gt;');
+  if (!window.ethereum) return box.innerHTML = ligne('state', pastille('NO WALLET IN THIS BROWSER', 'warn'));
+  box.innerHTML = ligne('state', 'reading X and your wallet…');
+  let compte = null;
+  try { [compte] = await window.ethereum.request({ method: 'eth_requestAccounts' }); }
+  catch (e) { return box.innerHTML = ligne('state', pastille('WALLET REFUSED', 'warn')) + ligne('why', enTexte(e.message || e)); }
+  const p = await lirePost(id);
+  if (p.absent) return box.innerHTML = ligne('state', pastille('POST NOT READABLE', 'warn'))
+    + ligne('why', enTexte(p.pourquoi))
+    + ligne('meaning', 'this says nothing about the account — only that X did not answer');
+
+  /* ⛔ L IDENTIFIANT VIENT DU CHAMP, PAS DU POST — parce qu un navigateur ne peut pas le lire.
+   *    `messageDefi` REFUSE un handle a cette place, donc une saisie fautive est arretee ici et
+   *    non trois etapes plus loin. */
+  const xId = $('#xid').value.trim();
+  if (!/^\d{5,25}$/.test(xId)) {
+    return box.innerHTML = ligne('handle', '@' + enTexte(p.handle) + ' <span class="k">read from X</span>')
+      + ligne('state', pastille('NUMERIC ID MISSING', 'warn'))
+      + ligne('why', 'a browser cannot read it — X serves it only to platform.twitter.com')
+      + ligne('how', 'node prepare-lien-x.mjs ' + enTexte(id) + ' &lt;your wallet&gt;');
+  }
+  const chaineId = parseInt(await window.ethereum.request({ method: 'eth_chainId' }), 16);
+  /* ⛔ NONCE ALEATOIRE CRYPTOGRAPHIQUE, jamais une horloge : deux preparations dans la meme
+   *    milliseconde donneraient le meme defi, donc une preuve rejouable. */
+  const nonce = hex(crypto.getRandomValues(new Uint8Array(12)));
+  const expire = Date.now() + 30 * 86400000;
+  const m = messageDefi({ xId, handle: p.handle, adresse: compte, chaineId, nonce, expire });
+  if (m.etat !== 'OK') return box.innerHTML = ligne('state', pastille('REFUSED', 'bad')) + ligne('why', enTexte(m.pourquoi));
+
+  etat = { xId, handle: p.handle, adresse: compte, chaineId, nonce, expire, texte: m.texte };
+  box.innerHTML = ligne('handle', '@' + enTexte(p.handle) + ' <span class="k">read from X, for display only</span>')
+    + ligne('numeric id', enTexte(xId) + ' <span class="k">— this is what gets signed</span>')
+    + ligne('wallet', enTexte(compte))
+    + ligne('chain', String(chaineId));
+  $('#message').value = m.texte;
+  $('#vueDefi').innerHTML = ligne('expires', new Date(expire).toISOString().slice(0, 10))
+    + ligne('nonce', enTexte(nonce) + ' <span class="k">— keep it, the message cannot be rebuilt without it</span>');
+  $('#signer').disabled = false;
+};
+
+$('#signer').onclick = async () => {
+  const box = $('#vueSignature');
+  if (!etat) return;
+  try {
+    box.innerHTML = ligne('state', 'your wallet will open — read the text before accepting');
+    const sig = await window.ethereum.request({ method: 'personal_sign', params: [etat.texte, etat.adresse] });
+    /* ⛔ ON VERIFIE NOTRE PROPRE SIGNATURE AVANT DE LA MONTRER. Si le portefeuille a signe avec un
+     *    AUTRE compte que celui affiche — changement de compte entre-temps — la preuve serait
+     *    publiee fausse, et c est l utilisateur qui en porterait la trace publique. */
+    const rec = await recuperer(digestEip191(etat.texte), sig);
+    if (!rec || rec.toLowerCase() !== etat.adresse.toLowerCase()) {
+      return box.innerHTML = ligne('state', pastille('SIGNED BY A DIFFERENT ACCOUNT', 'bad'))
+        + ligne('expected', enTexte(etat.adresse)) + ligne('got', enTexte(rec || 'nothing recoverable'))
+        + ligne('meaning', 'do NOT publish this — it would prove the wrong thing');
+    }
+    etat.signature = sig;
+    box.innerHTML = ligne('state', pastille('SIGNED AND CHECKED', 'ok'))
+      + ligne('signature', enTexte(sig));
+    $('#vuePublier').innerHTML = ligne('post this from @' + enTexte(etat.handle),
+      '<textarea readonly style="min-height:90px">' + enTexte(sig) + '</textarea>')
+      + ligne('note', 'the signature alone is enough — the post just has to come from that account');
+    $('#verifier').disabled = false;
+  } catch (e) {
+    /* ⛔ « J AI REFUSE » ET « CA A PLANTE » SONT DEUX FAITS OPPOSES (code EIP-1193 4001). */
+    const refus = e && (e.code === 4001 || /reject|denied/i.test(String(e.message || e)));
+    box.innerHTML = ligne('state', pastille(refus ? 'YOU REFUSED' : 'SIGNING FAILED', 'warn'))
+      + ligne('why', enTexte(e.message || e));
+  }
+};
+
+$('#verifier').onclick = async () => {
+  const box = $('#vueVerdict');
+  if (!etat) return;
+  const id = idDePost($('#preuve').value);
+  if (!id) return box.innerHTML = ligne('state', pastille('NOT A POST LINK', 'warn'));
+  box.innerHTML = ligne('state', 'reading the post…');
+  const post = await lirePost(id);
+  const sig = post.absent ? null : signatureDansTexte(post.texte);
+  const rec = sig ? await recuperer(digestEip191(etat.texte), sig) : null;
+  /* ⛔⛔ LA MOITIE « QUEL COMPTE A PUBLIE » NE PEUT PAS SE VERIFIER ICI. Un navigateur n obtient
+   *    que le handle, et se rabattre dessus serait EXPLOITABLE : quelqu un qui prend un handle
+   *    abandonne republierait la signature depuis son compte et heriterait de la preuve.
+   *    On rend donc `NON_MESURE` sur cette moitie, et on dit ou la faire — jamais un verdict
+   *    positif obtenu en baissant l exigence. */
+  if (post && !post.absent && post.auteurId === null) {
+    return box.innerHTML = ligne('verdict', pastille('HALF-CHECKED ONLY', 'warn'))
+      + ligne('signature', sig ? pastille('VALID, from ' + enTexte((rec || '').slice(0, 12)) + '…',
+          rec && rec.toLowerCase() === etat.adresse.toLowerCase() ? 'ok' : 'bad') : 'none in that post')
+      + ligne('which account', pastille('NOT MEASURED', 'dim')
+          + ' <span class="k">a browser only gets the @handle (@' + enTexte(post.handle) + '), and binding to a handle is exploitable</span>')
+      + ligne('finish it with', 'node verifie-lien-x.mjs ' + enTexte(id) + ' ' + enTexte(etat.xId)
+          + ' ' + enTexte(etat.adresse) + ' ' + etat.chaineId + ' ' + enTexte(etat.nonce)
+          + ' ' + new Date(etat.expire).toISOString());
+  }
+  const v = verdictLien({ attendu: etat, post, recouvre: rec });
+  const couleur = v.etat === 'LIE_PROUVE' ? 'ok'
+    : v.etat === 'POST_ILLISIBLE' || v.etat === 'NON_MESURE' ? 'dim' : 'bad';
+  box.innerHTML = ligne('verdict', pastille(v.etat.replace(/_/g, ' '), couleur))
+    + (v.pourquoi ? ligne('why', enTexte(v.pourquoi)) : '')
+    + (post.absent ? '' : ligne('posted by', '@' + enTexte(post.handle) + ' (' + enTexte(post.auteurId) + ')'))
+    + ligne('signature found', sig ? enTexte(sig.slice(0, 24)) + '…' : 'none in that post')
+    + ligne('recovered', enTexte(rec || 'nothing'))
+    + (v.etat === 'LIE_PROUVE'
+      ? ligne('checked on', enTexte(v.verifieLe)) + ligne('does NOT prove', enTexte(v.neProuvePas))
+      : '');
+};
+</script>
