@@ -292,7 +292,7 @@ h1{font-size:18px;letter-spacing:-.01em;line-height:1.2}
 
 /* Cards: consistent radius + breathing room; quieter micro-headers */
 .card{border-radius:13px;padding:16px 16px 14px;margin-bottom:12px}
-.card h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;color:#6e84b0;margin:0 0 10px;opacity:.92}
+.card h2{font-size:13px;letter-spacing:0;text-transform:none;font-weight:700;color:var(--dim);margin:0 0 10px;opacity:.95}
 .cardQuiet{padding:10px 14px;background:var(--bg2);border-style:dashed;opacity:.95}
 .cardQuiet summary{min-height:44px;color:var(--dim);font-size:13px}
 #gardeMainnet{border-radius:13px;margin-bottom:10px}
@@ -382,8 +382,102 @@ button.act.sec:hover{opacity:1;color:var(--fg)}
 @media (min-width:1000px){
   main > header, main > .tabs, main > #funnel, main > #gardeMainnet,
   main > #ctaPacket, main > #agir, main > #relire, main > #ouvrirLancement,
-  main > #etat, main > .note, main > .bascule, main > #carteGalerieWrap
+  main > #etat, main > .note, main > .bascule, main > #carteGalerieWrap,
+  main > #warningsStrip, main > #nextSteps, main > #lookupCard, main > #commentCaMarche,
+  main > #carteLook, main > #createZone
   {column-span:all}
+}
+
+/* ══ VISUAL PASS 2 (feat/tblock-visual-2) — progressive disclosure after Name/Symbol ══ */
+.secHead{font-size:15px;font-weight:700;letter-spacing:0;text-transform:none;color:var(--fg);
+margin:0;line-height:1.3}
+.secWhy{display:block;margin:4px 0 0;font-size:12.5px;color:var(--dim);font-weight:500;line-height:1.4;
+letter-spacing:0;text-transform:none}
+.card > .secHead{margin-bottom:2px}
+.card > .secWhy{margin-bottom:12px}
+.card h2.secHead{opacity:1;color:var(--fg)}
+
+#carteLook{margin-top:4px}
+#carteLook > summary{list-style:none;cursor:pointer;display:flex;flex-direction:column;
+align-items:flex-start;gap:2px;min-height:48px;padding:4px 0}
+#carteLook > summary::-webkit-details-marker{display:none}
+#carteLook > summary::after{content:"Customise colours, shards, material";font-size:12px;
+color:#6e84b0;font-weight:500}
+#carteLook[open] > summary::after{content:"Hide look settings"}
+#lookBody{padding-top:8px;padding-bottom:4px}
+.lookGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;align-items:end}
+.lookGrid .lookFull{grid-column:1 / -1}
+.lookGrid label{margin-top:0}
+@media (max-width:640px){
+  .lookGrid{grid-template-columns:1fr;gap:12px}
+}
+
+#warningsStrip{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 10px;padding:10px 12px;
+border:1px solid #2a3a5c;border-radius:12px;background:var(--bg2)}
+#warningsStrip .wItem{flex:1 1 140px;font-size:12px;line-height:1.4;color:var(--dim);
+padding:6px 8px;border-radius:8px;border:1px solid #243556;background:rgba(5,13,36,.35)}
+#warningsStrip .wItem b{color:var(--warn);font-weight:700}
+
+#nextSteps{margin:10px 0 12px;padding:12px 14px 10px;border:1px solid var(--line);
+border-radius:13px;background:var(--card)}
+#nextSteps .nsHead{display:flex;flex-direction:column;gap:2px;margin-bottom:10px}
+#nextSteps .nsTabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+#nextSteps .nsTab{flex:1 1 auto;min-height:44px;padding:10px 12px;border-radius:10px;
+border:1px solid var(--line);background:var(--bg2);color:var(--dim);font:inherit;
+font-size:13px;font-weight:600;cursor:pointer}
+#nextSteps .nsTab[aria-selected="true"]{color:var(--fg);border-color:#4d8cff;background:#132038}
+#nextSteps .nsPanel{display:none;padding-top:2px}
+#nextSteps .nsPanel.on{display:block}
+#nextSteps.nsReady{border-color:#3a5a9a;box-shadow:0 0 0 1px rgba(77,140,255,.12)}
+#nextSteps:not([open]) .nsTabs{display:none}
+#nextSteps:not([open]) .nsPanel{display:none !important}
+#nextSteps > summary.nsSum{list-style:none;cursor:pointer;min-height:48px;display:flex;
+flex-direction:column;align-items:flex-start;gap:2px;padding:2px 0;color:var(--fg)}
+#nextSteps > summary.nsSum::-webkit-details-marker{display:none}
+body[data-funnel="Ready-to-Launch"] #nextSteps{border-color:#4d8cff}
+
+#lookupCard{margin:8px 0 12px}
+#lookupCard > summary{list-style:none;cursor:pointer;display:flex;flex-direction:column;
+align-items:flex-start;gap:2px;min-height:48px;padding:4px 0}
+#lookupCard > summary::-webkit-details-marker{display:none}
+#lookupInner{padding-top:8px}
+#lookupInner .lookupBlock{margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+#lookupInner .lookupBlock:last-child{margin-bottom:0;padding-bottom:0;border-bottom:0}
+#lookupInner .lookupLabel{font-size:13px;font-weight:700;color:var(--fg);margin:0 0 8px}
+
+#carteASigner .kv,#etatToken.kv,#fiche.kv{display:grid;grid-template-columns:minmax(88px,120px) 1fr;
+gap:0 12px}
+#fiche .row,#etatToken .row{display:grid;grid-template-columns:subgrid;grid-column:1 / -1;
+padding:8px 0;border-bottom:1px solid var(--line);align-items:baseline;gap:0 12px}
+#fiche .row:last-child,#etatToken .row:last-child{border-bottom:0}
+#fiche .k,#etatToken .k{flex:none;width:auto;font-size:12px;color:var(--dim);font-family:inherit}
+#fiche .v,#etatToken .v{font-size:12.5px;word-break:break-word;font-family:inherit}
+#fiche .mono,#etatToken .mono,.v.mono,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+#fiche .dataExpand{margin-top:4px;font-size:12px;color:#7fb0ff;cursor:pointer;background:none;
+border:0;padding:4px 0;font-family:inherit;min-height:auto}
+#fiche .dataFull{display:none;margin-top:6px;padding:8px;border-radius:8px;background:var(--bg2);
+border:1px solid var(--line);word-break:break-all;font-size:11.5px;
+font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
+#fiche .dataFull.on{display:block}
+
+#commentCaMarche{padding:10px 14px;background:var(--bg2);border-style:dashed;opacity:.92}
+#commentCaMarche > .secHead{margin-bottom:0}
+#commentCaMarche details > summary{min-height:44px}
+
+.bascule{margin-top:4px}
+
+
+#carteASigner summary, #carteEtat summary, #lookupCard summary, #carteLook summary,
+#commentCaMarche > summary, #nextSteps > summary.nsSum{
+  flex-direction:column;align-items:flex-start;gap:2px;padding:8px 0;
+}
+#carteASigner summary .secHead, #carteEtat summary .secHead{font-size:14px}
+
+@media (max-width:640px){
+  #warningsStrip{flex-direction:column;gap:6px}
+  #nextSteps .nsTab{flex:1 1 100%}
+  #fiche .row,#etatToken .row{grid-template-columns:1fr;gap:2px}
+  #carteASigner .kv,#etatToken.kv,#fiche.kv{grid-template-columns:1fr}
 }
 
 </style>
@@ -425,8 +519,9 @@ button.act.sec:hover{opacity:1;color:var(--fg)}
   <label><input type="checkbox" id="gardeCase"> I understand this is mainnet and I accept the cost.</label>
 </div>
 
-<div class="card">
-  <h2>Create your block</h2>
+<div class="card" id="createZone">
+  <h2 class="secHead">Create your block</h2>
+  <p class="secWhy">Name and symbol first — everything else is optional or comes after.</p>
   <label for="nom">Name</label><input id="nom" value="Tokenized Block" maxlength="32">
   <div class="duo">
     <div><label for="sym">Symbol</label><input id="sym" value="TBLOCK" maxlength="11"></div>
@@ -463,87 +558,94 @@ button.act.sec:hover{opacity:1;color:var(--fg)}
       <button class="act sec" id="photoRetirer" style="margin-top:8px;display:none">Remove the photo, go back to the generated logo</button>
     </div>
   </details>
-  <label class="avance" for="teinte">Block colour</label><input class="avance" id="teinte" type="range" min="0" max="360" value="222">
-  <label class="avance" for="accent">Accent colour — the letters and the shards</label>
-  <input class="avance" id="accent" type="range" min="0" max="360" value="38">
-  <div class="duo avance">
-    <div><label for="division">Division — how finely the block splits</label>
-      <input id="division" type="range" min="1" max="5" value="3"></div>
-    <div><label for="eclats">Shards — how many break away</label>
-      <input id="eclats" type="range" min="0" max="6" value="3"></div>
-  </div>
-  <div class="duo avance">
-    <div><label for="ecart">Spread — how far the shards sit from the block</label>
-      <input id="ecart" type="range" min="0" max="4" value="2"></div>
-    <div><label for="ornement">Corners</label>
-      <!-- ⛔ LES COINS ETAIENT VIDES, ET C EST LA MOITIE DE L IMAGE. Le catalogue etait grand,
-           la silhouette restait unique : deux blocs de meme teinte se ressemblaient bien plus que
-           le compte de combinaisons ne le laissait croire. -->
-      <select id="ornement">
-        <option value="aucun">Bare — nothing in the corners</option>
-        <option value="points">Dots — four quiet marks</option>
-        <option value="equerres">Brackets — a frame that does not close</option>
-        <option value="griffes">Claws — short strokes turning inward</option>
-        <option value="arcs">Arcs — the corners rounded off</option>
-        <option value="croix">Crosses — four small crosses</option>
-        <option value="chevrons">Chevrons — pointing out of the frame</option>
-        <option value="etoiles">Stars — four sparks</option>
-      </select></div>
-  </div>
-  <!-- ⛔ La disposition des eclats etait FIGEE : un seul sillage possible, et le seul reglage
-       etait combien. C est la partie la plus visible du logo, et c etait la plus impersonnelle —
-       deux blocs differents rendaient la meme trainee. Le choix se fait ici. -->
-  <label class="avance" for="orbite">Where the shards go</label>
-  <select class="avance" id="orbite">
-    <option value="sillage">Trail — rising to one side</option>
-    <option value="couronne">Crown — an arc above the block</option>
-    <option value="essaim">Swarm — scattered all around</option>
-    <option value="chute">Falling — dropping away below</option>
-    <option value="coins">Corners — set down, not moving</option>
-    <option value="spirale">Spiral — winding outwards</option>
-    <option value="colonne">Column — stacked above</option>
-    <option value="ailes">Wings — balanced on both sides</option>
-    <option value="ronde">Ring — circling the block</option>
-    <option value="diagonale">Diagonal — cutting across</option>
-  </select>
-  <!-- ⛔ NOUVELLE DIMENSION, ET C EST CELLE QUI CHANGE LE PLUS L ALLURE. Toutes les autres
-       reglaient un detail du meme cube de verre ; la matiere change le cube lui-meme. Elle est
-       DESSINEE, comme le reste : aucun asset, donc aucune licence a graver par erreur. -->
-  <label class="avance" for="matiere">Material — what the block is made of</label>
-  <select class="avance" id="matiere">
-    <option value="verre">Glass — translucent, the original</option>
-    <option value="plein">Solid — opaque and heavy</option>
-    <option value="fil">Wireframe — edges only</option>
-    <option value="neon">Neon — glowing outline on dark</option>
-    <option value="papier">Paper — pale and matte</option>
-    <option value="encre">Ink — black lines on white</option>
-    <option value="chrome">Chrome — polished metal</option>
-    <option value="braise">Ember — dark and glowing</option>
-    <option value="givre">Frost — pale translucent</option>
-  </select>
-  <label class="avance" for="facette">Face style</label>
-  <select class="avance" id="facette">
-    <option value="lettre">Letter — the symbol's initial</option>
-    <option value="anneau">Ring — a hollow circle</option>
-    <option value="barres">Bars — three stacked bars</option>
-    <option value="disque">Disc — a filled circle</option>
-    <option value="croix">Cross — a thick plus</option>
-    <option value="losange">Diamond — an outlined rhombus</option>
-    <option value="triangle">Triangle — a filled wedge</option>
-    <option value="points">Dots — a three by three grid</option>
-    <option value="chevrons">Chevrons — two arrows</option>
-    <option value="cible">Target — two rings</option>
-    <option value="etoile">Star — five points</option>
-    <option value="eclair">Bolt — a lightning strike</option>
-    <option value="hexagone">Hexagon — an outlined cell</option>
-    <option value="coche">Check — a tick mark</option>
-    <option value="cle">Key — a plain key</option>
-    <option value="vague">Waves — two ripples</option>
-    <option value="grille">Grid — a hash</option>
-    <option value="fleche">Arrow — pointing up</option>
-    <option value="vide">Empty — glass only</option>
-  </select>
 </div>
+
+<!-- Your block look — progressive disclosure; compact grid, not stacked endless selects -->
+<details class="card" id="carteLook">
+  <summary>
+    <span class="secHead">Your block look</span>
+    <span class="secWhy">Colours, shards and material — engraved on create. Optional; preview updates live.</span>
+  </summary>
+  <div id="lookBody">
+    <div class="lookGrid">
+      <div><label for="teinte">Block colour</label><input id="teinte" type="range" min="0" max="360" value="222"></div>
+      <div><label for="accent">Accent — letters &amp; shards</label><input id="accent" type="range" min="0" max="360" value="38"></div>
+      <div><label for="division">Division — how finely it splits</label>
+        <input id="division" type="range" min="1" max="5" value="3"></div>
+      <div><label for="eclats">Shards — how many break away</label>
+        <input id="eclats" type="range" min="0" max="6" value="3"></div>
+      <div><label for="ecart">Spread — shard distance</label>
+        <input id="ecart" type="range" min="0" max="4" value="2"></div>
+      <div><label for="ornement">Corners</label>
+        <!-- ⛔ LES COINS ETAIENT VIDES, ET C EST LA MOITIE DE L IMAGE. Le catalogue etait grand,
+             la silhouette restait unique : deux blocs de meme teinte se ressemblaient bien plus que
+             le compte de combinaisons ne le laissait croire. -->
+        <select id="ornement">
+          <option value="aucun">Bare — nothing in the corners</option>
+          <option value="points">Dots — four quiet marks</option>
+          <option value="equerres">Brackets — a frame that does not close</option>
+          <option value="griffes">Claws — short strokes turning inward</option>
+          <option value="arcs">Arcs — the corners rounded off</option>
+          <option value="croix">Crosses — four small crosses</option>
+          <option value="chevrons">Chevrons — pointing out of the frame</option>
+          <option value="etoiles">Stars — four sparks</option>
+        </select></div>
+      <div class="lookFull"><label for="orbite">Where the shards go</label>
+        <!-- ⛔ La disposition des eclats etait FIGEE : un seul sillage possible, et le seul reglage
+             etait combien. C est la partie la plus visible du logo, et c etait la plus impersonnelle —
+             deux blocs differents rendaient la meme trainee. Le choix se fait ici. -->
+        <select id="orbite">
+          <option value="sillage">Trail — rising to one side</option>
+          <option value="couronne">Crown — an arc above the block</option>
+          <option value="essaim">Swarm — scattered all around</option>
+          <option value="chute">Falling — dropping away below</option>
+          <option value="coins">Corners — set down, not moving</option>
+          <option value="spirale">Spiral — winding outwards</option>
+          <option value="colonne">Column — stacked above</option>
+          <option value="ailes">Wings — balanced on both sides</option>
+          <option value="ronde">Ring — circling the block</option>
+          <option value="diagonale">Diagonal — cutting across</option>
+        </select></div>
+      <div><label for="matiere">Material</label>
+        <!-- ⛔ NOUVELLE DIMENSION, ET C EST CELLE QUI CHANGE LE PLUS L ALLURE. Toutes les autres
+             reglaient un detail du meme cube de verre ; la matiere change le cube lui-meme. Elle est
+             DESSINEE, comme le reste : aucun asset, donc aucune licence a graver par erreur. -->
+        <select id="matiere">
+          <option value="verre">Glass — translucent, the original</option>
+          <option value="plein">Solid — opaque and heavy</option>
+          <option value="fil">Wireframe — edges only</option>
+          <option value="neon">Neon — glowing outline on dark</option>
+          <option value="papier">Paper — pale and matte</option>
+          <option value="encre">Ink — black lines on white</option>
+          <option value="chrome">Chrome — polished metal</option>
+          <option value="braise">Ember — dark and glowing</option>
+          <option value="givre">Frost — pale translucent</option>
+        </select></div>
+      <div><label for="facette">Face style</label>
+        <select id="facette">
+          <option value="lettre">Letter — the symbol's initial</option>
+          <option value="anneau">Ring — a hollow circle</option>
+          <option value="barres">Bars — three stacked bars</option>
+          <option value="disque">Disc — a filled circle</option>
+          <option value="croix">Cross — a thick plus</option>
+          <option value="losange">Diamond — an outlined rhombus</option>
+          <option value="triangle">Triangle — a filled wedge</option>
+          <option value="points">Dots — a three by three grid</option>
+          <option value="chevrons">Chevrons — two arrows</option>
+          <option value="cible">Target — two rings</option>
+          <option value="etoile">Star — five points</option>
+          <option value="eclair">Bolt — a lightning strike</option>
+          <option value="hexagone">Hexagon — an outlined cell</option>
+          <option value="coche">Check — a tick mark</option>
+          <option value="cle">Key — a plain key</option>
+          <option value="vague">Waves — two ripples</option>
+          <option value="grille">Grid — a hash</option>
+          <option value="fleche">Arrow — pointing up</option>
+          <option value="vide">Empty — glass only</option>
+        </select></div>
+    </div>
+  </div>
+</details>
 
 <!-- ⛔ P1/P4 dig-adapt: evidence packet on the Create CTA — network, irreversibility, link to
      existing « What you will sign » (gas lives there). Strengthen visibility; do not bury in Advanced. -->
@@ -563,81 +665,73 @@ button.act.sec:hover{opacity:1;color:var(--fg)}
 
 <div class="card cardQuiet" id="carteASigner">
   <details id="signDetails">
-    <summary>What you will sign — destination, data head, gas</summary>
-    <div id="fiche"></div>
+    <summary><span class="secHead" style="font-size:14px">What you will sign</span>
+      <span class="secWhy" style="margin-left:0">Destination, data head, gas — open before you confirm in the wallet.</span></summary>
+    <div id="fiche" class="kv"></div>
   </details>
 </div>
 
 <div class="card cardQuiet" id="carteEtat">
   <details id="etatDetails">
-    <summary>On-chain state — re-read after create</summary>
-    <div id="etatToken"></div>
+    <summary><span class="secHead" style="font-size:14px">On-chain state</span>
+      <span class="secWhy">Re-read after create — never inferred from a successful send.</span></summary>
+    <div id="etatToken" class="kv"></div>
   </details>
 </div>
 
+<!-- Compact trust strip — does not fight the Create CTA -->
+<div id="warningsStrip" role="note">
+  <div class="wItem"><b>No key here</b> — this page presents the tx; your wallet signs.</div>
+  <div class="wItem"><b>No admin / no minter</b> — supply = cap; name, logo, description permanent.</div>
+  <div class="wItem"><b>Re-read only</b> — state comes from the chain, not from “sent”.</div>
+</div>
+
 <!-- ⛔ MESURE, PAS INTUITION : simple mode folds Advanced; signed plan identical. -->
-<button class="bascule" id="bascule" aria-expanded="false">Advanced · show every setting</button>
+<button class="bascule" id="bascule" aria-expanded="false">Advanced · supply, salt, decimals</button>
 
+<!-- Next steps: Launch / Liquidity / Swap — one panel at a time; collapsed by default -->
+<details class="card" id="nextSteps">
+  <summary class="nsSum">
+    <span class="secHead">Next steps</span>
+    <span class="secWhy">After create: launch the pool, add liquidity, or swap — open one at a time.</span>
+  </summary>
+  <div class="nsTabs" role="tablist" aria-label="Next steps">
+    <button type="button" class="nsTab" role="tab" aria-selected="true" data-ns="launch">Launch</button>
+    <button type="button" class="nsTab" role="tab" aria-selected="false" data-ns="liq">Liquidity</button>
+    <button type="button" class="nsTab" role="tab" aria-selected="false" data-ns="swap">Swap</button>
+  </div>
 
-<div class="card avance">
-  <h2>Your blocks</h2>
-  <label for="idxAdresse">Creator address — leave empty to list every recent block</label>
-  <input id="idxAdresse" placeholder="0x… (defaults to your connected wallet)" spellcheck="false" autocapitalize="off">
-  <label for="idxSel">Know the salt you used? Skip the scan entirely</label>
-  <input id="idxSel" placeholder="the salt, e.g. tblock-v1" spellcheck="false">
-  <button class="act sec" id="idxDeriver" style="margin-top:10px">Derive the address</button>
-  <div id="idxDerive"></div>
-  <label for="idxBlocs">Or scan — how far back (blocks)</label>
-  <input id="idxBlocs" value="20000" inputmode="numeric">
-  <button class="act sec" id="idxChercher" style="margin-top:10px">Find blocks</button>
-  <div id="idxVue"></div>
-</div>
+  <!-- ⛔ LANCEMENT UNILATERAL — la carte qui supprime le besoin de capital.
+       Mesure du 2026-09-06 : chez openlaunch 99,99 % de la supply est DANS la pool, chez nous
+       0,00 %. Leur position est placee ENTIEREMENT sous le prix, donc elle ne contient que le
+       jeton du createur. Zero ETH. Le regime a ete PROUVE accepte par la chaine (281 980 gas,
+       avec temoin positif ET temoin negatif). -->
+  <div class="nsPanel on" id="ns-launch" role="tabpanel" data-ns="launch">
+    <p class="expl">Put the <b>whole supply</b> in the pool with <b>only the token</b>. Buyers bring the ETH — no capital needed to launch.</p>
+    <label for="lancBlock">Block to launch</label>
+    <input id="lancBlock" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
+    <label for="lancValo">What the whole supply is worth at the start — in ETH</label>
+    <input id="lancValo" value="10" inputmode="decimal">
+    <div id="lancPlan" class="fiche" style="margin-top:10px"></div>
+    <button class="act sec" id="lancCalculer" style="margin-top:10px">Work out the launch</button>
+    <!-- ⛔ UN SEUL BOUTON, ET C EST L ATOMICITE QUI COMPTE PLUS QUE LE CONFORT. En deux etapes,
+         quelqu un pouvait creer la pool puis refuser le mint : il restait une pool VIDE au bon prix
+         que rien ne rattrape. `multicall` sur le PositionManager fait les deux ou aucun.
+         Mesure : 336 719 gas contre 352 756 en deux transactions — le gaz est un bonus, pas la
+         raison. -->
+    <button class="act" id="lancLancer" style="margin-top:8px;display:none">Launch — one transaction</button>
+  </div>
 
-<div class="card avance">
-  <h2>Read a block</h2>
-  <label for="lecture">Block address</label>
-  <input id="lecture" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
-  <button class="act sec" id="lire" style="margin-top:10px">Read it</button>
-  <div id="rendu"></div>
-</div>
-
-<!-- ⛔ LANCEMENT UNILATERAL — la carte qui supprime le besoin de capital.
-     Mesure du 2026-09-06 : chez openlaunch 99,99 % de la supply est DANS la pool, chez nous
-     0,00 %. Leur position est placee ENTIEREMENT sous le prix, donc elle ne contient que le
-     jeton du createur. Zero ETH. Le regime a ete PROUVE accepte par la chaine (281 980 gas,
-     avec temoin positif ET temoin negatif).
-     ⚠️ Elle reste dans les reglages avances : c est un geste definitif qui place TOUTE la
-     supply, et il ne doit pas se trouver sous la main de quelqu un qui decouvre la page. -->
-<div class="card avance">
-  <h2>Launch — put the whole supply in the pool</h2>
-  <p class="expl">The creator puts in <b>only the token</b>. Buyers bring the ETH. This is how a
-  launch needs no capital: the position sits entirely below the price, so it holds nothing but
-  your blocks.</p>
-  <label for="lancBlock">Block to launch</label>
-  <input id="lancBlock" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
-  <label for="lancValo">What the whole supply is worth at the start — in ETH</label>
-  <input id="lancValo" value="10" inputmode="decimal">
-  <div id="lancPlan" class="fiche" style="margin-top:10px"></div>
-  <button class="act sec" id="lancCalculer" style="margin-top:10px">Work out the launch</button>
-  <!-- ⛔ UN SEUL BOUTON, ET C EST L ATOMICITE QUI COMPTE PLUS QUE LE CONFORT. En deux etapes,
-       quelqu un pouvait creer la pool puis refuser le mint : il restait une pool VIDE au bon prix
-       que rien ne rattrape. `multicall` sur le PositionManager fait les deux ou aucun.
-       Mesure : 336 719 gas contre 352 756 en deux transactions — le gaz est un bonus, pas la
-       raison. -->
-  <button class="act" id="lancLancer" style="margin-top:8px;display:none">Launch — one transaction</button>
-</div>
-
-<div class="card avance">
-  <h2>Liquidity</h2>
-  <label for="poolToken">Block to pool</label>
-  <input id="poolToken" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
-  <!-- ⛔ LA DEVISE SE CHOISIT. Elle etait figee a USDC sur mainnet, et le premier block y a ete
-       cree par un compte qui detient de l ETH et ZERO USDC : la pool etait donc impossible, sans
-       que rien ne le dise. WETH s obtient en enveloppant son propre ETH — une transaction, aucun
-       echange, aucun tiers. -->
-  <label for="poolDevise">Quote currency</label>
-  <select id="poolDevise" style="width:100%;padding:10px;border-radius:9px;background:#0d1220;color:#dce6f5;border:1px solid #1c2740;font-size:14px"></select>
-  <label for="poolValeur">Starting value of the whole supply</label>
+  <div class="nsPanel" id="ns-liq" role="tabpanel" data-ns="liq">
+    <label for="poolToken">Block to pool</label>
+    <input id="poolToken" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
+    <!-- ⛔ LA DEVISE SE CHOISIT. Elle etait figee a USDC sur mainnet, et le premier block y a ete
+         cree par un compte qui detient de l ETH et ZERO USDC : la pool etait donc impossible, sans
+         que rien ne le dise. WETH s obtient en enveloppant son propre ETH — une transaction, aucun
+         echange, aucun tiers. -->
+    <label for="poolDevise">Quote currency</label>
+    <select id="poolDevise" style="width:100%;padding:10px;border-radius:9px;background:#0d1220;color:#dce6f5;border:1px solid #1c2740;font-size:14px"></select>
+    <label for="poolValeur">Starting value of the whole supply</label>
     <input id="poolValeur" value="10000" inputmode="numeric">
     <!-- ⛔ LE PRIX DE DEPART SE CHOISIT. Il etait code en dur a `PRIX_1_POUR_1` = 2^96, un ratio
          d UNITES DE BASE qui ignore les decimales : sur une paire USDC(6)/block(18) cela signifie
@@ -649,22 +743,52 @@ button.act.sec:hover{opacity:1;color:var(--fg)}
          sans qu un tiers calcule a votre place n est pas un champ.
          ⇒ On demande ce qu on MET ; l app en deduit `L`, marge de securite comprise. -->
     <label for="poolLiq">How much to put in (in whole units of the quote currency)</label>
-  <input id="poolLiq" value="0.001" inputmode="decimal" placeholder="0.001">
-  <button class="act sec" id="poolEtat" style="margin-top:10px">Check the 6 steps</button>
-  <div id="poolVue"></div>
-  <button class="act" id="poolAgir" disabled>Run the next step</button>
-</div>
+    <input id="poolLiq" value="0.001" inputmode="decimal" placeholder="0.001">
+    <button class="act sec" id="poolEtat" style="margin-top:10px">Check the 6 steps</button>
+    <div id="poolVue"></div>
+    <button class="act" id="poolAgir" disabled>Run the next step</button>
+  </div>
 
-<div class="card avance">
-  <h2>Swap</h2>
-  <label for="swapToken">Block</label>
-  <input id="swapToken" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
-  <label for="swapMontant">How many blocks to sell</label>
-  <input id="swapMontant" value="0.2" inputmode="decimal" placeholder="0.2">
-  <button class="act sec" id="swapEtat" style="margin-top:10px">Quote it</button>
-  <div id="swapVue"></div>
-  <button class="act" id="swapAgir" disabled>Run the next step</button>
-</div>
+  <div class="nsPanel" id="ns-swap" role="tabpanel" data-ns="swap">
+    <label for="swapToken">Block</label>
+    <input id="swapToken" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
+    <label for="swapMontant">How many blocks to sell</label>
+    <input id="swapMontant" value="0.2" inputmode="decimal" placeholder="0.2">
+    <button class="act sec" id="swapEtat" style="margin-top:10px">Quote it</button>
+    <div id="swapVue"></div>
+    <button class="act" id="swapAgir" disabled>Run the next step</button>
+  </div>
+</details>
+
+<!-- Lookup: Your blocks + Read — collapsed -->
+<details class="card cardQuiet" id="lookupCard">
+  <summary>
+    <span class="secHead">Lookup</span>
+    <span class="secWhy">Find blocks you made, or read any block address on-chain.</span>
+  </summary>
+  <div id="lookupInner">
+    <div class="lookupBlock">
+      <p class="lookupLabel">Your blocks</p>
+      <label for="idxAdresse">Creator address — leave empty to list every recent block</label>
+      <input id="idxAdresse" placeholder="0x… (defaults to your connected wallet)" spellcheck="false" autocapitalize="off">
+      <label for="idxSel">Know the salt you used? Skip the scan entirely</label>
+      <input id="idxSel" placeholder="the salt, e.g. tblock-v1" spellcheck="false">
+      <button class="act sec" id="idxDeriver" style="margin-top:10px">Derive the address</button>
+      <div id="idxDerive"></div>
+      <label for="idxBlocs">Or scan — how far back (blocks)</label>
+      <input id="idxBlocs" value="20000" inputmode="numeric">
+      <button class="act sec" id="idxChercher" style="margin-top:10px">Find blocks</button>
+      <div id="idxVue"></div>
+    </div>
+    <div class="lookupBlock">
+      <p class="lookupLabel">Read a block</p>
+      <label for="lecture">Block address</label>
+      <input id="lecture" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
+      <button class="act sec" id="lire" style="margin-top:10px">Read it</button>
+      <div id="rendu"></div>
+    </div>
+  </div>
+</details>
 
 <!-- Gallery secondary: does not compete with Instant Create above the fold. -->
 <details class="card cardQuiet" id="carteGalerieWrap" hidden>
@@ -676,32 +800,20 @@ button.act.sec:hover{opacity:1;color:var(--fg)}
      ⚠️ Elle se charge APRES la page : elle ne doit jamais retarder ce que l utilisateur est venu
      faire. Si elle echoue, elle se tait plutot que d inventer. -->
 <div id="carteGalerie" style="display:none">
-  <h2>Blocks people made</h2>
+  <h2 class="secHead">Blocks people made</h2>
   <div id="galerie" class="galerie"></div>
   <div id="galerieNote" class="k" style="margin-top:10px"></div>
 </div>
 </details>
 
-
-
-<p class="note">⛔ This page holds no key. It <b>presents</b> the transaction; your wallet shows it and signs it.<br>
-⛔ The block is born <b>with no admin and no minter</b>, and its supply equals its cap. Nobody — you included — will ever mint one more, or change its name, logo or description.<br>
-⛔ Every state shown is <b>re-read from the chain</b>, never inferred from a transaction having succeeded.</p>
-
 <!-- ⛔ CETTE SECTION EST UNE PROMESSE PUBLIQUE. Chaque phrase doit correspondre a ce que le code
      fait REELLEMENT, et rien d autre. Pas de « bientot », pas de feuille de route, pas de chiffre
      qui n a pas ete mesure. Ce qui n existe pas est dit comme n existant pas. -->
-<div class="card" id="commentCaMarche">
-  <h2>How a Tokenized Block works</h2>
-  <!-- ⛔ REPLIE PAR DEFAUT, ET C EST UNE MESURE QUI LE DECIDE. Cette carte pesait 1 465 px pour
-       517 mots — 26 % de toute la page — et elle se tenait ENTRE l utilisateur et le formulaire.
-       Sur un ecran de 375 px la page demandait 7 ecrans de defilement.
-       ⚠️ REPLIER N EST PAS SUPPRIMER, et la nuance est le sujet : ce texte s adresse a des gens
-       qui ne connaissent pas la crypto, il doit rester atteignable en un geste. `<details>` le
-       garde dans le document — donc lisible par un lecteur d ecran, trouvable par la recherche du
-       navigateur, et indexable — au lieu de le cacher en JavaScript. -->
-  <details>
-    <summary>Read what a block is, and what nobody can do to it once it exists</summary>
+<details class="card cardQuiet" id="commentCaMarche">
+  <summary>
+    <span class="secHead">How a Tokenized Block works</span>
+    <span class="secWhy">Secondary — what a block is, and what nobody can change once it exists.</span>
+  </summary>
 
   <p class="expl"><b>A block is bytes you own.</b> You choose a name, a symbol, a supply and a
   description. The app turns that into a <b>B-20 token</b> — Base's native token standard, where the
@@ -765,8 +877,7 @@ button.act.sec:hover{opacity:1;color:var(--fg)}
   been exercised end to end on <b>Base Sepolia</b> — a test network. The encoders are compared byte
   for byte against the reference toolchain, but nothing here has been used at scale by anyone other
   than its author. Treat it as working code, not as a finished product.</p>
-  </details>
-</div>
+</details>
 <div id="ov" hidden>
   <div class="ovBox">
     <svg class="ovCube" viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg">
@@ -825,6 +936,7 @@ function setFunnel(step) {
   const i = FUNNEL_STEPS.indexOf(step);
   if (i < 0) return;
   nav.setAttribute('data-state', step);
+  document.body.setAttribute('data-funnel', step);
   nav.querySelectorAll('li').forEach(li => {
     const s = li.getAttribute('data-step');
     const j = FUNNEL_STEPS.indexOf(s);
@@ -833,6 +945,14 @@ function setFunnel(step) {
     else if (j === i) li.classList.add('on');
     else if (j >= 0 && j < i && step !== 'Blocked') li.classList.add('done');
   });
+  const ns = $('#nextSteps');
+  if (ns) {
+    ns.classList.toggle('nsReady', step === 'Ready-to-Launch');
+    if (step === 'Ready-to-Launch') {
+      ns.open = true;
+      if (typeof selectNextStep === 'function') selectNextStep('launch');
+    }
+  }
 }
 function majCtaPacket() {
   const el = $('#ctaNet');
@@ -849,6 +969,25 @@ document.addEventListener('click', (ev) => {
   if (!a) return;
   const d = $('#signDetails');
   if (d) d.open = true;
+});
+
+/* Visual-2: Next steps tabs — one panel open at a time inside the accordion. */
+function selectNextStep(name) {
+  const root = $('#nextSteps');
+  if (!root) return;
+  root.querySelectorAll('.nsTab').forEach(btn => {
+    const on = btn.getAttribute('data-ns') === name;
+    btn.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  root.querySelectorAll('.nsPanel').forEach(p => {
+    const on = p.getAttribute('data-ns') === name;
+    p.classList.toggle('on', on);
+  });
+}
+document.addEventListener('click', (ev) => {
+  const t = ev.target && ev.target.closest && ev.target.closest('#nextSteps .nsTab');
+  if (!t) return;
+  selectNextStep(t.getAttribute('data-ns'));
 });
 
 
@@ -1412,11 +1551,15 @@ async function rafraichir() {
    * contraire de la transparence. */
   const cout = await estimerCout(data, compte);
 
+  const dataHead = data.slice(0, 26) + '…';
+  const dataBytes = (data.length / 2 - 1);
   $('#fiche').innerHTML =
       ligne('network', RESEAUX[chaine].nom + ' (' + chaine + ')')
-    + ligne('to', FACTORY)
+    + ligne('to', '<span class="mono">' + FACTORY + '</span>')
     + ligne('value', '0')
-    + ligne('data', data.slice(0, 24) + '… (' + (data.length / 2 - 1) + ' bytes)')
+    + ligne('data', '<span class="mono">' + dataHead + '</span> <span class="dim">(' + dataBytes + ' bytes)</span>'
+        + '<button type="button" class="dataExpand" id="dataExpandBtn">Show full data</button>'
+        + '<div class="dataFull" id="dataFullBox">' + data + '</div>')
     + ligne('gas', cout.texte)
     + (f.refusSupply
         ? ligne('supply', pastille('NOT A WHOLE NUMBER', 'bad')
@@ -1437,13 +1580,18 @@ async function rafraichir() {
     /* ⛔ SI LE SEL EST DEJA PRIS, MONTRER LE BLOCK — il est a l utilisateur, il l a cree.
      * `adresseOuRefus` rendait deja les donnees entieres du refus ; personne ne les decodait.
      * « change the salt » sans montrer ce qui occupe la place cache a quelqu un son propre block. */
-    + ligne('address', adr ? `<a href="${RESEAUX[chaine].scan}/address/${adr}" target="_blank" rel="noopener">${adr}</a>`
+    + ligne('address', adr ? `<a class="mono" href="${RESEAUX[chaine].scan}/address/${adr}" target="_blank" rel="noopener">${adr}</a>`
         : dejaLa ? pastille('ALREADY YOURS', 'warn')
-          + ` <a href="${RESEAUX[chaine].scan}/address/${dejaLa}" target="_blank" rel="noopener">${dejaLa}</a>`
+          + ` <a class="mono" href="${RESEAUX[chaine].scan}/address/${dejaLa}" target="_blank" rel="noopener">${dejaLa}</a>`
           + '<br><span class="dim">That block is yours. To make another, change the salt above'
           + ' — or press « Find a free salt ».</span>'
         : cause ? pastille('NOT COMPUTED: ' + cause, 'warn')
         : pastille('connect — it derives from YOUR address', 'dim'));
+  const deb = $('#dataExpandBtn'), dfb = $('#dataFullBox');
+  if (deb && dfb) deb.onclick = () => {
+    const on = dfb.classList.toggle('on');
+    deb.textContent = on ? 'Hide full data' : 'Show full data';
+  };
   if (adr) await relireJeton(adr);
   gardeMainnet();
 }
@@ -1567,8 +1715,8 @@ function appliquerMode() {
    *    ce qu il contient, pas decrire son mecanisme : « every setting » ne dit rien de ce qu on y
    *    trouve, alors que « material, shards, colours » se reconnait. */
   b.textContent = simple
-    ? 'Advanced · show settings (material, face, shards, colours, supply)'
-    : 'Advanced · hide settings';
+    ? 'Advanced · supply, salt, decimals, description'
+    : 'Advanced · hide create settings';
   b.setAttribute('aria-expanded', String(!simple));
 }
 $('#bascule').onclick = () => {
@@ -1823,13 +1971,10 @@ $('#ouvrirLancement').onclick = () => {
       const n = $('#' + id); if (n) n.value = adr;
     }
   }
-  if (simple) {
-    simple = false;
-    try { localStorage.setItem('tb-expert', '1'); } catch { /* ignore */ }
-    appliquerMode();
-  }
-  const carte = document.querySelector('#lancBlock') && $('#lancBlock').closest('.card');
-  if (carte) carte.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const ns = $('#nextSteps');
+  if (ns) ns.open = true;
+  if (typeof selectNextStep === 'function') selectNextStep('launch');
+  if (ns) ns.scrollIntoView({ behavior: 'smooth', block: 'start' });
   $('#lancBlock') && $('#lancBlock').focus();
   dire('Block address filled for Launch — work out the launch, then one transaction.\n'
     + 'Token-only LP: buyers bring the ETH. No platform fee, no custody.', 'ok');
