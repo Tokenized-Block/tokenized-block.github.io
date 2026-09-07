@@ -108,7 +108,15 @@ body.simple .avance{display:none}
 /* ⚠️ `auto-fill` et non `auto-fit` : avec deux blocks seulement, `auto-fit` les etirerait sur
  *    toute la largeur et deux vignettes occuperaient l ecran. La grille garde sa maille. */
 .galerie{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:10px}
-.galerie figure{margin:0;text-align:center}
+/* ⛔ LA VIGNETTE EST UN BOUTON : elle doit donc RESSEMBLER a quelque chose de cliquable, sinon on
+ *    a rendu la galerie utile sans que personne ne le devine. Le curseur et le retour au survol
+ *    sont la fonction, pas la decoration.
+ * ⚠️ RESTAURE LE 2026-09-07 : la branche `feat/instant-create-handoff`, ecrite sur une base
+ *    anterieure, avait re-emis ce bloc en `<figure>` et le merge a emporte la suppression. */
+.galerie .vignette{margin:0;padding:0;text-align:center;background:transparent;border:0;
+  cursor:pointer;font:inherit;color:inherit;display:block;width:100%;border-radius:8px}
+.galerie .vignette:hover svg,.galerie .vignette:focus-visible svg{outline:2px solid var(--fg);outline-offset:2px}
+.galerie .vignette:hover figcaption{color:var(--fg)}
 .galerie svg{width:100%;height:auto;border-radius:8px;display:block}
 .galerie figcaption{font-size:11px;color:var(--dim);margin-top:4px;
   /* ⛔ UN SYMBOLE VENU D UN INCONNU PEUT ETRE TRES LONG. Sans cette coupe, une seule entree
@@ -1396,8 +1404,34 @@ async function remplirGalerie() {
     boite.innerHTML = vues.map((c) => {
       const sym = String(c.symbole || '?').slice(0, 11);
       const svg = logoSvg(paramsLogoDepuisApparence(apparenceDepuisAdresse(c.jeton), sym));
-      return '<figure>' + svg + '<figcaption>' + enTexte(sym) + '</figcaption></figure>';
+      /* ⛔ CLIQUABLE, PARCE QU UN MUR INERTE NE SERT A RIEN. Un visiteur voyait douze blocks et ne
+       *    pouvait rien en faire. Chaque vignette ouvre maintenant CE block dans le lecteur.
+       * ⛔ UN VRAI <button>, PAS UN <div> CLIQUABLE : il est atteignable au clavier, annonce comme
+       *    un bouton, et activable par Entree — un div avec un `onclick` ne l est pour personne
+       *    qui n utilise pas de souris.
+       * ⛔ L ADRESSE EST VALIDEE AVANT D ENTRER DANS L ATTRIBUT : elle vient d un log, donc d un
+       *    inconnu. Et `enAttribut` echappe le GUILLEMET, ce qu un echappeur de TEXTE ne fait pas —
+       *    c est exactement la faille mesuree sur le site le 2026-09-04. */
+      const adr = /^0x[0-9a-fA-F]{40}$/.test(c.jeton || '') ? c.jeton : null;
+      if (!adr) return '';
+      return '<button type="button" class="vignette" data-block="' + enAttribut(adr) + '"'
+        + ' title="' + enAttribut(adr) + '">' + svg
+        + '<figcaption>' + enTexte(sym) + '</figcaption></button>';
     }).join('');
+    /* ⛔ UN SEUL GESTIONNAIRE SUR LE CONTENEUR, PAS DOUZE. La galerie se reconstruit a chaque
+     *    changement de reseau : douze gestionnaires reattaches a chaque fois finiraient par
+     *    s accumuler sans que rien ne le montre. */
+    boite.onclick = (e) => {
+      const b = e.target.closest('button[data-block]');
+      if (!b) return;
+      const a = b.getAttribute('data-block');
+      $('#lecture').value = a;
+      /* ⛔ ON OUVRE LES REGLAGES AVANCES SI BESOIN : le lecteur y vit, et envoyer quelqu un vers
+       *    une carte masquee lui ferait croire que le clic n a rien fait. */
+      if (document.body.classList.contains('simple')) $('#bascule').click();
+      $('#lire').click();
+      $('#lecture').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
     const rates = (r.fenetresRatees || []).length;
     /* ⛔ LE RESEAU EN PREMIER. Sans lui, des jetons de test se lisent comme de vrais lancements —
      *    et c est exactement ce que cette carte a fait avant d etre corrigee. */
