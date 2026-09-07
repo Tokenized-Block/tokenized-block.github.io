@@ -554,7 +554,9 @@ import { encodeCreateB20, paramsAsset, encodeUpdateSupplyCap, encodeUpdateContra
  * fait de la division et du remplissage sur des BigInt, et elle arrondit VERS LE HAUT — un cout
  * affiche ne doit jamais etre inferieur au cout reel. 8 tests dans `test-montants.mjs`. */
 import { formaterEth, estArrondi, formaterGas, entierStrict, decimalesStrictes, montantHumain, formaterUnites } from './montants.js';
-import { classerUri, sourceImage, metadonnees, enAttribut, PASSERELLE_PAR_DEFAUT } from './lecteur.js';
+import { classerUri, sourceImage, metadonnees, enAttribut, PASSERELLE_PAR_DEFAUT,
+  /* ⛔ La ligne qui dit si une apparence survit a un serveur — pour n importe quel block. */
+  ouVitLApparence } from './lecteur.js';
 import { listerCreations, creationsDe } from './index-blocks.js';
 import { cleDePool, etatPool, encodeInitialize, encodeApprove, encodePermit2Approve, encodeMintPosition,
   /* ⛔ `PRIX_1_POUR_1` N EST PLUS IMPORTE. Le garder disponible, meme inutilise, c est laisser a
@@ -1464,7 +1466,19 @@ async function lireBlock(adr) {
     }
     const txt = async (sel) => { try { return chaineDe(await rpc('eth_call', [{ to: adr, data: sel }, 'latest'])); } catch { return null; } };
     const num = async (sel) => { try { return BigInt(await rpc('eth_call', [{ to: adr, data: sel }, 'latest'])); } catch { return null; } };
-    const nom = await txt(S['name()']), sym = await txt(S['symbol()']), uri = await txt(S['contractURI()']);
+    const nom = await txt(S['name()']), sym = await txt(S['symbol()']);
+    /* ⛔⛔ PLUSIEURS NOMS DE VUE, ET J AI PUBLIE UN FAUX AVANT DE LE CORRIGER. Ce lecteur
+     *    n essayait que `contractURI()`. Sur un jeton openlaunch — qui expose `metadataURI()` — il
+     *    affichait « NO URI · this token carries no metadata at all ». C etait FAUX, et faux au
+     *    detriment d un concurrent : « je n ai pas regarde » presente comme « il n y a rien », sur
+     *    le jeton de quelqu un d autre.
+     * ⚠️ Chaque projet nomme sa vue. On en essaie quatre, et on DIT laquelle a repondu — un URI
+     *    trouve sans qu on sache par ou serait invérifiable. */
+    let uri = null, vueUri = null;
+    for (const v of ['contractURI()', 'metadataURI()', 'tokenURI()', 'uri()']) {
+      const val = await txt(S[v] || sel4(v));
+      if (val) { uri = val; vueUri = v; break; }
+    }
     const dec = await num(S['decimals()']), tot = await num(S['totalSupply()']), cap = await num(S['supplyCap()']);
     const m = await metadonnees(uri);
 
@@ -1473,7 +1487,22 @@ async function lireBlock(adr) {
       + ligne('supply', tot === null ? '—' : tot.toString() + (dec !== null ? ' (10^' + dec + ')' : ''))
       + ligne('minting', tot !== null && cap !== null && tot === cap
           ? pastille('CLOSED — SUPPLY = CAP', 'ok') : pastille('supply < cap', 'warn'))
-      + ligne('metadata', m.etat === 'LU' ? pastille('READ · ' + m.source, 'ok') : pastille(m.etat, 'warn'));
+      + ligne('metadata', m.etat === 'LU' ? pastille('READ · ' + m.source, 'ok') : pastille(m.etat, 'warn'))
+      /* ⛔ OU VIT L APPARENCE — LA SEULE LIGNE QUI DIT CE QUE « PERSONNALISE » VAUT DANS LE TEMPS.
+       *    Mesure du 2026-09-07 : un jeton openlaunch pointe vers `openlaunch.lol`, notre BLOCK 0
+       *    vers IPFS, et ce que cette app produit vit DANS la transaction. La difference etait
+       *    invisible ici — un block dont le nom disparait avec un serveur n est pas personnalise,
+       *    il est loue, et personne ne pouvait le voir.
+       * ⚠️ On l affiche pour N IMPORTE QUEL block, y compris ceux des autres : c est une lecture,
+       *    pas un argument de vente, et elle doit pouvoir nous etre defavorable. */
+      + (() => { const v = ouVitLApparence(uri); return ligne('appearance lives',
+        (v.depend ? pastille(v.ou, 'warn') : pastille(v.ou, 'ok'))
+        + ' <span class="k">' + enTexte(v.note)
+        /* ⛔ QUAND ON NE TROUVE RIEN, ON DIT CE QU ON A CHERCHE. « Aucune metadonnee » sans la
+         *    liste des vues essayees est une affirmation sur le jeton d autrui qu on ne peut pas
+         *    verifier — et qui peut etre fausse, comme elle l a ete. */
+        + (uri ? ' · read from ' + vueUri : ' · none of contractURI() metadataURI() tokenURI() uri() answered')
+        + '</span>'); })();
 
     if (m.etat !== 'LU') {
       /* ⛔ On DIT pourquoi on n a pas su lire, au lieu de rendre un cadre vide. */

@@ -62,6 +62,48 @@ export function enAttribut(v) {
     .replace(/'/g, '&#39;');
 }
 
+/**
+ * OU VIT l apparence d un jeton, et ce qu elle survit.
+ * ================================================================================================
+ * ⛔ C EST LA QUESTION DE LA PERSONNALISATION, PAS UN DETAIL TECHNIQUE. Un block « personnalise »
+ *    dont le nom et l image disparaissent si un serveur ferme n est pas personnalise : il est
+ *    loue. Et rien dans l interface ne le disait — la difference etait invisible.
+ *
+ * ⛔ MESURE DU 2026-09-07, sur la chaine, pas sur des pages :
+ *      un jeton openlaunch  -> `https://openlaunch.lol/api/launch/meta/…`  (leur serveur)
+ *      notre BLOCK 0        -> `ipfs://bafkrei…`
+ *      ce que l app produit -> `data:application/json;base64,…`  (dans la transaction)
+ *    Leur page /rules dit « stored by this site and can change » et leur contrat dit « immutable
+ *    after construction ». Les DEUX sont vrais : l URI est figee, mais elle POINTE vers un serveur
+ *    dont le contenu bouge. Il fallait lire la chaine pour les reconcilier.
+ *
+ * ⛔ ET ON NE JUGE PAS. Un URI vers un serveur permet de corriger une faute de frappe ou une image
+ *    ratee ; un URI grave ne le permet pas — mesure : personne ne peut changer l image d un block,
+ *    pas meme nous. Ce sont deux compromis OPPOSES, pas un bon et un mauvais. On dit OU vit la
+ *    donnee et QUI doit rester en vie ; le lecteur conclut.
+ */
+export function ouVitLApparence(uri) {
+  if (typeof uri !== 'string' || uri === '') {
+    return { ou: 'AUCUNE', depend: null, note: 'this token carries no metadata at all' };
+  }
+  if (uri.startsWith('data:')) {
+    return { ou: 'IN THE TRANSACTION', depend: null,
+      note: 'the name and the image are inside the chain itself — no server, no gateway, nothing to keep alive' };
+  }
+  if (uri.startsWith('ipfs://')) {
+    return { ou: 'IPFS', depend: 'someone pinning it',
+      note: 'no single party owns it, but it survives only while someone keeps a copy pinned' };
+  }
+  if (uri.startsWith('http://') || uri.startsWith('https://')) {
+    let hote = null;
+    /* ⚠️ Une URL illisible n est pas une URL vers un serveur connu : on ne devine pas un hote. */
+    try { hote = new URL(uri).host; } catch { return { ou: 'A SERVER', depend: 'an unreadable URL', note: 'the URL could not be parsed' }; }
+    return { ou: 'A SERVER — ' + hote, depend: hote,
+      note: 'if ' + hote + ' goes away, the token stays but its name and image do not' };
+  }
+  return { ou: 'UNKNOWN SCHEME', depend: null, note: 'starts with: ' + uri.slice(0, 24) };
+}
+
 /** Classe un contractURI SANS aller le chercher. Pur, donc testable sans reseau. */
 export function classerUri(u, passerelle = PASSERELLE_PAR_DEFAUT) {
   if (typeof u !== 'string' || u === '') return { type: 'VIDE' };
