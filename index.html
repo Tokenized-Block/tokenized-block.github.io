@@ -927,6 +927,10 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
   </div>
 
   <div class="nsPanel" id="ns-swap" role="tabpanel" data-ns="swap">
+    <!-- ⛔ THIN-POOL / minOut HONESTY 2026-09-07 (GROK-SUPER dig §2). After Quote: show expected out vs
+         minOut (99% of quote). Real: fail-closed disable #swapAgir if quote-vs-slot0 >5% OR mid NOT
+         MEASURED OR NO QUOTE (incl. sell into empty/near-empty ETH book). Practice: warn+allow.
+         No Real override checkbox this ship. Probe sortieMin 0n stays encoding-only — never user send. -->
     <label for="swapToken">Block</label>
     <input id="swapToken" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
     <label>Direction</label>
@@ -3446,11 +3450,18 @@ async function etatSwap() {
         : '');
 
   /* ── le quote : gratuit, et il dit si la pool est cotable AVANT tout le reste ── */
+  /* ⛔ THIN-POOL / minOut HONESTY 2026-09-07 (GROK-SUPER dig §2):
+   *    Send floor stays 99% of *this* measured quote (1% slip) — never probe sortieMin 0n on user send.
+   *    Real: quote-vs-slot0 >5% OR cost NOT MEASURED OR NO QUOTE → fail-closed #swapAgir (no override).
+   *    Practice: warn + allow so E2E stays green. Do not invent depth numbers — only quote/slot0 already read. */
   let sortie = null;
   let quoteCause = null;
+  let perte = null; /* % loss vs slot0 mid; null = unread / NOT MEASURED */
+  let sortieMinPlan = null; /* bound to this Quote pass — used on send */
   try {
     const r = await appel(q, encodeQuote({ cle, zeroForOne, montant }));
     sortie = BigInt('0x' + r.slice(2, 66));
+    sortieMinPlan = (sortie * 99n) / 100n;
     let refPrix = null;
     try {
       const s0 = await appel(v.stateView, '0x' + sel4('getSlot0(bytes32)') + poolId(cle).slice(2));
@@ -3462,16 +3473,27 @@ async function etatSwap() {
       }
     } catch { refPrix = null; }
     const attendu = refPrix === null ? null : Number(montant) * refPrix;
-    const perte = attendu === null || attendu === 0 ? null : (1 - Number(sortie) / attendu) * 100;
-    vue += ligne('you receive', formaterUnites(sortie, decOut) + ' ' + enTexte(nomOut)
+    perte = attendu === null || attendu === 0 ? null : (1 - Number(sortie) / attendu) * 100;
+    vue += ligne('expected out (quote)', formaterUnites(sortie, decOut) + ' ' + enTexte(nomOut)
       + '  <span class="dim">(' + sortie.toString() + ' raw)</span>');
+    vue += ligne('minOut on send (99%)', formaterUnites(sortieMinPlan, decOut) + ' ' + enTexte(nomOut)
+      + '  <span class="dim">(' + sortieMinPlan.toString() + ' raw) — 1% slip vs this quote only</span>');
     vue += ligne('cost vs displayed price', perte === null
       ? pastille('NOT MEASURED', 'warn')
       : (perte > 5 ? '<b style="color:#ff9f6b">−' + perte.toFixed(1) + ' %</b>' : '−' + perte.toFixed(2) + ' %')
         + '  <span class="dim">— ' + (cle.fee / 10000) + ' % is the pool fee, the rest is depth</span>');
     if (perte !== null && perte > 5) {
-      vue += ligne('⚠️', 'This pool is thin. You lose ' + perte.toFixed(1)
-        + ' % on this trade, and a bigger one loses more.');
+      vue += ligne('⚠️ thin pool', 'You lose ' + perte.toFixed(1)
+        + ' % vs slot0 mid on this size. <b>1% minOut does not protect you here</b> — it only floors the quote, not depth.'
+        + (typeof MAINNET !== 'undefined' && chaine === MAINNET
+          ? ' On Real this page will not send — reduce size or re-Quote after more depth.'
+          : ' Practice may still warn+allow for test trades.'));
+    } else if (perte === null) {
+      vue += ligne('⚠️ unread mid', 'Cost vs slot0 mid is NOT MEASURED. '
+        + '<b>1% minOut does not protect you here.</b>'
+        + (typeof MAINNET !== 'undefined' && chaine === MAINNET
+          ? ' On Real this page will not send until Quote+slot0 both read.'
+          : ''));
     }
   } catch (e) {
     quoteCause = e && e.message ? e.message : String(e);
@@ -3555,6 +3577,11 @@ async function etatSwap() {
   const manque = solde !== null && solde < montant;
   /* ⛔ Fail-closed on unread balance (Liquidity already did; Swap was still open on NOT MEASURED). */
   const soldeInconnu = !!compte && solde === null;
+  /* Thin / unread honesty: Real fail-closed; Practice warn+allow (except NO QUOTE / other hard blockers). */
+  const surMainnet = (typeof MAINNET !== 'undefined' && chaine === MAINNET);
+  const minceVsMid = perte !== null && perte > 5;
+  const midNonMesure = sortie !== null && perte === null;
+  const minceBloqueReal = surMainnet && (minceVsMid || midNonMesure || sortie === null);
   const b = $('#swapAgir');
   let empeche = null;
   if (!compte) empeche = 'Connect your wallet first (button below)';
@@ -3573,8 +3600,19 @@ async function etatSwap() {
         ? ('Not enough ' + v.quoteNom + ' — ETH cannot fund this buy')
         : ('Not enough ' + v.quoteNom + ' for that amount'))
     : 'Not enough block for that amount';
-  else if (sortie === null) empeche = acheter ? 'No quote — nothing to send' : 'No quote — try Buy first if pool has no ETH';
-  else if (autorise && forme === null) empeche = 'The router rejected both encodings';
+  else if (sortie === null) {
+    empeche = acheter ? 'No quote — nothing to send' : 'No quote — try Buy first if pool has no ETH';
+    if (surMainnet) {
+      vue += ligne('⛔ Real · thin/unread',
+        'Thin or unread pool — this page will not send. Re-Quote or reduce size. '
+        + '<b>1% minOut does not protect you here.</b>');
+    }
+  } else if (surMainnet && (minceVsMid || midNonMesure)) {
+    empeche = 'Thin or unread pool — will not send';
+    vue += ligne('⛔ Real · thin/unread',
+      'Thin or unread pool — this page will not send. Re-Quote or reduce size. '
+      + '<b>1% minOut does not protect you here.</b>');
+  } else if (autorise && forme === null) empeche = 'The router rejected both encodings';
   b.disabled = empeche !== null;
   b.textContent = empeche ? empeche
     : (autorise ? 'Run: 2. swap' : 'Run: 1. approve Permit2 → Router');
@@ -3589,8 +3627,11 @@ async function etatSwap() {
   syncGardePermit2Max('swap', swapApproMax);
   gardeMainnet();
   if (swapApproMax) syncGardePermit2Max('swap', true);
+  /* Re-force Real thin fail-closed after gardeMainnet (force-refuse only elsewhere). */
+  if (minceBloqueReal && b) b.disabled = true;
   return {
     b20, cle, zeroForOne, montant, ur, autorise, forme, sortie,
+    sortieMin: sortieMinPlan, perte, minceVsMid, midNonMesure, minceBloqueReal,
     acheter, entreeEstNatif, jetonEntree, valeur: valeurHex || '0x0',
   };
 }
@@ -4702,6 +4743,12 @@ $('#swapAgir').onclick = async () => {
   }
   if (!planSwap) { planSwap = await etatSwap(); if (!planSwap) return; }
   const p = planSwap;
+  /* ⛔ THIN-POOL fail-closed on Real (GROK-SUPER dig §2) — disabled attr is not enough. */
+  if (p.minceBloqueReal || (chaine === MAINNET && (p.sortie === null || p.minceVsMid || p.midNonMesure
+      || (p.sortie !== null && (p.perte === null || p.perte === undefined))))) {
+    return dire('Thin or unread pool — this page will not send.\n'
+      + 'Re-Quote or reduce size. 1% minOut does not protect you here.', 'bad');
+  }
   if (!p.autorise && !p.entreeEstNatif && !permit2MaxAckOk('swap')) {
     return dire('Unlimited Permit2 approve — tick the acknowledge on Real first.\n'
       + 'This allowance lasts until you revoke it (revoke.cash or the explorer approval checker).', 'bad');
@@ -4716,8 +4763,9 @@ $('#swapAgir').onclick = async () => {
       if (p.forme === null) return dire('The router rejected both encodings — nothing to sign.', 'bad');
       if (p.sortie === null) return dire('No quote — nothing to send.', 'bad');
       const bloc0 = await rpc('eth_getBlockByNumber', ['latest', false]);
-      /* ⛔ sortie minimale = 99 % du quote. Zero accepterait N IMPORTE QUEL prix, y compris zero. */
-      const min = (p.sortie * 99n) / 100n;
+      /* ⛔ Bind sortieMin to THIS quote (99%). Never probe sortieMin 0n on user sends. */
+      const min = (p.sortieMin != null) ? p.sortieMin : ((p.sortie * 99n) / 100n);
+      if (min <= 0n) return dire('minOut unbound — re-Quote. Nothing was sent.', 'bad');
       to = p.ur; quoi = p.acheter ? 'swap buy' : 'swap sell';
       data = encodeSwapExactInSingle({ cle: p.cle, zeroForOne: p.zeroForOne, montant: p.montant,
         sortieMin: min, deadline: BigInt(bloc0.timestamp) + 600n, forme: p.forme });
