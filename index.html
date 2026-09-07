@@ -2443,6 +2443,13 @@ function devise(chaine) {
 }
 const PERMIT2 = '0x000000000022D473030F116dDEE9F6B43aC78BA3';
 let plan = null;
+/* ⛔ MINT LIQUIDITY — MEMOIRE DE SESSION SEULEMENT.
+ * Mesure 2026-09-07 : apres un mint confirme (ex. 0x203e2351…), `construirePlan` relisait et
+ * montrait encore « 6. mint TO DO » + « chain preflight NOT TRIED » (soldes baisses → bloqueur
+ * → preflight saute). Le mint n a PAS d etat on-chain unique « deja fait » (plusieurs positions
+ * possibles) : on ne fake PAS un DONE / NFT id. On garde le hash confirme CETTE session pour un
+ * affichage honnete, et on refuse de laisser « NOT TRIED » apres un envoi confirme. */
+let liqMintSession = null; /* { hash, b20, chaine } or null */
 
 async function construirePlan() {
   const b20 = $('#poolToken').value.trim();
@@ -2679,10 +2686,16 @@ async function construirePlan() {
     ...(!quoteNatif ? [
       { nom: '5. Permit2 → PositionManager (' + v.quoteNom + ')', ok: fait(pQ.versPosm), to: PERMIT2, data: encodePermit2Approve(v.quote, v.posm, MAX_UINT160, MAX_UINT48) },
     ] : []),
-    /* ⛔ Le mint n a pas d etat « deja fait » lisible : on peut minter plusieurs positions. Il
-     * reste donc toujours a faire — c est honnete, et c est different d une etape sautee.
+    /* ⛔ Le mint n a pas d etat « deja fait » lisible on-chain : on peut minter plusieurs
+     * positions. On ne pose donc PAS `ok: true` d apres la chaine (fail-closed : pas de faux DONE
+     * ni de NFT id invente). Si CETTE session a deja confirme un mint pour ce block, on attache
+     * le hash pour l affichage — distinct de DONE / TO DO.
      * ⚠️ ETH natif : SETTLE_PAIR tire le msg.value — sans valeur le mint revert apres Launch. */
     { nom: '6. mint position', ok: false, to: v.posm, mint: true,
+      confirmeSession: (liqMintSession
+        && liqMintSession.chaine === chaine
+        && String(liqMintSession.b20).toLowerCase() === b20.toLowerCase())
+        ? liqMintSession.hash : null,
       ...(quoteNatif && besoinQ !== null && besoinQ > 0n
         ? { valeur: '0x' + ((besoinQ * 102n) / 100n).toString(16) } : {}) },
   ];
@@ -2804,7 +2817,13 @@ async function construirePlan() {
     const impossible = s.mint
       ? (besoinB === null || besoinQ === null || sqrtPrix === null)
       : (s.data === null || s.data === undefined);
-    vue += ligne(s.nom, s.ok === true ? pastille('DONE', 'ok')
+    /* ⛔ CONFIRMED THIS SESSION ≠ DONE. DONE implique un etat relu sur la chaine (approvals).
+     *    Le mint n offre pas ca ; apres receipt on dit la session + le hash, sans NFT id. */
+    vue += ligne(s.nom, s.confirmeSession
+      ? pastille('CONFIRMED THIS SESSION', 'ok')
+        + ' <span class="dim">tx ' + enTexte(s.confirmeSession)
+        + ' — position NFT id not read (no single on-chain « mint done »)</span>'
+      : s.ok === true ? pastille('DONE', 'ok')
       : impossible ? pastille('CANNOT BUILD — see above', 'bad')
       : s.ok === null ? pastille('NOT MEASURED', 'dim') : pastille('TO DO', 'warn'));
   }
@@ -2869,10 +2888,23 @@ async function construirePlan() {
    * try », alors qu il restait SIX etapes. Message vrai sur le mauvais fait : l utilisateur
    * lisait « plus rien a faire » devant un plan entierement a faire. Trouve en EXERCANT la page,
    * pas en la relisant. On nomme donc la vraie raison ici, et on n appelle pas le helper. */
-  const essai = empeche !== null
+  /* ⛔ APRES UN MINT CONFIRME CETTE SESSION : les soldes baissent souvent sous le besoin →
+   *    `empeche` se pose → l ancien chemin affichait « NOT TRIED ». Faux : l envoi A ete tente et
+   *    confirme. On ne re-pretend pas un ACCEPTE non plus ; on nomme le fait de session. */
+  const mintSessionIci = !!(liqMintSession
+    && liqMintSession.chaine === chaine
+    && String(liqMintSession.b20).toLowerCase() === b20.toLowerCase()
+    && suivante && suivante.mint);
+  const essai = (empeche !== null && mintSessionIci)
+    ? { etat: 'DEJA_CONFIRME', hash: liqMintSession.hash }
+    : empeche !== null
     ? { etat: 'NON_MESURE', pourquoi: 'nothing was sent to the chain — fix the blocker above first' }
     : await essaiEtape({ appelBrut: leve, de: compte, etape: suivante });
-  vue += ligne('chain preflight', essai.etat === 'ACCEPTE'
+  vue += ligne('chain preflight', essai.etat === 'DEJA_CONFIRME'
+      ? pastille('MINT CONFIRMED THIS SESSION', 'ok')
+        + ' <span class="dim">tx ' + enTexte(essai.hash)
+        + ' — not re-tried after confirmed send; NFT id not read</span>'
+    : essai.etat === 'ACCEPTE'
       ? pastille('THE CHAIN ACCEPTS THIS STEP', 'ok')
         + ' <span class="dim">returned ' + enTexte(String(essai.retour)) + '</span>'
     : essai.etat === 'REFUSE'
@@ -3830,9 +3862,15 @@ $('#poolAgir').onclick = async () => {
       afficherTx('pending', s.nom, r.hash);
       return dire('Press « Check the 6 steps » when ready.\n' + r.hash, 'warn');
     }
+    /* ⛔ AVANT la relecture : memoriser le mint confirme de CETTE session (hash seulement).
+     * Sans ca, `construirePlan` reaffiche TO DO + NOT TRIED alors que la receipt est la. */
+    if (r.ok && s.mint) {
+      liqMintSession = { hash: r.hash, b20: plan.b20, chaine };
+    }
     plan = await construirePlan();
     afficherTx(r.ok ? 'ok' : 'fail', s.nom, r.hash);
-    if (r.ok) dire('Confirmed on-chain: ' + s.nom, 'ok');
+    if (r.ok) dire('Confirmed on-chain: ' + s.nom
+      + (s.mint ? '\nRe-read: mint marked confirmed this session (no NFT id claimed).' : ''), 'ok');
   } catch (e) { dire(refusUtilisateur(e) ? 'You declined the transaction.' : 'Failed: ' + (e.message || e), 'bad'); }
 };
 
