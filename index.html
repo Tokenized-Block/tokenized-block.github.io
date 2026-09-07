@@ -251,15 +251,25 @@ padding:14px 15px;margin:0 0 12px}
 #gardeValoCheap p{margin:0 0 10px;font-size:12.5px;color:#f0d0d0;line-height:1.5}
 #gardeValoCheap label{display:flex;gap:10px;align-items:flex-start;color:var(--fg);font-size:13px;margin:0}
 #gardeValoCheap input[type=checkbox]{width:20px;height:20px;flex:0 0 auto;margin-top:1px;accent-color:var(--or)}
-/* After native Launch: WETH/USDC = different PoolKey (MAINNET-DEEP-DIG #7) — soft-gate. */
-#gardeDeviseHorsLaunch{display:none;background:#3a2410;border:1px solid #7a4a12;border-radius:12px;
+/* After native Launch: WETH/USDC = different PoolKey (MAINNET-DEEP-DIG #7) — soft-gate.
+ * C2 #1: Swap duplicates the panel (#gardeDeviseHorsLaunchSwap) so users need not hunt Liquidity. */
+#gardeDeviseHorsLaunch,#gardeDeviseHorsLaunchSwap{display:none;background:#3a2410;border:1px solid #7a4a12;border-radius:12px;
   padding:12px 14px;margin:10px 0 0}
-#gardeDeviseHorsLaunch.on{display:block}
-#gardeDeviseHorsLaunch .t{font-weight:800;color:var(--warn);font-size:13.5px;margin-bottom:6px}
-#gardeDeviseHorsLaunch p{margin:0 0 10px;font-size:12.5px;color:#f0dcc0;line-height:1.5}
-#gardeDeviseHorsLaunch label{display:flex;gap:10px;align-items:flex-start;color:var(--fg);font-size:13px;margin:0}
-#gardeDeviseHorsLaunch input[type=checkbox]{width:20px;height:20px;flex:0 0 auto;margin-top:1px;accent-color:var(--or)}
-/* Unlimited Permit2 / ERC20 MAX approve disclose (2026-09-07) — Launch / Liq / Swap. */
+#gardeDeviseHorsLaunch.on,#gardeDeviseHorsLaunchSwap.on{display:block}
+#gardeDeviseHorsLaunch .t,#gardeDeviseHorsLaunchSwap .t{font-weight:800;color:var(--warn);font-size:13.5px;margin-bottom:6px}
+#gardeDeviseHorsLaunch p,#gardeDeviseHorsLaunchSwap p{margin:0 0 10px;font-size:12.5px;color:#f0dcc0;line-height:1.5}
+#gardeDeviseHorsLaunch label,#gardeDeviseHorsLaunchSwap label{display:flex;gap:10px;align-items:flex-start;color:var(--fg);font-size:13px;margin:0}
+#gardeDeviseHorsLaunch input[type=checkbox],#gardeDeviseHorsLaunchSwap input[type=checkbox]{width:20px;height:20px;flex:0 0 auto;margin-top:1px;accent-color:var(--or)}
+/* C2 #4: Liquidity empty-pool too-cheap soft-gate (mirrors Launch #gardeValoCheap). */
+#gardeValoCheapPool{display:none;background:#3a1818;border:1px solid #7a2a2a;border-radius:12px;
+  padding:12px 14px;margin:10px 0 0}
+#gardeValoCheapPool.on{display:block}
+#gardeValoCheapPool .t{font-weight:800;color:var(--bad);font-size:13.5px;margin-bottom:6px}
+#gardeValoCheapPool p{margin:0 0 10px;font-size:12.5px;color:#f0d0d0;line-height:1.5}
+#gardeValoCheapPool label{display:flex;gap:10px;align-items:flex-start;color:var(--fg);font-size:13px;margin:0}
+#gardeValoCheapPool input[type=checkbox]{width:20px;height:20px;flex:0 0 auto;margin-top:1px;accent-color:var(--or)}
+/* Unlimited Permit2 / ERC20 MAX approve disclose (2026-09-07) — Launch / Liq / Swap.
+ * C2 #6–7: distinguish MAX_UINT256 vs MAX_UINT160; post-approve « MAX still active » pill. */
 .gardePermit2Max{display:none;background:#3a2410;border:1px solid #7a4a12;border-radius:12px;
   padding:12px 14px;margin:10px 0 0}
 .gardePermit2Max.on{display:block}
@@ -269,6 +279,8 @@ padding:14px 15px;margin:0 0 12px}
 .gardePermit2Max label.permit2Ack{display:none;gap:10px;align-items:flex-start;color:var(--fg);font-size:13px;margin:8px 0 0}
 .gardePermit2Max label.permit2Ack.on{display:flex}
 .gardePermit2Max input[type=checkbox]{width:20px;height:20px;flex:0 0 auto;margin-top:1px;accent-color:var(--or)}
+.permit2MaxStill{display:inline-block;margin:2px 0;padding:2px 8px;border-radius:999px;background:#3a2410;border:1px solid #7a4a12;color:#f0dcc0;font-size:12px;font-weight:700}
+.permit2MaxStill a{color:var(--or);text-decoration:underline}
 #apercu{display:block;width:96px;height:106px;margin:2px auto 0;border-radius:10px}
 
 /* ══ RETOUR VISUEL DE TRANSACTION ═══════════════════════════════════════════════════════════
@@ -601,14 +613,15 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
   admin, no minter, no way to change the name, the logo or the description afterwards. Nobody can
   undo it — not you, not us.</p>
   <label><input type="checkbox" id="gardeCase"> I understand this is mainnet and I accept the cost.</label>
-  <!-- ⛔ MAINNET-DEEP-DIG trap #5 (extended Create): 30d restore may pre-check `#gardeCase`, but
-       habit-click Create fee / Launch / LP / Swap without re-reading cost is refused. Session
-       re-ack (`#gardeCaseArgent` or fresh `#gardeCase`) required for irreversible money buttons. -->
+  <!-- ⛔ MAINNET-DEEP-DIG trap #5 + C2 #8 (2026-09-07): 30d restore may pre-check `#gardeCase`, but
+       habit-click Create / Launch / LP / Swap without re-reading cost is refused. After restore
+       THIS session, ALWAYS require `#gardeCaseArgent` — a fresh `#gardeCase` tick alone must NOT
+       clear `consentRestaureCetteSession` (habit-click residual). -->
   <div id="gardeConsentRestored" role="region" aria-label="Consent restored — re-confirm money actions">
     <div class="t">Consent restored — re-confirm before Create / Launch / LP / Swap</div>
     <p>This account accepted mainnet cost within the last 30 days. A pre-checked box is only a reminder.
-    <b>Create, Launch, Liquidity, and Swap stay closed</b> until you re-confirm for this visit —
-    restore alone must not authorize irreversible sends (Create fee included).</p>
+    <b>Create, Launch, Liquidity, and Swap stay closed</b> until you tick the money re-ack below for this visit —
+    restore alone must not authorize irreversible sends (Create fee included). Re-ticking the box above is not enough after restore.</p>
     <label><input type="checkbox" id="gardeCaseArgent"> I re-confirm mainnet cost for Create / Launch / Liquidity / Swap this session.</label>
   </div>
 </div>
@@ -797,7 +810,7 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
   previewed in « What you will sign ». This page will <b>not</b> open your wallet until you
   confirm the new address below.</p>
   <p>New address: <a class="mono" id="gardeAdrCreateLien" href="#" target="_blank" rel="noopener">—</a></p>
-  <label><input type="checkbox" id="gardeAdrCreateCase"> Address changed — I checked this new address.</label>
+  <label><input type="checkbox" id="gardeAdrCreateCase"> Address changed — I checked this new address<span id="gardeAdrCreateShort"></span>.</label>
 </div>
 <button class="act" id="agir">Connect wallet</button>
 <button class="act sec" id="relire">Re-read the chain</button>
@@ -879,9 +892,11 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
          Always show before Run approve. Checkbox required only on Real (mainnet); Practice stays one less click. -->
     <div id="gardePermit2MaxLanc" class="gardePermit2Max" role="region" aria-label="Unlimited Permit2 approve disclose — Launch">
       <div class="t">⚠ Unlimited allowance — lasts until you revoke</div>
-      <p>This step asks for an <b>unlimited</b> token allowance to <b>Permit2</b> (and/or the Uniswap router / PositionManager via Permit2). It is not limited to this one Launch / Liquidity / Swap. It stays until you revoke it.</p>
+      <p>This step asks for <b>unlimited</b> allowances (not limited to this one Launch / Liquidity / Swap):</p>
+      <p><b>ERC20 → Permit2</b> uses <b>MAX_UINT256</b> (token <code>approve</code>).<br>
+      <b>Permit2 → PositionManager / Router</b> uses <b>MAX_UINT160</b> amount (+ far expiration). These are different ceilings — both stay until you revoke.</p>
       <p class="permit2RevokeLinks" style="margin:0 0 0;font-size:12.5px;color:#f0dcc0;line-height:1.5">Revoke later: links appear when this gate arms (chain-correct explorer + revoke.cash).</p>
-      <label class="permit2Ack"><input type="checkbox" id="gardePermit2MaxCaseLanc"> I understand this is an unlimited allowance until I revoke it.</label>
+      <label class="permit2Ack"><input type="checkbox" id="gardePermit2MaxCaseLanc"> I understand MAX_UINT256 / MAX_UINT160 allowances last until I revoke them.</label>
     </div>
     <button class="act" id="lancApprouver" style="margin-top:8px;display:none" disabled>Run the next approval</button>
     <!-- ⛔ UN SEUL BOUTON DE LANCEMENT, ET C EST L ATOMICITE QUI COMPTE PLUS QUE LE CONFORT. En deux
@@ -910,12 +925,18 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
       <p>This page just Launched with <b>native ETH · fee 0 · spacing 200</b>. <b>WETH</b> and
       <b>USDC</b> use a <b>different PoolKey</b> (fee 3000 · spacing 60) — usually empty right after
       Launch. Liquidity / Swap stay on <b>ETH</b> to match the pool that holds your supply, unless
-      you knowingly want a second pool.</p>
+      you knowingly want a second pool. Swap has the same ack (quote shared via this selector).</p>
       <label><input type="checkbox" id="gardeDeviseHorsLaunchCase"> I know this is a different pool than Launch — continue with WETH/USDC.</label>
     </div>
     <label for="poolValeur">Starting value of the whole supply</label>
     <input id="poolValeur" value="10000" inputmode="numeric">
-    <p class="expl" style="margin:6px 0 0;color:#f0c674">If the pool is empty, this starting value engraves the price forever — it cannot be reinitialized. Initialize + mint are ONE transaction (same as Launch) — refusing mid-way cannot leave an empty pool.</p>
+    <p class="expl" style="margin:6px 0 0;color:#f0c674">If the pool is empty, this starting value engraves the price forever — it cannot be reinitialized. Initialize + mint are ONE transaction (same as Launch) — refusing mid-way cannot leave an empty pool. <b>Below 1 whole quote unit</b> (ETH/WETH mirrors Launch &lt;1 ETH; other quotes use 1 whole quote-unit) needs a sniper confirm before Run init+mint.</p>
+    <!-- ⛔ C2 #4 2026-09-07: Liquidity empty-pool soft-gate mirrors Launch #20. -->
+    <div id="gardeValoCheapPool" role="region" aria-label="Liquidity too-cheap valuation soft-gate">
+      <div class="t">⚠ Too-cheap starting value — permanent sniper risk</div>
+      <p>Pool is empty: this starting value will engrave the price forever. Whole-supply start is <b>below 1 whole quote unit</b> (ETH/WETH = Launch &lt;1 ETH floor; USDC/other = 1 whole quote-unit equivalent). Snipers can buy nearly free. Prefer raising the value — or tick below if you mean it.</p>
+      <label><input type="checkbox" id="gardeValoCheapPoolCase"> I know this price is permanent and snipers can buy nearly free.</label>
+    </div>
     <!-- ⛔ LE PRIX DE DEPART SE CHOISIT. Il etait code en dur a `PRIX_1_POUR_1` = 2^96, un ratio
          d UNITES DE BASE qui ignore les decimales : sur une paire USDC(6)/block(18) cela signifie
          1 block = 1e12 USDC, et la pool nait morte. Le prix d une pool ne se reinitialise pas.
@@ -933,9 +954,11 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
          Always show before Run approve. Checkbox required only on Real (mainnet); Practice stays one less click. -->
     <div id="gardePermit2MaxPool" class="gardePermit2Max" role="region" aria-label="Unlimited Permit2 approve disclose — Liquidity">
       <div class="t">⚠ Unlimited allowance — lasts until you revoke</div>
-      <p>This step asks for an <b>unlimited</b> token allowance to <b>Permit2</b> (and/or the Uniswap router / PositionManager via Permit2). It is not limited to this one Launch / Liquidity / Swap. It stays until you revoke it.</p>
+      <p>This step asks for <b>unlimited</b> allowances (not limited to this one Launch / Liquidity / Swap):</p>
+      <p><b>ERC20 → Permit2</b> uses <b>MAX_UINT256</b> (token <code>approve</code>).<br>
+      <b>Permit2 → PositionManager / Router</b> uses <b>MAX_UINT160</b> amount (+ far expiration). These are different ceilings — both stay until you revoke.</p>
       <p class="permit2RevokeLinks" style="margin:0 0 0;font-size:12.5px;color:#f0dcc0;line-height:1.5">Revoke later: links appear when this gate arms (chain-correct explorer + revoke.cash).</p>
-      <label class="permit2Ack"><input type="checkbox" id="gardePermit2MaxCasePool"> I understand this is an unlimited allowance until I revoke it.</label>
+      <label class="permit2Ack"><input type="checkbox" id="gardePermit2MaxCasePool"> I understand MAX_UINT256 / MAX_UINT160 allowances last until I revoke them.</label>
     </div>
     <button class="act" id="poolAgir" disabled>Run the next step</button>
   </div>
@@ -947,6 +970,13 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
          No Real override checkbox this ship. Probe sortieMin 0n stays encoding-only — never user send. -->
     <label for="swapToken">Block</label>
     <input id="swapToken" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
+    <p class="expl" style="margin:6px 0 0;color:#f0c674">Quote currency is the Liquidity selector (<b>#poolDevise</b>) — native ETH matches Launch; WETH/USDC is a different PoolKey.</p>
+    <!-- C2 #1 2026-09-07: same different-pool ack on Swap (no hunting Liquidity). -->
+    <div id="gardeDeviseHorsLaunchSwap" role="region" aria-label="Quote currency differs from Launch PoolKey — Swap">
+      <div class="t">⚠ Not the Launch pool</div>
+      <p>After native Launch (<b>ETH · fee 0 · spacing 200</b>), <b>WETH</b>/<b>USDC</b> hit a <b>different PoolKey</b> (3000/60) — often empty. Tick here (or on Liquidity) before Run, or switch quote back to ETH on the Liquidity tab.</p>
+      <label><input type="checkbox" id="gardeDeviseHorsLaunchCaseSwap"> I know this is a different pool than Launch — continue with WETH/USDC.</label>
+    </div>
     <label>Direction</label>
     <div class="swapDir" role="group" aria-label="Buy or sell">
       <button type="button" class="swapDirBtn" id="swapBuy" aria-pressed="true">Buy</button>
@@ -962,9 +992,11 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
          Always show before Run approve. Checkbox required only on Real (mainnet); Practice stays one less click. -->
     <div id="gardePermit2MaxSwap" class="gardePermit2Max" role="region" aria-label="Unlimited Permit2 approve disclose — Swap">
       <div class="t">⚠ Unlimited allowance — lasts until you revoke</div>
-      <p>This step asks for an <b>unlimited</b> token allowance to <b>Permit2</b> (and/or the Uniswap router / PositionManager via Permit2). It is not limited to this one Launch / Liquidity / Swap. It stays until you revoke it.</p>
+      <p>This step asks for <b>unlimited</b> allowances (not limited to this one Launch / Liquidity / Swap):</p>
+      <p><b>ERC20 → Permit2</b> uses <b>MAX_UINT256</b> (token <code>approve</code>).<br>
+      <b>Permit2 → PositionManager / Router</b> uses <b>MAX_UINT160</b> amount (+ far expiration). These are different ceilings — both stay until you revoke.</p>
       <p class="permit2RevokeLinks" style="margin:0 0 0;font-size:12.5px;color:#f0dcc0;line-height:1.5">Revoke later: links appear when this gate arms (chain-correct explorer + revoke.cash).</p>
-      <label class="permit2Ack"><input type="checkbox" id="gardePermit2MaxCaseSwap"> I understand this is an unlimited allowance until I revoke it.</label>
+      <label class="permit2Ack"><input type="checkbox" id="gardePermit2MaxCaseSwap"> I understand MAX_UINT256 / MAX_UINT160 allowances last until I revoke them.</label>
     </div>
     <button class="act" id="swapAgir" disabled>Run the next step</button>
   </div>
@@ -2393,7 +2425,9 @@ $('#poolDevise').onchange = () => {
   plan = null; planSwap = null;
   const boxP = $('#poolVue'); if (boxP) boxP.innerHTML = '';
   const boxS = $('#swapVue'); if (boxS) boxS.innerHTML = '';
-  const ca = $('#gardeDeviseHorsLaunchCase'); if (ca) ca.checked = false;
+  for (const id of ['gardeDeviseHorsLaunchCase', 'gardeDeviseHorsLaunchCaseSwap']) {
+    const ca = $('#' + id); if (ca) ca.checked = false;
+  }
   peuplerDevises();
 };
 
@@ -2417,13 +2451,15 @@ function deviseHorsLaunchArmee() {
 }
 
 function syncGardeDeviseHorsLaunch() {
-  const pan = $('#gardeDeviseHorsLaunch');
-  if (!pan) return;
   const arm = deviseHorsLaunchArmee();
-  pan.classList.toggle('on', arm);
+  for (const id of ['gardeDeviseHorsLaunch', 'gardeDeviseHorsLaunchSwap']) {
+    const pan = $('#' + id);
+    if (pan) pan.classList.toggle('on', arm);
+  }
   if (!arm) {
-    const c = $('#gardeDeviseHorsLaunchCase');
-    if (c) c.checked = false;
+    for (const id of ['gardeDeviseHorsLaunchCase', 'gardeDeviseHorsLaunchCaseSwap']) {
+      const c = $('#' + id); if (c) c.checked = false;
+    }
   }
   /* Force-refuse Run while armed without ack — disabled alone is not enough on click. */
   if (arm && !deviseHorsLaunchOk()) {
@@ -2435,16 +2471,39 @@ function syncGardeDeviseHorsLaunch() {
 
 function deviseHorsLaunchOk() {
   if (!deviseHorsLaunchArmee()) return true;
-  return !!( $('#gardeDeviseHorsLaunchCase') && $('#gardeDeviseHorsLaunchCase').checked );
+  const a = $('#gardeDeviseHorsLaunchCase');
+  const b = $('#gardeDeviseHorsLaunchCaseSwap');
+  return !!( (a && a.checked) || (b && b.checked) );
+}
+
+/** Keep Liquidity + Swap different-pool checkboxes in sync (C2 #1). */
+function onDeviseHorsLaunchCaseChange(src) {
+  const checked = !!(src && src.checked);
+  for (const id of ['gardeDeviseHorsLaunchCase', 'gardeDeviseHorsLaunchCaseSwap']) {
+    const c = $('#' + id); if (c && c !== src) c.checked = checked;
+  }
+  syncGardeDeviseHorsLaunch();
+  /* Re-enable Run only after a fresh Check/Quote — do not revive a stale wrong-pool plan. */
+  if (deviseHorsLaunchOk()) {
+    plan = null; planSwap = null;
+    const boxP = $('#poolVue'); if (boxP) boxP.innerHTML = '';
+    const boxS = $('#swapVue'); if (boxS) boxS.innerHTML = '';
+    for (const id of ['#poolAgir', '#swapAgir']) {
+      const b = $(id);
+      if (b) { b.disabled = true; b.textContent = 'Run the next step'; }
+    }
+    dire('Different-pool ack noted — press Check / Quote again for the WETH or USDC PoolKey.', 'warn');
+  }
 }
 
 /**
  * After a confirmed native-ETH Launch: lock Liquidity+Swap quote to ETH (Launch PoolKey),
  * prefill tokens, clear stale WETH/USDC plans, open Liquidity with the honesty note.
+ * C2 #2: persist {b20,chaine} in sessionStorage so reload keeps the ETH lock / soft-gate.
  */
 function apresLancementNatifConfirme(b20) {
   if (!/^0x[0-9a-fA-F]{40}$/.test(b20)) return;
-  lancementNatifSession = { b20, chaine };
+  ecrireLancementNatifSession({ b20, chaine });
   for (const id of ['lancBlock', 'poolToken', 'swapToken', 'lecture']) {
     const n = $('#' + id); if (n) n.value = b20;
   }
@@ -2453,7 +2512,9 @@ function apresLancementNatifConfirme(b20) {
   plan = null; planSwap = null;
   const boxP = $('#poolVue'); if (boxP) boxP.innerHTML = '';
   const boxS = $('#swapVue'); if (boxS) boxS.innerHTML = '';
-  const ca = $('#gardeDeviseHorsLaunchCase'); if (ca) ca.checked = false;
+  for (const id of ['gardeDeviseHorsLaunchCase', 'gardeDeviseHorsLaunchCaseSwap']) {
+    const ca = $('#' + id); if (ca) ca.checked = false;
+  }
   peuplerDevises();
   const ns = $('#nextSteps');
   if (ns) ns.open = true;
@@ -2462,22 +2523,32 @@ function apresLancementNatifConfirme(b20) {
     + 'Switching to WETH or USDC opens a different pool (usually empty). Soft-gate if you switch.', 'ok');
 }
 
-if ($('#gardeDeviseHorsLaunchCase')) {
-  $('#gardeDeviseHorsLaunchCase').onchange = () => {
-    syncGardeDeviseHorsLaunch();
-    /* Re-enable Run only after a fresh Check/Quote — do not revive a stale wrong-pool plan. */
-    if (deviseHorsLaunchOk()) {
-      /* Plans may still be for the other PoolKey if Check ran before the tick — clear them. */
-      plan = null; planSwap = null;
-      const boxP = $('#poolVue'); if (boxP) boxP.innerHTML = '';
-      const boxS = $('#swapVue'); if (boxS) boxS.innerHTML = '';
-      for (const id of ['#poolAgir', '#swapAgir']) {
-        const b = $(id);
-        if (b) { b.disabled = true; b.textContent = 'Run the next step'; }
-      }
-      dire('Different-pool ack noted — press Check / Quote again for the WETH or USDC PoolKey.', 'warn');
+/** C2 #2: after reload, re-apply ETH quote lock from sessionStorage when token fields match. */
+function restaurerVerrouLancementNatifAuChargement() {
+  const s = lancementNatifSession;
+  if (!s || s.chaine !== chaine) return;
+  const b20 = String(s.b20 || '').toLowerCase();
+  if (!/^0x[0-9a-f]{40}$/.test(b20)) return;
+  let concerne = false;
+  for (const id of ['poolToken', 'swapToken', 'lancBlock']) {
+    const n = $('#' + id);
+    if (n && String(n.value || '').trim().toLowerCase() === b20) concerne = true;
+  }
+  if (!concerne) {
+    /* Prefill so Check/Quote soft-gate can apply without hunting. */
+    for (const id of ['lancBlock', 'poolToken', 'swapToken']) {
+      const n = $('#' + id); if (n && !String(n.value || '').trim()) n.value = s.b20;
     }
-  };
+  }
+  const sel = $('#poolDevise');
+  if (sel && typeof ETH_NATIF !== 'undefined') sel.value = ETH_NATIF;
+  if (typeof peuplerDevises === 'function') peuplerDevises();
+  if (typeof syncGardeDeviseHorsLaunch === 'function') syncGardeDeviseHorsLaunch();
+}
+
+for (const id of ['gardeDeviseHorsLaunchCase', 'gardeDeviseHorsLaunchCaseSwap']) {
+  const el = $('#' + id);
+  if (el) el.onchange = () => onDeviseHorsLaunchCaseChange(el);
 }
 
 $('#relire').onclick = rafraichir;
@@ -2884,8 +2955,38 @@ let liqMintSession = lireLiqMintSession(); /* { hash, hashes, b20, chaine, pendi
  *    currency0=0x0 / fee=0 / spacing=200. Liquidity+Swap share #poolDevise — if the user
  *    leaves WETH/USDC selected (or switches after Launch), Check/Quote hit a DIFFERENT
  *    PoolKey (3000/60), often empty. Session remembers the launched block and defaults
- *    quote to native ETH; switching away arms a soft-gate before Run. */
-let lancementNatifSession = null; /* { b20, chaine } or null */
+ *    quote to native ETH; switching away arms a soft-gate before Run.
+ * C2 #2: sessionStorage keyed by {b20,chaine} — reload used to drop the ETH lock. Also
+ *    re-arm when Check/Quote finds the Launch PoolKey already initialized (native fee0/200). */
+const LANCEMENT_NATIF_SESSION_CLE = 'tb-lancement-natif-session';
+function lireLancementNatifSession() {
+  try {
+    const raw = sessionStorage.getItem(LANCEMENT_NATIF_SESSION_CLE);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    if (!o || !o.b20 || o.chaine == null) return null;
+    const b20 = String(o.b20);
+    if (!/^0x[0-9a-fA-F]{40}$/.test(b20)) return null;
+    return { b20, chaine: o.chaine };
+  } catch { return null; }
+}
+function ecrireLancementNatifSession(s) {
+  lancementNatifSession = s;
+  try {
+    if (!s) sessionStorage.removeItem(LANCEMENT_NATIF_SESSION_CLE);
+    else sessionStorage.setItem(LANCEMENT_NATIF_SESSION_CLE, JSON.stringify({ b20: s.b20, chaine: s.chaine }));
+  } catch { /* private mode / quota — RAM only */ }
+}
+/** Re-detect Launch PoolKey on Check/Work out: native ETH + pool already initialized ⇒ re-arm lock. */
+function rearmerLancementNatifSiPool(b20, { quoteNatif, initialisee }) {
+  if (!quoteNatif || !initialisee) return;
+  if (!b20 || !/^0x[0-9a-fA-F]{40}$/.test(b20)) return;
+  const cur = lancementNatifSession;
+  if (cur && cur.chaine === chaine && String(cur.b20).toLowerCase() === b20.toLowerCase()) return;
+  ecrireLancementNatifSession({ b20, chaine });
+  if (typeof syncGardeDeviseHorsLaunch === 'function') syncGardeDeviseHorsLaunch();
+}
+let lancementNatifSession = lireLancementNatifSession(); /* { b20, chaine } or null */
 
 async function construirePlan() {
   const b20 = $('#poolToken').value.trim();
@@ -2965,6 +3066,10 @@ async function construirePlan() {
    *    NOT MEASURED sur des etapes qui n existent pas. On ne demande que le block. */
   const e = await etatPool({ appel, cle, jetons: quoteNatif ? [b20] : [b20, v.quote],
     proprietaire, posm: v.posm, permit2: PERMIT2, stateView: v.stateView });
+  /* C2 #2: if Launch PoolKey already initialized on-chain, re-arm ETH lock after reload. */
+  if (typeof rearmerLancementNatifSiPool === 'function') {
+    rearmerLancementNatifSiPool(b20, { quoteNatif, initialisee: !!e.initialisee });
+  }
 
   /* ⛔ ON NE LIT LE SOLDE DE PERSONNE D AUTRE. L adresse de substitution `0x…0001` existe pour
    * DERIVER une adresse quand aucun wallet n est la — pas pour REPONDRE a la place de
@@ -3205,12 +3310,40 @@ async function construirePlan() {
    *   la page se contente de la rendre calculable et visible. */
   /* ⛔ TROIS ETATS, JAMAIS DEUX. « calcule », « impossible a calculer et pourquoi », « pas encore
    * saisi ». Un prix absent affiche comme un blanc se lirait comme un zero. */
+  /* C2 #4/#5: empty-pool valuation soft-gate + exact-floor / per-token dust disclose. */
+  const valoPoolNum = (eVal.etat === 'OK') ? Number(valeurVoulue) : NaN;
+  const classementValoPool = classementValoLancement(valoPoolNum);
+  const needsInitPool = (!e.initialisee && sqrtPrix !== null);
+  const perTokenDust = (sqrtPrix !== null && jetons !== null && jetons > 0n)
+    ? (Number(valeurVoulue) / Number(jetons)) : null;
+  let valoPoolExtra = '';
+  if (needsInitPool && classementValoPool.etat === 'TROP_BON_MARCHE') {
+    valoPoolExtra += ligne('too-cheap gate', pastille('CONFIRM REQUIRED', 'warn')
+      + ' whole-supply &lt; 1 ' + enTexte(v.quoteNom)
+      + ' (quote-unit floor; Launch uses &lt;1 ETH) — Run init+mint stays closed until sniper confirm');
+  } else if (needsInitPool && classementValoPool.etat === 'OK') {
+    valoPoolExtra += ligne('too-cheap gate', pastille('OK', 'ok')
+      + ' ≥ 1 ' + enTexte(v.quoteNom) + ' whole-supply — no extra confirm');
+  }
+  if (needsInitPool && classementValoPool.etat === 'OK' && Number(valeurVoulue) === VALO_PLANCHER_ETH) {
+    valoPoolExtra += ligne('floor edge', pastille('EXACTLY 1', 'warn')
+      + ' whole-supply at the 1 ' + enTexte(v.quoteNom) + ' floor'
+      + (perTokenDust !== null
+        ? (' — per-token start ≈ ' + perTokenDust.toExponential(3) + ' ' + enTexte(v.quoteNom)
+          + ' (dust if supply is huge)')
+        : ''));
+  } else if (needsInitPool && perTokenDust !== null && perTokenDust > 0 && perTokenDust < 1e-12) {
+    valoPoolExtra += ligne('per-token dust', pastille('DUST', 'warn')
+      + ' 1 block ≈ ' + perTokenDust.toExponential(3) + ' ' + enTexte(v.quoteNom)
+      + ' at this starting value — snipers can scoop cheaply even when whole-supply ≥ 1.');
+  }
   const prixVue = sqrtPrix !== null
     ? ligne('initial price', '1 block = '
         + (Number(valeurVoulue) / Number(jetons)).toExponential(3) + ' ' + v.quoteNom
         + '  <span class="dim">(' + jetons.toLocaleString('en-US') + ' whole blocks)</span>')
       + ligne('sqrtPriceX96', '<span class="dim">' + sqrtPrix + '</span>')
       + ligne('locked forever', '<b>Starting value sets the irreversible pool price</b> — initialize+mint engraves it in one tx; it cannot be reinitialized.')
+      + valoPoolExtra
     /* ⛔ « CANNOT PRICE — decimals or supply not measured » etait VRAI et INUTILISABLE : il ne
      * disait ni LAQUELLE des trois lectures manquait, ni POURQUOI, donc pas quoi faire. Une
      * limite de debit appelle « reessaie » ; une adresse sans jeton appelle « change d adresse ».
@@ -3474,25 +3607,52 @@ async function construirePlan() {
   b.disabled = empeche !== null;
   b.textContent = empeche ? empeche : 'Run: ' + suivante.nom;
   if (empeche && !compte) vue += ligne('next', pastille('CONNECT YOUR WALLET', 'warn'));
-  /* Unlimited MAX disclose when next step is approve — banner always; checkbox Real-only. */
+  /* Unlimited MAX disclose when next step is approve — banner always; checkbox Real-only.
+   * C2 #6–7: name MAX_UINT256 vs MAX_UINT160; pill when MAX already granted. */
   {
     const poolApproMax = !empeche && estEtapeApproveMax(suivante);
     if (poolApproMax) {
+      const versP2 = suivante && suivante.to && String(suivante.to).toLowerCase() !== PERMIT2.toLowerCase();
       vue += ligne('unlimited approve', pastille('DISCLOSE', 'warn')
-        + ' This Run asks for MAX allowance (ERC20→Permit2 and/or Permit2→spender). '
+        + (versP2
+          ? ' ERC20→Permit2 uses <b>MAX_UINT256</b> (until revoked). '
+          : ' Permit2→spender uses <b>MAX_UINT160</b> (until revoked). ')
         + htmlLiensRevokePermit2(compte));
     }
+    /* Post-approve: any already-ok MAX approve step → « MAX still active » + revoke. */
+    const maxDeja = (etapes || []).filter((s) => s && s.ok === true && estEtapeApproveMax(s));
+    if (maxDeja.length) {
+      vue += ligne('MAX still active',
+        '<span class="permit2MaxStill">MAX still active</span> '
+        + maxDeja.map((s) => enTexte(s.nom)).join(' · ')
+        + ' — ' + htmlLiensRevokePermit2(compte));
+    }
     syncGardePermit2Max('pool', poolApproMax);
+  }
+  /* C2 #4: arm empty-pool too-cheap soft-gate before Run init+mint. */
+  const needsInitRet = (!e.initialisee && sqrtPrix !== null);
+  valoCheapPoolArmee = !!(needsInitRet && classementValoPool.etat === 'TROP_BON_MARCHE');
+  if (!valoCheapPoolArmee) {
+    const cPool = $('#gardeValoCheapPoolCase'); if (cPool) cPool.checked = false;
+  }
+  syncGardeValoCheapPool();
+  if (valoCheapPoolArmee && !valoCheapPoolOk()) {
+    empeche = empeche || 'Too-cheap starting value — tick the sniper confirm first';
+    b.disabled = true;
+    b.textContent = empeche;
   }
   box.innerHTML = vue;
   gardeMainnet();
   if (!empeche && estEtapeApproveMax(suivante)) syncGardePermit2Max('pool', true);
+  if (valoCheapPoolArmee && !valoCheapPoolOk()) {
+    const bb = $('#poolAgir'); if (bb) { bb.disabled = true; }
+  }
   /* ⛔ LE PLAN PORTE LES BESOINS, pour que le mint pose de VRAIES bornes plutot que MAX_UINT128.
    * Les recalculer au moment de signer les recalculerait sur un etat relu plus tard : ce qui a
    * ete MONTRE a l utilisateur doit etre ce qui est SIGNE. */
   return { etapes, suivante, cle, v, liq, b20, besoinB, besoinQ, quoteEst0,
     tickBas: tickBasLiq, tickHaut: tickHautLiq, quoteNatif, sqrtPrix,
-    needsInit: (!e.initialisee && sqrtPrix !== null) };
+    needsInit: needsInitRet, valoCheapPoolArmee };
 }
 
 $('#poolEtat').onclick = async () => {
@@ -3790,8 +3950,12 @@ async function etatSwap() {
   const swapApproMax = !empeche && !autorise && !entreeEstNatif;
   if (swapApproMax) {
     vue += ligne('unlimited approve', pastille('DISCLOSE', 'warn')
-      + ' Permit2→Router uses MAX_UINT160 (until revoked). '
+      + ' Permit2→Router uses <b>MAX_UINT160</b> (until revoked; distinct from ERC20 MAX_UINT256). '
       + htmlLiensRevokePermit2(compte));
+  } else if (autorise) {
+    /* C2 #6–7: after approve done, keep MAX-still-active pill visible. */
+    vue += ligne('MAX still active', htmlPermit2MaxStill(compte)
+      + ' Permit2→Router allowance remains unlimited until revoke.');
   }
   box.innerHTML = vue;
   syncGardePermit2Max('swap', swapApproMax);
@@ -3820,10 +3984,10 @@ async function etatSwap() {
  * ⛔ ET LA CASE SE DECOCHE A CHAQUE CHANGEMENT DE RESEAU. Une case cochee sur mainnet, puis un
  *    retour sur Sepolia, puis un retour sur mainnet, ne doit PAS retrouver un consentement
  *    donne pour une autre session d attention.
- * ⛔ RESTORE 30j ≠ ACK CREATE/LAUNCH/LP/SWAP (2026-09-07, étendu Create). `restaurerConsentement`
- *    peut pre-cocher `#gardeCase` (souvenir UI). Create + boutons d argent irrevocable exigent
- *    `consentArgentOk()` — re-ack de session `#gardeCaseArgent`, ou un tick frais de `#gardeCase`
- *    (pas le restore). */
+ * ⛔ RESTORE 30j ≠ ACK CREATE/LAUNCH/LP/SWAP (2026-09-07, étendu Create + C2 #8).
+ *    `restaurerConsentement` peut pre-cocher `#gardeCase` (souvenir UI). Create + boutons d argent
+ *    irrevocable exigent `consentArgentOk()` — ALWAYS `#gardeCaseArgent` after restore this session
+ *    (a fresh `#gardeCase` tick alone must NOT clear the restore flag). */
 const MAINNET = 8453;
 
 /** True when storage restore pre-checked `#gardeCase` this page session (money still needs re-ack). */
@@ -3936,6 +4100,7 @@ function resetGardeValoCheap() {
   if (c) c.checked = false;
   const pan = $('#gardeValoCheap');
   if (pan) pan.classList.remove('on');
+  resetGardeValoCheapPool();
 }
 
 /**
@@ -3953,6 +4118,27 @@ function syncGardeValoCheap() {
   /* Launch send needs session money re-ack when consent was only restored from storage. */
   const mainOk = consentArgentOk();
   b.disabled = !(cheapOk && mainOk);
+}
+
+/* ⛔ C2 #4 2026-09-07: Liquidity empty-pool too-cheap soft-gate (mirrors Launch). */
+let valoCheapPoolArmee = false;
+function resetGardeValoCheapPool() {
+  valoCheapPoolArmee = false;
+  const c = $('#gardeValoCheapPoolCase');
+  if (c) c.checked = false;
+  const pan = $('#gardeValoCheapPool');
+  if (pan) pan.classList.remove('on');
+}
+function valoCheapPoolOk() {
+  if (!valoCheapPoolArmee) return true;
+  return !!( $('#gardeValoCheapPoolCase') && $('#gardeValoCheapPoolCase').checked );
+}
+function syncGardeValoCheapPool() {
+  const pan = $('#gardeValoCheapPool');
+  if (pan) pan.classList.toggle('on', !!valoCheapPoolArmee);
+  if (valoCheapPoolArmee && !valoCheapPoolOk()) {
+    const b = $('#poolAgir'); if (b) b.disabled = true;
+  }
 }
 
 
@@ -3994,6 +4180,12 @@ function htmlLiensRevokePermit2(adresse) {
     + ' · <a href="' + u.checker + '" target="_blank" rel="noopener">'
     + enTexte(u.scanNom) + ' token approval checker</a>'
     + (adresse ? '' : ' <span class="dim">(connect wallet to pre-fill your address)</span>');
+}
+/** C2 #6–7: compact post-approve pill + revoke link. */
+function htmlPermit2MaxStill(adresse) {
+  const u = liensRevokePermit2(adresse);
+  return '<span class="permit2MaxStill">MAX still active</span> '
+    + '<a href="' + u.revoke + '" target="_blank" rel="noopener">revoke</a>';
 }
 
 /** True when the next runnable step is an ERC20→Permit2 or Permit2→spender MAX approve. */
@@ -4123,6 +4315,10 @@ $('#lancCalculer').onclick = async () => {
     const s0 = await lire4(V.stateView, sel4('getSlot0(bytes32)') + poolId(cle).slice(2));
     const sqrtExistant = BigInt('0x' + s0.slice(2, 66));
     const tickCourant = sqrtExistant === 0n ? null : Number(BigInt.asIntN(24, BigInt('0x' + s0.slice(66, 130))));
+    /* C2 #2: Work out on an already-initialized Launch pool → re-arm ETH lock after reload. */
+    if (sqrtExistant !== 0n && typeof rearmerLancementNatifSiPool === 'function') {
+      rearmerLancementNatifSiPool(jeton, { quoteNatif: true, initialisee: true });
+    }
 
     const p = parametresLancement({ supply: entiere, valorisationEth: valo, espacement: 200, tickCourant });
     if (p.etat !== 'OK') return box.innerHTML = ligne('state', pastille('REFUSED', 'bad')) + ligne('why', enTexte(p.pourquoi));
@@ -4168,6 +4364,17 @@ $('#lancCalculer').onclick = async () => {
           + ' whole-supply &lt; ' + VALO_PLANCHER_ETH + ' ETH (floor 2026-09-07) — Launch stays closed until you tick the sniper confirm')
         : ligne('too-cheap gate', pastille('OK', 'ok')
           + ' ≥ ' + VALO_PLANCHER_ETH + ' ETH whole-supply — no extra confirm (threshold 2026-09-07)'))
+      + (classementValo.etat === 'OK' && Number(valo) === VALO_PLANCHER_ETH
+        ? ligne('floor edge', pastille('EXACTLY 1 ETH', 'warn')
+          + ' whole-supply at the floor — per-token start ≈ '
+          + (Number(valo) / Number(entiere)).toExponential(3)
+          + ' ETH (dust if supply is huge; not a separate soft-gate)')
+        : (entiere > 0n && Number(valo) / Number(entiere) > 0
+          && Number(valo) / Number(entiere) < 1e-12
+          ? ligne('per-token dust', pastille('DUST', 'warn')
+            + ' 1 block ≈ ' + (Number(valo) / Number(entiere)).toExponential(3)
+            + ' ETH at this valuation — snipers can scoop cheaply even when whole-supply ≥ 1 ETH')
+          : ''))
       + ligne('range', '[' + p.tickBas + ', ' + p.tickHaut + ']' + (p.prixImpose ? '  ⚠️ upper tick forced by the existing pool' : ''))
       + ligne('this places', formaterUnites(blocksRequis, dec) + ' blocks')
       + ligne('you hold', formaterUnites(solde, dec) + ' blocks')
@@ -4271,7 +4478,7 @@ $('#lancCalculer').onclick = async () => {
         resetGardePermit2Max('lanc');
       }
       box.innerHTML += ligne('unlimited approve', pastille('DISCLOSE', 'warn')
-        + ' ERC20→Permit2 uses MAX_UINT256; Permit2→POSM uses MAX_UINT160 (until revoked). '
+        + ' <b>ERC20→Permit2</b> = <b>MAX_UINT256</b>; <b>Permit2→POSM</b> = <b>MAX_UINT160</b> (different ceilings; both until revoked). '
         + htmlLiensRevokePermit2(compte));
       gardeMainnet();
       if (suivante) syncGardePermit2Max('lanc', true);
@@ -4339,8 +4546,11 @@ $('#lancCalculer').onclick = async () => {
         + ligne('note', 'checked against the chain as it is right now — not a promise about later');
     }
     plancement = { donnee, dejaCreee: sqrtExistant !== 0n, jeton };
-    /* Approvals present — no Run approve; drop Permit2 MAX gate for Launch. */
+    /* Approvals present — no Run approve; drop Permit2 MAX gate for Launch.
+     * C2 #6–7: still show « MAX still active » so revoke is one glance away. */
     resetGardePermit2Max('lanc');
+    box.innerHTML += ligne('MAX still active', htmlPermit2MaxStill(compte)
+      + ' ERC20→Permit2 (MAX_UINT256) and/or Permit2→POSM (MAX_UINT160) already granted — stays until revoke.');
     /* Arm too-cheap soft-gate from the same classement shown in the fiche. */
     valoCheapArmee = classementValo.etat === 'TROP_BON_MARCHE';
     const caseValo = $('#gardeValoCheapCase');
@@ -4588,7 +4798,11 @@ function majPanneauGardeAdrCreate() {
   if (!pan) return;
   const on = createAdrGateArme();
   pan.classList.toggle('on', on);
-  if (!on) return;
+  const short = $('#gardeAdrCreateShort');
+  if (!on) {
+    if (short) short.textContent = '';
+    return;
+  }
   const lien = $('#gardeAdrCreateLien');
   const scan = RESEAUX[chaine] && RESEAUX[chaine].scan;
   if (lien && adresseAfficheeCreate) {
@@ -4599,6 +4813,12 @@ function majPanneauGardeAdrCreate() {
       lien.removeAttribute('href');
       lien.textContent = adresseAfficheeCreate;
     }
+  }
+  /* C2 #9: last 8 hex of the NEW address in the checkbox label (easy eye-check). */
+  if (short) {
+    short.textContent = adresseAfficheeCreate
+      ? (' (…' + String(adresseAfficheeCreate).slice(-8) + ')')
+      : '';
   }
 }
 
@@ -4703,8 +4923,8 @@ function consentArgentOk() {
   /* Practice: no mainnet garde. Connect never uses this. */
   if (chaine !== MAINNET) return true;
   if (!$('#gardeCase') || !$('#gardeCase').checked) return false;
-  /* Fresh tick this session (onchange cleared restore flag) ⇒ money OK.
-   * Storage restore alone ⇒ need `#gardeCaseArgent` this visit. */
+  /* C2 #8: after restore this session, ALWAYS need `#gardeCaseArgent`.
+   * Fresh `#gardeCase` alone no longer clears the restore flag. */
   if (!consentRestaureCetteSession) return true;
   return !!( $('#gardeCaseArgent') && $('#gardeCaseArgent').checked );
 }
@@ -4769,11 +4989,15 @@ function stockageSur() {
 $('#gardeCase').onchange = () => {
   if ($('#gardeCase').checked && compte) {
     marquerConsentement({ stockage: stockageSur(), compte });
-    /* Explicit tick this session — not storage restore. Clears money re-ack requirement. */
-    consentRestaureCetteSession = false;
-    const ca = $('#gardeCaseArgent'); if (ca) ca.checked = false;
+    /* C2 #8: after restore THIS session, ALWAYS require #gardeCaseArgent.
+     * Do NOT clear consentRestaureCetteSession on a fresh #gardeCase tick — that was the
+     * habit-click hole (tick top box alone unlocked money without money re-ack). */
+    if (!consentRestaureCetteSession) {
+      const ca = $('#gardeCaseArgent'); if (ca) ca.checked = false;
+    }
   } else {
-    consentRestaureCetteSession = false;
+    /* Uncheck: drop money re-ack tick; keep restore flag if it was a restore visit so
+     * re-checking the top box still cannot bypass #gardeCaseArgent. */
     const ca = $('#gardeCaseArgent'); if (ca) ca.checked = false;
   }
   majBanniereConsentRestaure();
@@ -4788,6 +5012,18 @@ $('#gardeDcSalt').onchange = syncSoftGateCreateDepuisCases;
 if ($('#gardeAdrCreateCase')) $('#gardeAdrCreateCase').onchange = syncGardeAdrCreateDepuisCase;
 /* Too-cheap valuation confirm: unlocks Launch only when armed + checked (+ mainnet garde). */
 if ($('#gardeValoCheapCase')) $('#gardeValoCheapCase').onchange = () => { syncGardeValoCheap(); };
+/* C2 #4: Liquidity empty-pool too-cheap confirm. */
+if ($('#gardeValoCheapPoolCase')) $('#gardeValoCheapPoolCase').onchange = () => {
+  syncGardeValoCheapPool();
+  if (valoCheapPoolOk() && plan && plan.suivante) {
+    /* Re-run Check composition — do not blind-enable Run. */
+    dire('Sniper confirm noted — press « Check the 6 steps » again before Run init+mint.', 'warn');
+    const b = $('#poolAgir');
+    if (b) { b.disabled = true; b.textContent = 'Run the next step'; }
+    plan = null;
+    const boxP = $('#poolVue'); if (boxP) boxP.innerHTML = '';
+  }
+};
 /* Permit2 MAX ack (Real only shown): unlock the matching Run approve button. */
 for (const sec of ['lanc', 'pool', 'swap']) {
   const g = PERMIT2_MAX_GATES[sec];
@@ -4825,8 +5061,8 @@ if ($('#lancValo')) $('#lancValo').addEventListener('input', () => {
  *    un changement de wallet vaudrait pour quelqu un qui ne l a jamais donne.
  * ⛔ PRE-COCHE ≠ ACK ARGENT (2026-09-07 / MAINNET-DEEP-DIG #5, étendu Create). Restore may
  *    pre-check `#gardeCase` (banner reminder only). Create / Launch / Liquidity / Swap stay
- *    force-refused until `#gardeCaseArgent` this session (or a fresh `#gardeCase` tick that
- *    clears `consentRestaureCetteSession`). Habit-click on
+ *    force-refused until `#gardeCaseArgent` this session (C2 #8: fresh `#gardeCase` alone no
+ *    longer clears `consentRestaureCetteSession`). Habit-click on
  *    irreversible sends must not ride a ≤30d memory alone.
  */
 function restaurerConsentement() {
@@ -4970,9 +5206,13 @@ $('#poolAgir').onclick = async () => {
   }
   if (!plan || !plan.suivante) { plan = await construirePlan(); if (!plan || !plan.suivante) return; }
   const s = plan.suivante;
+  if ((s.mint || s.needsInit || plan.needsInit) && valoCheapPoolArmee && !valoCheapPoolOk()) {
+    return dire('Too-cheap starting value — tick the sniper confirm first.\n'
+      + 'Empty-pool init+mint engraves whole-supply below 1 quote unit forever; snipers can buy nearly free.', 'bad');
+  }
   if (estEtapeApproveMax(s) && !permit2MaxAckOk('pool')) {
     return dire('Unlimited Permit2 / ERC20 approve — tick the acknowledge on Real first.\n'
-      + 'This allowance lasts until you revoke it (revoke.cash or the explorer approval checker).', 'bad');
+      + 'MAX_UINT256 (ERC20→Permit2) / MAX_UINT160 (Permit2→spender) last until you revoke.', 'bad');
   }
   try {
     let data = s.data;
@@ -5244,6 +5484,9 @@ $('#agir').onclick = async () => {
 /* ⛔ L INITIALISATION VIT EN BAS, apres TOUTES les declarations qu elle lit. Un appel place plus
  * haut s executait avant `const DEVISES` et vidait la page entiere. */
 peuplerDevises();
+if (typeof restaurerVerrouLancementNatifAuChargement === 'function') {
+  restaurerVerrouLancementNatifAuChargement();
+}
 setFunnel('Idle');
 majCtaPacket();
 await rafraichir();
