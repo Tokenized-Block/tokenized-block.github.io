@@ -1231,6 +1231,18 @@ main[data-app="market"] > #blockHome{display:none !important}
       <div class="bhActions" id="blockHomeActions"></div>
     </div>
   </div>
+  <!-- ⛔ VITALS (2026-09-08) — la « vie » du block, DERIVEE de faits mesures. Aucune HP inventee et
+       aucun minuteur : ce qui descend est le SILENCE DE LA CHAINE, pas une horloge. Chaque signe
+       porte sa borne, et un signe NON MESURE ne fait PAS baisser la vitalite. -->
+  <section class="bhHistory" id="blockHomeVitals" aria-label="Block vitals">
+    <div class="bhHistHead">
+      <h3>Vitals</h3>
+      <p class="bhHistSub">Derived from re-readable chain facts — <b>not an HP bar, not a trust score</b>. A block goes quiet when the chain goes quiet about it, not on a timer. Signs that were not measured do <b>not</b> lower it.</p>
+    </div>
+    <div class="bhHistBoard" id="blockHomeVitalsBoard" role="status"></div>
+    <ul class="bhHistList" id="blockHomeVitalsList" aria-live="polite"></ul>
+    <p class="bhHistFoot" id="blockHomeVitalsFoot"></p>
+  </section>
   <!-- History: append-only Transfer evidence via browser eth_getLogs (limited window); fail-closed on RPC fail. -->
   <section class="bhHistory" id="blockHomeHistory" aria-label="Block transfer history">
     <div class="bhHistHead">
@@ -1757,6 +1769,7 @@ import { cleDePool, etatPool, encodeInitialize, encodeApprove, encodePermit2Appr
   encodeInitializePool, encodeMulticall } from './pool.js';
 import { parametresLancement, tickMinAligne, VALO_PLANCHER_ETH, classementValoLancement } from './lancement.js';
 import { apparenceDepuisAdresse } from './apparence.js';
+import { vitalite, commentPrendreSoin, SIGNES as SIGNES_VITAUX } from './vitalite.js';
 import { consentementValide, marquerConsentement } from './consentement.js';
 import { verdictPhoto, chercherQualite, octetsUri, PHOTO_MAX } from './photo.js';
 
@@ -3958,6 +3971,69 @@ function lienCompanionPour(adr) {
   } catch { return base; }
 }
 
+/* ══ VITALS — la vie du block, derivee ═════════════════════════════════════════════════════════
+ * ⛔ DEUX PASSES, COMME L HISTORY, ET POUR LA MEME RAISON. Les faits de chaine (supply, cap, pool)
+ *    arrivent avec `ouvrirBlockHome` ; les compteurs de FENETRE (porteurs, mouvement) n arrivent
+ *    qu apres le scan `eth_getLogs`. Peindre une seule fois obligerait soit a attendre le scan —
+ *    et la carte resterait vide — soit a inventer les compteurs. On peint donc avec ce qu on a, et
+ *    les signes non encore lus sont NON MESURES : ils ne font PAS baisser la vitalite.
+ * ⚠️ Les faits sont conserves PAR ADRESSE : sans ca, ouvrir un second block ferait fusionner les
+ *    mesures de deux jetons differents, et le chiffre affiche n appartiendrait a personne. */
+let vitFaits = { adr: null, faits: {} };
+
+function peindreVitalite(adr, ajout) {
+  const sec = $('#blockHomeVitals');
+  if (!sec) return;
+  if (vitFaits.adr !== adr) vitFaits = { adr, faits: {} };
+  vitFaits.faits = { ...vitFaits.faits, ...(ajout || {}) };
+  const v = vitalite(vitFaits.faits);
+
+  const board = $('#blockHomeVitalsBoard');
+  if (board) {
+    const p = v.surCent;
+    /* ⛔ LA PASTILLE SUIT L ETAT, PAS LE POURCENTAGE. Mesure a l ecran : « 100 % · VIF » en VERT
+     * sur un seul signe lu sur six. Chaque mot etait vrai, et l oeil lisait quand meme un bulletin
+     * de sante — c est la pastille qu on lit, pas la note a cote. En PARTIEL elle reste neutre. */
+    board.innerHTML = '<span class="bhHistBoardLabel">Vitality</span>'
+      + pastille(p === null ? 'NOT MEASURED'
+        : v.etat === 'PARTIEL' ? ('PARTIAL — ' + p + '% of ' + v.poidsMesure + '/' + v.poidsTotal + ' weight read')
+        : (p + '% · ' + v.etat),
+        p === null || v.etat === 'PARTIEL' ? 'warn' : p >= 80 ? 'ok' : p >= 40 ? 'warn' : 'bad')
+      /* ⛔ LE DENOMINATEUR EST DIT. « 100 % » sur un seul signe mesure n est pas « 100 % » sur six,
+       * et les confondre transformerait une lecture partielle en bulletin de sante. */
+      + ' <span class="k">share of the signs actually MEASURED (weight ' + v.poidsMesure + '/' + v.poidsTotal + ')'
+      + (v.nonMesures.length ? ' · ' + v.nonMesures.length + ' sign(s) not measured — they do NOT lower it' : '')
+      + '. ' + enTexte(v.cequecenestpas) + '</span>';
+  }
+
+  const list = $('#blockHomeVitalsList');
+  if (list) {
+    list.innerHTML = SIGNES_VITAUX.map((d) => {
+      const s = v.signes[d.cle];
+      const p = s.etat === 'VIF' ? pastille('ALIVE', 'ok')
+        : s.etat === 'FAIBLE' ? pastille('QUIET', 'warn') : pastille('NOT MEASURED', 'dim');
+      return '<li class="bhHRow">'
+        + '<div><div class="bhHCol">Sign</div><div class="bhHVal">' + enTexte(d.titre) + '</div></div>'
+        + '<div><div class="bhHCol">State</div><div class="bhHVal">' + p + '</div></div>'
+        + '<div><div class="bhHCol">Measured</div><div class="bhHVal">' + enTexte(s.detail) + '</div></div>'
+        /* ⛔ LA BORNE VOYAGE AVEC LE SIGNE, a l ecran et pas seulement dans le code. Un signe dont
+         * la borne vit ailleurs se lit comme universel. */
+        + '<div><div class="bhHCol">Bound</div><div class="bhHVal">' + enTexte(d.borne) + '</div></div>'
+        + '</li>';
+    }).join('');
+  }
+
+  const foot = $('#blockHomeVitalsFoot');
+  if (foot) {
+    const soins = commentPrendreSoin(v).filter((s) => s.etat === 'FAIBLE');
+    foot.innerHTML = '<b>Caring for a block is a real gesture, never a purchase.</b> '
+      + 'There is no potion, no revive, no care token — a number invented and sold would be worth nothing. '
+      + (soins.length
+        ? soins.map((s) => '<br>· ' + enTexte(s.texte)).join('')
+        : '<br>· Nothing to raise from the signs measured right now.');
+  }
+}
+
 /**
  * Block home History shell — append-only evidence UI, fail-closed without Transfer indexer.
  * Never invents dumps, HP, trust/reputation badges, or scammer scores.
@@ -4211,6 +4287,18 @@ async function chargerBlockHomeHistory(adr, opts) {
     } else if (!createur) {
       aftermath = 'Creator unread in window — raw Transfer only';
     }
+
+    /* ⛔ SECONDE PASSE DES VITALS : les compteurs de FENETRE, avec leur fenetre. `porteursVus`
+     * compte les adresses RECEPTRICES distinctes — ce n est PAS le nombre de porteurs, et le mot
+     * choisi dans `vitalite.js` le dit. Confondre les deux transformerait une lecture partielle en
+     * recensement. */
+    const recus = new Set();
+    for (const t of (tr.transfers || [])) if (t && t.to) recus.add(String(t.to).toLowerCase());
+    peindreVitalite(adr, {
+      porteursVus: recus.size,
+      transfertsFenetre: (tr.transfers || []).length,
+      fenetre: tr.fenetre ? { de: tr.fenetre.de, a: tr.fenetre.a } : null,
+    });
 
     const events = evenementsDepuisTransfers(tr.transfers, {
       createur,
@@ -4717,6 +4805,17 @@ async function ouvrirBlockHome(adr, opts) {
     const dec = await lireDecimales(adr);
     const solde = await soldeBlockPourCompte(adr);
     const pool = await poolLaunchPresente(adr);
+
+    /* ⛔ PREMIERE PASSE DES VITALS, avec CE QUI EST DEJA LU. Les compteurs de fenetre arrivent plus
+     * tard, par `chargerBlockHomeHistory` ; ils restent NON MESURES jusque-la et ne font donc PAS
+     * baisser la vitalite. Une carte vide en attendant serait pire : elle laisserait croire que
+     * rien n a pu etre lu du tout.
+     * ⚠️ `pool` est passe en booleen STRICT : un `null` (lecture ratee) doit rester non mesure, pas
+     * devenir « pas de pool ». `!!null` vaudrait `false`, donc on ne l ecrit pas. */
+    peindreVitalite(adr, {
+      supply: tot, cap,
+      pooleCote: typeof pool === 'boolean' ? pool : (pool && typeof pool.presente === 'boolean' ? pool.presente : null),
+    });
 
     let shareLine = ligne('your balance', pastille('CONNECT WALLET', 'dim')
       + ' <span class="k">balanceOf needs a connected wallet — EXISTS read, not shown without it</span>');
