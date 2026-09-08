@@ -1571,7 +1571,15 @@ async function rpc(m, p, essais = 4, attente = 350) {
 async function appelBrut(tx) {
   const r = await fetch(RESEAUX[chaine].rpc, { method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ jsonrpc: '2.0', id: ++n, method: 'eth_call', params: [tx, 'latest'] }) });
-  return r.json();
+  let j = null;
+  try { j = await r.json(); } catch {
+    return { error: { code: -32016, message: 'HTTP ' + r.status + ' — empty/non-JSON RPC body' } };
+  }
+  if (!r.ok) {
+    const msg = (j && j.error && j.error.message) ? j.error.message : ('HTTP ' + r.status);
+    return { error: { code: (j && j.error && j.error.code) || -32016, message: msg, httpStatus: r.status } };
+  }
+  return j;
 }
 /* ⛔ « J ai refuse » et « ca a plante » sont deux faits opposes. Les wallets rendent le code
  * EIP-1193 4001 pour un refus explicite ; sans lui on ne PRESUME pas, on dit « failed ». */
@@ -4034,12 +4042,19 @@ async function etatSwap() {
   if (autorise && compte && sortie !== null) {
     const bloc0 = await rpc('eth_getBlockByNumber', ['latest', false]);
     const deadline = BigInt(bloc0.timestamp) + 600n;
-    ({ forme, causes } = await formeAcceptee({
+    let transportForme = false;
+    ({ forme, causes, transport: transportForme } = await formeAcceptee({
       appelBrut, ur, de: compte, cle, zeroForOne, montant, deadline,
       value: valeurHex || undefined,
     }));
-    vue += ligne('2. swap', forme === null ? pastille('BOTH SHAPES REJECTED', 'bad')
+    vue += ligne('2. swap', forme === null
+      ? (transportForme
+          ? pastille('RPC THROTTLED — RETRY', 'warn')
+          : pastille('BOTH SHAPES REJECTED', 'bad'))
       : pastille('READY · ' + (forme === AVEC_MINHOP ? 'with minHopPriceX36' : 'legacy shape'), 'ok'));
+    if (forme === null && transportForme) {
+      vue += ligne('rpc', 'Public RPC rate-limited both encodings — not proof the router rejects them. Quote again in a few seconds.');
+    }
     if (forme === null) for (const [k, c] of Object.entries(causes || {})) vue += ligne(k, enTexte(String(c).slice(0, 120)));
   } else if (autorise && compte && sortie === null) {
     vue += ligne('2. swap', pastille('NO QUOTE — NOTHING TO SEND', 'dim'));
