@@ -1469,7 +1469,7 @@ main[data-app="market"] > #blockHome{display:none !important}
       <div class="t">⚠ Unlimited allowance — lasts until you revoke</div>
       <p>This step asks for <b>unlimited</b> allowances (not limited to this one Launch / Liquidity / Swap):</p>
       <p><b>ERC20 → Permit2</b> uses <b>MAX_UINT256</b> (token <code>approve</code>).<br>
-      <b>Permit2 → PositionManager / Router</b> uses <b>MAX_UINT160</b> amount (+ far expiration). These are different ceilings — both stay until you revoke.</p>
+      <b>Permit2 → PositionManager / Router</b> uses <b>MAX_UINT160</b> amount, with the expiry set to <b>MAX_UINT48</b> — that is the year ~8,900,000, so it does <b>not expire</b> in any human sense. These are different ceilings — both stay until you revoke.</p>
       <p class="permit2RevokeLinks" style="margin:0 0 0;font-size:12.5px;color:#f0dcc0;line-height:1.5">Revoke later: links appear when this gate arms (chain-correct explorer + revoke.cash).</p>
       <label class="permit2Ack"><input type="checkbox" id="gardePermit2MaxCaseLanc"> I understand MAX_UINT256 / MAX_UINT160 allowances last until I revoke them.</label>
     </div>
@@ -1532,7 +1532,7 @@ main[data-app="market"] > #blockHome{display:none !important}
       <div class="t">⚠ Unlimited allowance — lasts until you revoke</div>
       <p>This step asks for <b>unlimited</b> allowances (not limited to this one Launch / Liquidity / Swap):</p>
       <p><b>ERC20 → Permit2</b> uses <b>MAX_UINT256</b> (token <code>approve</code>).<br>
-      <b>Permit2 → PositionManager / Router</b> uses <b>MAX_UINT160</b> amount (+ far expiration). These are different ceilings — both stay until you revoke.</p>
+      <b>Permit2 → PositionManager / Router</b> uses <b>MAX_UINT160</b> amount, with the expiry set to <b>MAX_UINT48</b> — that is the year ~8,900,000, so it does <b>not expire</b> in any human sense. These are different ceilings — both stay until you revoke.</p>
       <p class="permit2RevokeLinks" style="margin:0 0 0;font-size:12.5px;color:#f0dcc0;line-height:1.5">Revoke later: links appear when this gate arms (chain-correct explorer + revoke.cash).</p>
       <label class="permit2Ack"><input type="checkbox" id="gardePermit2MaxCasePool"> I understand MAX_UINT256 / MAX_UINT160 allowances last until I revoke them.</label>
     </div>
@@ -1571,7 +1571,7 @@ main[data-app="market"] > #blockHome{display:none !important}
       <div class="t">⚠ Unlimited allowance — lasts until you revoke</div>
       <p>This step asks for <b>unlimited</b> allowances (not limited to this one Launch / Liquidity / Swap):</p>
       <p><b>ERC20 → Permit2</b> uses <b>MAX_UINT256</b> (token <code>approve</code>).<br>
-      <b>Permit2 → PositionManager / Router</b> uses <b>MAX_UINT160</b> amount (+ far expiration). These are different ceilings — both stay until you revoke.</p>
+      <b>Permit2 → PositionManager / Router</b> uses <b>MAX_UINT160</b> amount, with the expiry set to <b>MAX_UINT48</b> — that is the year ~8,900,000, so it does <b>not expire</b> in any human sense. These are different ceilings — both stay until you revoke.</p>
       <p class="permit2RevokeLinks" style="margin:0 0 0;font-size:12.5px;color:#f0dcc0;line-height:1.5">Revoke later: links appear when this gate arms (chain-correct explorer + revoke.cash).</p>
       <label class="permit2Ack"><input type="checkbox" id="gardePermit2MaxCaseSwap"> I understand MAX_UINT256 / MAX_UINT160 allowances last until I revoke them.</label>
     </div>
