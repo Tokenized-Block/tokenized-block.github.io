@@ -6475,7 +6475,7 @@ $('#agir').onclick = async () => {
 /* ══ P2P MARKET MVP 2026-09-08 — GROK-SUPER-P2P-MARKET-UX ═══════════════════
  * ⛔ Object of sale = secondary B-20 units (not design NFT / exclusive IP).
  * ⛔ Settlement = guided non-atomic ETH pay + existing Send — no escrow keys.
- * ⛔ Asks = localStorage (+ shareable ?block=&ask= link) — unsigned browser intents.
+ * ⛔ Asks = localStorage (+ shareable ?block=&ask=&chain= link) — unsigned browser intents.
  * ⛔ Fail-closed if decimals unread (lireDecimales). No fees/RPC/Permit2 changes.
  * ⛔ Dig multi-column cards kept — Market is a .card in the masonry flow. */
 
@@ -6549,6 +6549,9 @@ function lienAskPour(ask) {
   u.searchParams.set('amt', ask.amount);
   u.searchParams.set('price', ask.priceEth);
   if (ask.note) u.searchParams.set('note', ask.note);
+  /* Practice vs Real deep-link: same chain id as page / ask (84532 Sepolia · 8453 Base). */
+  const cid = (ask.chainId != null ? ask.chainId : chaine);
+  if (cid === 8453 || cid === 84532) u.searchParams.set('chain', String(cid));
   return u.toString();
 }
 
@@ -6713,6 +6716,32 @@ function rafraichirMarche() {
   }
 }
 
+/** Read ?chain= / ?chainId= (84532 Practice · 8453 Real). Fail closed on unknown. */
+function lireChainDepuisUrl(params) {
+  const raw = ((params && (params.get('chain') || params.get('chainId'))) || '').trim();
+  if (!raw) return null;
+  const id = parseInt(raw, 10);
+  if (id !== 8453 && id !== 84532) {
+    dire('Deep link ?chain= ignored — expected 84532 (Practice) or 8453 (Real).\n' + raw, 'warn');
+    return null;
+  }
+  return id;
+}
+
+/**
+ * Apply ?chain= before ask/block deep-links so Market lands on Practice vs Real.
+ * Reuses the page Practice/Real tab click (same side-effects as a manual flip).
+ */
+function appliquerDeepLinkChaine() {
+  let params;
+  try { params = new URLSearchParams(location.search); } catch { return; }
+  const id = lireChainDepuisUrl(params);
+  if (id == null || chaine === id) return;
+  const btn = $('#t' + id);
+  if (btn) btn.click();
+  else dire('Deep link ?chain=' + id + ' — network tab missing; left on ' + RESEAUX[chaine].nom + '.', 'warn');
+}
+
 function appliquerDeepLinkAsk() {
   let params;
   try { params = new URLSearchParams(location.search); } catch { return; }
@@ -6743,13 +6772,14 @@ function appliquerDeepLinkAsk() {
     }
     return;
   }
+  const urlChain = lireChainDepuisUrl(params);
   const ask = {
     block,
     seller: seller || '0x0000000000000000000000000000000000000000',
     amount,
     priceEth,
     note,
-    chainId: chaine,
+    chainId: (urlChain != null ? urlChain : chaine),
     createdAt: Date.now(),
     unverified: true,
     fromLink: true,
@@ -6800,6 +6830,16 @@ if (_listCopier) _listCopier.onclick = async () => {
   const ask = askCourantDepuisForm();
   const err = validerAskChamps(ask);
   if (err) return dire(err, 'bad');
+  /* Fail-closed decimals before copy success (same gate as Save / Create / Send). */
+  const dec = await lireDecimales(ask.block);
+  if (dec === null) {
+    return dire('⛔ Could not read token decimals — copy aborted (fail closed). Nothing copied.', 'bad');
+  }
+  const amtDec = montantHumain(ask.amount, dec);
+  if (amtDec.etat !== 'OK' || amtDec.valeur <= 0n) {
+    return dire('Amount refused for this token\'s ' + dec + ' decimals — copy aborted.\n'
+      + ((amtDec.pourquoi) || 'must be > 0'), 'bad');
+  }
   await copierLienAsk(ask);
 };
 
@@ -6872,13 +6912,29 @@ if (_settleSend) _settleSend.onclick = () => {
     if (compte && ask.seller && compte.toLowerCase() === ask.seller.toLowerCase()) {
       to.value = '';
       to.placeholder = 'Buyer address (they paid you ETH)';
+      const infoS = $('#sendInfo');
+      if (infoS) {
+        infoS.removeAttribute('role');
+        infoS.style.color = '';
+        infoS.textContent = 'Seller mode — paste the buyer who paid you. From '
+          + compte + ' on ' + RESEAUX[chaine].nom + '. Decimals re-read fail-closed before transfer.';
+      }
       dire('Send form opened as seller — paste the buyer address who paid you, amount prefilled.\n'
         + 'Decimals will be re-read fail-closed before transfer.', 'ok');
     } else if (compte) {
-      /* Buyer view: remind seller must send TO buyer */
+      /* Buyer view: prefill recipient = connected buyer — seller must sign Send. */
       to.value = compte;
+      const info = $('#sendInfo');
+      if (info) {
+        info.setAttribute('role', 'alert');
+        info.style.color = '#f0c674';
+        info.innerHTML = '<b>⚠ Buyer prefill — do not miss:</b> recipient is set to <span class="mono">'
+          + enTexte(compte) + '</span> (your connected wallet). '
+          + 'The <b>SELLER</b> must connect and confirm this transfer. '
+          + 'If <b>you</b> are the buyer, do <b>not</b> Send your own tokens here.';
+      }
       dire('Send form opened with your address as recipient — the SELLER must connect and confirm this transfer.\n'
-        + 'If you are the buyer, do not Send your own tokens here.', 'warn');
+        + 'If you are the buyer, do not Send your own tokens here. Warning also shown on the Send form.', 'warn');
     }
   }
   const s2 = $('#settleStep2'); if (s2) s2.classList.add('on');
@@ -7122,7 +7178,8 @@ if (typeof restaurerVerrouLancementNatifAuChargement === 'function') {
 setFunnel('Idle');
 majCtaPacket();
 await rafraichir();
-/* Slice 1 + Market: honor ?block= (and keep ?cb=); ask/list opens Market settle. */
+/* Slice 1 + Market: ?chain= Practice/Real first, then ?block=; ask/list opens Market settle. */
+if (typeof appliquerDeepLinkChaine === 'function') appliquerDeepLinkChaine();
 if (typeof appliquerDeepLinkBlock === 'function') appliquerDeepLinkBlock();
 if (typeof appliquerDeepLinkAsk === 'function') appliquerDeepLinkAsk();
 
