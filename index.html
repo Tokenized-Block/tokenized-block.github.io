@@ -1234,7 +1234,7 @@ main[data-app="market"] > #blockHome{display:none !important}
   <section class="bhHistory" id="blockHomeHistory" aria-label="Block transfer history">
     <div class="bhHistHead">
       <h3>History</h3>
-      <p class="bhHistSub">This block — recent Transfer logs (eth_getLogs window) as dated evidence + explorer links. Creator out/in labeled only when create tx.from is measured. Not a trust or scammer score.</p>
+      <p class="bhHistSub">This block — recent Transfer logs (eth_getLogs window) as dated evidence + explorer links. Creator out/in labeled only when create <span class="mono">tx.from</span> is measured — <b>Creator Transfer out ≠ dump / murder verdict</b> (address match on that Transfer only). Not a trust or scammer score.</p>
     </div>
     <div class="bhHistBoard" id="blockHomeHistBoard" role="status"></div>
     <ul class="bhHistList" id="blockHomeHistList" aria-live="polite"></ul>
@@ -3923,6 +3923,8 @@ function peindreBlockHomeHistory(adr, opts) {
       }
     }
     foot.innerHTML = 'Append-only evidence · no HP · no trust/reputation badge · no scammer score. '
+      + '<b>Creator Transfer out ≠ dump / murder verdict</b> — only that measured create tx.from '
+      + 'appears as Transfer <code>from</code>/<code>to</code> in this window (not emptied-stake proof). '
       + 'Pages Launch ≠ OpenLaunch ownerless locker.' + extra
       + ' Explorer: <span class="mono">' + enTexte(scanBasePourChaine()) + '/tx/&lt;hash&gt;</span>.';
   }
@@ -3940,7 +3942,7 @@ function raccourciAdr(a) {
 
 /**
  * Map decoded Transfer logs → History row objects (when · what · txHash · aftermath).
- * Labels creator out/in only when createur is a measured tx.from — never a guessed « murder ».
+ * Labels creator-address out/in only when createur is a measured tx.from — never a dump/murder verdict.
  */
 function evenementsDepuisTransfers(transfers, opts) {
   const o = opts || {};
@@ -3954,9 +3956,9 @@ function evenementsDepuisTransfers(transfers, opts) {
     const to = (t.to || '').toLowerCase();
     let what;
     if (createur && from === createur) {
-      what = 'Creator Transfer out → ' + raccourciAdr(to);
+      what = 'Creator-address Transfer out → ' + raccourciAdr(to);
     } else if (createur && to === createur) {
-      what = 'Creator Transfer in ← ' + raccourciAdr(from);
+      what = 'Creator-address Transfer in ← ' + raccourciAdr(from);
     } else {
       what = 'Transfer ' + raccourciAdr(from) + ' → ' + raccourciAdr(to);
     }
