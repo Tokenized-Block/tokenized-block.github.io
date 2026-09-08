@@ -583,7 +583,7 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
   font-weight:700;cursor:pointer}
 #appNav .appTab[aria-selected="true"]{color:var(--fg);border-color:#4d8cff;background:#132038}
 #appNav .appTab:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
-#mesBlocksCard,#createZone,#lookupCard,#nextSteps{
+#mesBlocksCard,#marketCard,#createZone,#lookupCard,#nextSteps{
   transition:opacity .18s ease, transform .18s ease}
 #mesBlocksCard[hidden]{display:none !important}
 #mesBlocksListe{margin-top:10px}
@@ -609,6 +609,34 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
 #rendu img{max-width:min(160px,100%);height:auto;border-radius:10px;display:block}
 .nsPanel{animation:nsFade .16s ease}
 @keyframes nsFade{from{opacity:.55;transform:translateY(4px)}to{opacity:1;transform:none}}
+/* ── P2P Market MVP 2026-09-08 (GROK-SUPER-P2P-MARKET-UX) ──
+ * Board = discovery of browser/localStorage asks — not on-chain orderbook, not escrow.
+ * Object of sale = B-20 fungible units; look rides contractURI. Dig multi-col cards kept. */
+#marketCard[hidden]{display:none !important}
+#marketCard .mkRisk{
+  margin:10px 0;padding:10px 12px;border-radius:10px;
+  border:1px solid #7a4a12;background:#3a2410;color:#f0dcc0;font-size:13px;line-height:1.45}
+#marketCard .mkRisk b{color:#ffd9a0}
+#marketBoard{margin-top:10px}
+.mkItem{border:1px solid var(--line);border-radius:12px;padding:12px;margin:0 0 10px;
+  background:var(--bg2);display:grid;gap:8px;break-inside:avoid}
+.mkItem .mkHead{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;justify-content:space-between}
+.mkItem .mkNom{font-weight:800;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.mkItem .mkAdr,.mkItem .mkSeller{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;color:var(--dim);
+  word-break:break-all}
+.mkItem .mkAsk{font-weight:700;color:var(--fg)}
+.mkItem .mkBadge{display:flex;flex-wrap:wrap;gap:6px}
+#listPanel,#settlePanel{margin-top:12px;padding:12px;border:1px dashed var(--line);border-radius:12px;
+  background:rgba(5,13,36,.35)}
+#listPanel[hidden],#settlePanel[hidden]{display:none !important}
+#listPanel .listTitre,#settlePanel .settleTitre{font-weight:800;margin:0 0 8px}
+.settleSteps{margin:8px 0 0;padding-left:1.2em;font-size:13px;line-height:1.5;color:var(--dim)}
+.settleSteps li{margin:4px 0}
+.settleSteps .on{color:var(--fg);font-weight:700}
+.mkFilters{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.mkFilters label{margin:0;flex:1 1 140px}
+.mkFilters input,.mkFilters select{margin-top:4px}
+
 @media (max-width:640px){
   #warningsStrip{flex-direction:column;gap:6px}
   #nextSteps .nsTab{flex:1 1 100%}
@@ -699,12 +727,30 @@ main[data-app="mes"] > #carteEtat,
 main[data-app="mes"] > #warningsStrip,
 main[data-app="mes"] > #bascule,
 main[data-app="mes"] > #shareAvantCreate,
-main[data-app="mes"] > #shareApresCreate {
+main[data-app="mes"] > #shareApresCreate,
+main[data-app="market"] > #funnel,
+main[data-app="market"] > #createZone,
+main[data-app="market"] > #carteLook,
+main[data-app="market"] > #ctaPacket,
+main[data-app="market"] > #gardeDoubleCreate,
+main[data-app="market"] > #gardeAdrCreate,
+main[data-app="market"] > #agir,
+main[data-app="market"] > #relire,
+main[data-app="market"] > #ouvrirLancement,
+main[data-app="market"] > #etat,
+main[data-app="market"] > #carteASigner,
+main[data-app="market"] > #carteEtat,
+main[data-app="market"] > #warningsStrip,
+main[data-app="market"] > #bascule,
+main[data-app="market"] > #shareAvantCreate,
+main[data-app="market"] > #shareApresCreate {
   display: none !important;
 }
 main[data-app="mes"] > #mesBlocksCard { column-span: all; }
+main[data-app="market"] > #marketCard { column-span: all; }
 @media (min-width: 1000px) {
   main[data-app="mes"] > #mesBlocksCard { column-span: none; }
+  main[data-app="market"] > #marketCard { column-span: none; }
 }
 /* CTA / prose: never mid-word break; addresses may wrap */
 .v{word-break:normal;overflow-wrap:break-word}
@@ -791,6 +837,10 @@ main[data-app="mes"] > #mesBlocksCard { column-span: all; }
   <button type="button" class="appTab" id="tabMesBlocks" aria-selected="false" data-app="mes">
     <span class="tabLab">My blocks</span>
     <span class="tabHint">What you created on-chain</span>
+  </button>
+  <button type="button" class="appTab" id="tabMarket" aria-selected="false" data-app="market">
+    <span class="tabLab">Market</span>
+    <span class="tabHint">P2P asks · browser listings</span>
   </button>
 </nav>
 
@@ -1101,6 +1151,77 @@ main[data-app="mes"] > #mesBlocksCard { column-span: all; }
     <div id="sendInfo" class="k" style="margin-top:8px"></div>
     <button type="button" class="act" id="sendAgir" style="margin-top:10px">Send — confirm in wallet</button>
     <button type="button" class="act sec" id="sendFermer" style="margin-top:8px">Close send form</button>
+  </div>
+  <!-- P2P list form — localStorage ask intent only (not on-chain orderbook). -->
+  <div id="listPanel" hidden>
+    <p class="listTitre">List block units for sale</p>
+    <p class="expl" style="margin:0 0 8px;color:#f0c674">Object of sale = <b>B-20 token units</b> of this block (fungible).
+      The engraved look rides <code>contractURI</code> for <b>all</b> holders — selling units is <b>not</b> exclusive design IP.
+      Ask is stored in <b>this browser</b> (unsigned intent) — <b>not an on-chain orderbook yet</b>. No escrow, no marketplace fee.</p>
+    <label for="listToken">Block token</label>
+    <input id="listToken" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
+    <label for="listAmount">Amount offered (whole token units)</label>
+    <input id="listAmount" value="1" inputmode="decimal" placeholder="1">
+    <label for="listPrice">Ask price (ETH total for that amount)</label>
+    <input id="listPrice" value="0.01" inputmode="decimal" placeholder="0.01">
+    <label for="listNote">Note (optional plain text)</label>
+    <input id="listNote" placeholder="e.g. after ETH lands I Send tokens" maxlength="120">
+    <div id="listInfo" class="k" style="margin-top:8px"></div>
+    <div class="mbActions" style="margin-top:10px">
+      <button type="button" class="act" id="listSauver">Save browser listing</button>
+      <button type="button" class="act sec" id="listCopier">Copy listing link</button>
+      <button type="button" class="act sec" id="listFermer">Close list form</button>
+    </div>
+  </div>
+</details>
+
+<!-- P2P Market — peer asks for B-20 units (GROK-SUPER-P2P-MARKET-UX-2026-09-08). Not Swap. -->
+<details class="card" id="marketCard" hidden>
+  <summary>
+    <span class="secHead">Market</span>
+    <span class="secWhy">Buy block units from a person at their ask — not the Swap pool. Browser listings · not on-chain orderbook yet.</span>
+  </summary>
+  <div class="mkRisk" role="note">
+    <b>Counterparty risk — not atomic, no escrow.</b>
+    Settlement is a guided 2-step handshake: buyer pays ETH to the seller wallet, then seller Sends block tokens (or reverse — same risk).
+    This page builds txs; your wallet signs. One party can fail to complete. Practice first.
+    <br><b>Look is shared:</b> holding units shows this contract’s engraved appearance; it is not exclusive IP. Same look as every other holder of this token.
+    <br><b>Swap vs Market:</b> Swap = trade in a pool; Market = peer ask for a stated token amount. No marketplace fee invented here.
+  </div>
+  <p class="expl" id="marketIntro">Listings below are <b>browser / link intents</b> keyed by network + seller — unsigned and unverified until you check the seller address and on-chain balances yourself.</p>
+  <div class="mkFilters">
+    <label for="mkFiltreCreateur">Creator / seller filter (address)
+      <input id="mkFiltreCreateur" placeholder="0x… optional" spellcheck="false" autocapitalize="off">
+    </label>
+    <label for="mkFiltreAsk">Show
+      <select id="mkFiltreAsk">
+        <option value="asks">Has ask (browser listings)</option>
+        <option value="mine">Mine only (connected seller)</option>
+      </select>
+    </label>
+  </div>
+  <div class="mbActions">
+    <button type="button" class="act sec" id="mkRafraichir">Refresh listings</button>
+    <button type="button" class="act sec" id="mkVersMy">List from My blocks</button>
+  </div>
+  <div id="marketBoard"></div>
+  <div id="settlePanel" hidden>
+    <p class="settleTitre">Settle ask — 2-step handshake (no escrow)</p>
+    <div class="mkRisk" role="alert">
+      <b>Not atomic.</b> Paying ETH does not move tokens. Sending tokens does not move ETH.
+      Counterparty can walk away after you go first. Verify seller address on-chain. Real = real money — same consent as Send.
+    </div>
+    <div id="settleDetail"></div>
+    <ol class="settleSteps" id="settleSteps">
+      <li id="settleStep1">1. Buyer pays ask ETH to seller (value transfer).</li>
+      <li id="settleStep2">2. Seller Sends the listed block token amount to buyer (existing Send).</li>
+    </ol>
+    <div class="mbActions" style="margin-top:10px">
+      <button type="button" class="act" id="settlePay">1 · Pay ETH to seller</button>
+      <button type="button" class="act sec" id="settleSend">2 · Open Send (seller → buyer)</button>
+      <button type="button" class="act sec" id="settleFermer">Close settle</button>
+    </div>
+    <div id="settleInfo" class="k" style="margin-top:8px"></div>
   </div>
 </details>
 
@@ -1618,7 +1739,8 @@ document.addEventListener('click', (ev) => {
  * ⛔ Pas de custodie hors-chaine : My blocks = creationsDe(tx.from) + lectures on-chain.
  * ⛔ Share link n invente rien : meme origine, query block= (+ cb= conserve si present).
  * ⛔ Send = ERC-20 transfer via envoyerTx ; Real respecte consentArgentOk.
- * ⛔ Decimals unread → fail closed (never invent 18). My blocks shows UNREAD. */
+ * ⛔ Decimals unread → fail closed (never invent 18). My blocks shows UNREAD.
+ * Market List/Settle: see P2P MARKET MVP block (GROK-SUPER-P2P-MARKET-UX). */
 
 /** Prefill Lookup + Next-steps token fields with a block address. */
 function prefillBlockChamps(adr) {
@@ -1695,21 +1817,30 @@ function appliquerDeepLinkBlock() {
   }, 50);
 }
 
-/** Primary Create ↔ My blocks nav — tab must match visible primary pane. */
+/** Primary Create ↔ My blocks ↔ Market nav — tab must match visible primary pane. */
 function selectAppSection(name) {
-  const create = name === 'create';
-  const tC = $('#tabCreate'), tM = $('#tabMesBlocks');
-  if (tC) tC.setAttribute('aria-selected', create ? 'true' : 'false');
-  if (tM) tM.setAttribute('aria-selected', create ? 'false' : 'true');
+  const sec = (name === 'mes' || name === 'market') ? name : 'create';
+  const tC = $('#tabCreate'), tM = $('#tabMesBlocks'), tK = $('#tabMarket');
+  if (tC) tC.setAttribute('aria-selected', sec === 'create' ? 'true' : 'false');
+  if (tM) tM.setAttribute('aria-selected', sec === 'mes' ? 'true' : 'false');
+  if (tK) tK.setAttribute('aria-selected', sec === 'market' ? 'true' : 'false');
   const main = document.querySelector('main');
-  if (main) main.setAttribute('data-app', create ? 'create' : 'mes');
+  if (main) main.setAttribute('data-app', sec);
   const mb = $('#mesBlocksCard');
+  const mk = $('#marketCard');
   if (mb) {
-    mb.hidden = create;
-    if (!create) mb.open = true;
+    mb.hidden = sec !== 'mes';
+    if (sec === 'mes') mb.open = true;
+  }
+  if (mk) {
+    mk.hidden = sec !== 'market';
+    if (sec === 'market') {
+      mk.open = true;
+      if (typeof rafraichirMarche === 'function') rafraichirMarche();
+    }
   }
   if (typeof majShareAvantCreate === 'function') majShareAvantCreate();
-  if (!create) {
+  if (sec === 'mes') {
     const intro = $('#mesBlocksIntro');
     if (intro) {
       intro.textContent = compte
@@ -1727,6 +1858,10 @@ function selectAppSection(name) {
     }
     if (mb && mb.scrollIntoView) {
       requestAnimationFrame(() => mb.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
+  } else if (sec === 'market') {
+    if (mk && mk.scrollIntoView) {
+      requestAnimationFrame(() => mk.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     }
   } else {
     const cz = $('#createZone');
@@ -1756,7 +1891,8 @@ function majShareAvantCreate() {
 document.addEventListener('click', (ev) => {
   const t = ev.target && ev.target.closest && ev.target.closest('#appNav .appTab');
   if (!t) return;
-  selectAppSection(t.getAttribute('data-app') === 'mes' ? 'mes' : 'create');
+  const a = t.getAttribute('data-app');
+  selectAppSection(a === 'mes' ? 'mes' : a === 'market' ? 'market' : 'create');
 });
 if (typeof majShareAvantCreate === 'function') majShareAvantCreate();
 
@@ -1766,6 +1902,7 @@ function barrePartageEtSend(adr) {
   return '<div class="shareBar" data-block="' + enAttribut(adr) + '">'
     + '<button type="button" class="act sec btnCopyShare">Copy share link</button>'
     + '<button type="button" class="act sec btnOpenSend">Send</button>'
+    + '<button type="button" class="act sec btnOpenList">List on Market</button>'
     + '<button type="button" class="act sec btnOpenNs">Next steps</button>'
     + '</div>';
 }
@@ -1776,9 +1913,11 @@ function brancherBarrePartage(racine) {
     const adr = bar.getAttribute('data-block');
     const c = bar.querySelector('.btnCopyShare');
     const s = bar.querySelector('.btnOpenSend');
+    const l = bar.querySelector('.btnOpenList');
     const n = bar.querySelector('.btnOpenNs');
     if (c) c.onclick = () => copierLienPartage(adr);
     if (s) s.onclick = () => ouvrirSendForm(adr);
+    if (l) l.onclick = () => ouvrirListForm(adr);
     if (n) n.onclick = () => {
       prefillBlockChamps(adr);
       const ns = $('#nextSteps'); if (ns) ns.open = true;
@@ -3023,6 +3162,8 @@ for (const id of [84532, 8453]) $('#t' + id).onclick = () => {
   /* Soft-gate is per mined Create on THIS network — a tab switch drops it. */
   if (typeof leverSoftGateCreate === 'function') leverSoftGateCreate('network change');
   if (typeof resetGardeAdrCreate === 'function') resetGardeAdrCreate('network change');
+  /* C2 nit: settle handshake is network-scoped — drop active ask on flip. */
+  settleAskActif = null;
   /* ⛔ STALE PLAN 2026-09-07: Work out / Check / Quote bake PoolKey + calldata for THIS chain.
    *    Switching Practice↔Real without clearing left Launch/Liq/Swap able to Sign octets
    *    simulated on the other network (page chaine updates; plancement.donnee does not). */
@@ -3039,6 +3180,8 @@ for (const id of [84532, 8453]) $('#t' + id).onclick = () => {
   const ml = $('#mesBlocksListe'), mv = $('#mesBlocksVue');
   if (ml) ml.innerHTML = '';
   if (mv) mv.innerHTML = '';
+  const mbBoard = $('#marketBoard'); if (mbBoard) mbBoard.innerHTML = '';
+  const settle = $('#settlePanel'); if (settle) settle.hidden = true;
   remplirGalerie();
   majCtaPacket(); dire('Network: ' + RESEAUX[id].nom + '.'); rafraichir();
 };
@@ -3309,7 +3452,8 @@ function apresCreationConfirmee(adr) {
   }
   bar.setAttribute('data-block', adr);
   bar.innerHTML = '<button type="button" class="act sec btnCopyShare">Copy share link</button>'
-    + '<button type="button" class="act sec btnOpenSend">Send</button>';
+    + '<button type="button" class="act sec btnOpenSend">Send</button>'
+    + '<button type="button" class="act sec btnOpenList">List on Market</button>';
   brancherBarrePartage(bar.parentNode || bar);
   if (typeof majShareAvantCreate === 'function') majShareAvantCreate();
 }
@@ -5679,12 +5823,13 @@ function gardeMainnet() {
   /* ⛔ Launch (#lancLancer) was missing from this list — comment said three buttons, code had two.
    *    On mainnet without the checkbox, Work out → Launch could still send. Force-refuse only. */
   const argentOk = consentArgentOk();
-  if (!argentOk) for (const id of ['#poolAgir', '#swapAgir', '#lancLancer', '#lancApprouver', '#sendAgir']) { const b = $(id); if (b) b.disabled = true; }
+  if (!argentOk) for (const id of ['#poolAgir', '#swapAgir', '#lancLancer', '#lancApprouver', '#sendAgir', '#settlePay']) { const b = $(id); if (b) b.disabled = true; }
   else {
     /* Mainnet money ack OK (or Practice): re-compose Launch with too-cheap confirm — never blind-enable. */
     syncGardeValoCheap();
-    /* Send has no section re-composer — clear force-disable when money ack is OK. */
+    /* Send / Market pay have no section re-composer — clear force-disable when money ack is OK. */
     const sendB = $('#sendAgir'); if (sendB) sendB.disabled = false;
+    const payB = $('#settlePay'); if (payB) payB.disabled = false;
   }
   /* Re-apply Permit2 MAX Real checkboxes (force-refuse only) after mainnet composition. */
   for (const sec of ['lanc', 'pool', 'swap']) {
@@ -6326,6 +6471,420 @@ $('#agir').onclick = async () => {
   }
 };
 
+
+/* ══ P2P MARKET MVP 2026-09-08 — GROK-SUPER-P2P-MARKET-UX ═══════════════════
+ * ⛔ Object of sale = secondary B-20 units (not design NFT / exclusive IP).
+ * ⛔ Settlement = guided non-atomic ETH pay + existing Send — no escrow keys.
+ * ⛔ Asks = localStorage (+ shareable ?block=&ask= link) — unsigned browser intents.
+ * ⛔ Fail-closed if decimals unread (lireDecimales). No fees/RPC/Permit2 changes.
+ * ⛔ Dig multi-column cards kept — Market is a .card in the masonry flow. */
+
+const MARKET_LS_PREFIX = 'tb-p2p-asks-';
+
+function cleMarche(chainId, seller) {
+  return MARKET_LS_PREFIX + String(chainId) + ':' + String(seller || '').toLowerCase();
+}
+
+function lireAsksLocaux() {
+  const out = [];
+  try {
+    const prefix = MARKET_LS_PREFIX + String(chaine) + ':';
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith(prefix)) continue;
+      let arr;
+      try { arr = JSON.parse(localStorage.getItem(k) || '[]'); } catch { continue; }
+      if (!Array.isArray(arr)) continue;
+      for (const a of arr) {
+        if (!a || typeof a !== 'object') continue;
+        if (!/^0x[0-9a-fA-F]{40}$/.test(a.block || '')) continue;
+        if (!/^0x[0-9a-fA-F]{40}$/.test(a.seller || '')) continue;
+        out.push(a);
+      }
+    }
+  } catch { /* private mode / quota — empty board, never invent */ }
+  return out;
+}
+
+function sauverAskLocal(ask) {
+  if (!ask || !/^0x[0-9a-fA-F]{40}$/.test(ask.block) || !/^0x[0-9a-fA-F]{40}$/.test(ask.seller)) {
+    return { ok: false, pourquoi: 'block/seller address invalid' };
+  }
+  const key = cleMarche(chaine, ask.seller);
+  let arr = [];
+  try { arr = JSON.parse(localStorage.getItem(key) || '[]'); } catch { arr = []; }
+  if (!Array.isArray(arr)) arr = [];
+  /* Replace same block ask from same seller on this chain. */
+  arr = arr.filter((x) => !(x && String(x.block).toLowerCase() === ask.block.toLowerCase()));
+  arr.unshift({
+    block: ask.block,
+    seller: ask.seller,
+    amount: String(ask.amount),
+    priceEth: String(ask.priceEth),
+    note: String(ask.note || '').slice(0, 120),
+    chainId: chaine,
+    createdAt: Date.now(),
+    unverified: true,
+  });
+  arr = arr.slice(0, 40);
+  try {
+    localStorage.setItem(key, JSON.stringify(arr));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, pourquoi: (e && e.message) || 'localStorage write failed' };
+  }
+}
+
+function lienAskPour(ask) {
+  if (!ask || !/^0x[0-9a-fA-F]{40}$/.test(ask.block)) return null;
+  let u;
+  try { u = new URL(location.href); }
+  catch {
+    const base = (typeof SITE_ORIGIN_LIVE !== 'undefined' ? SITE_ORIGIN_LIVE : '') + '/';
+    u = new URL(base);
+  }
+  u.searchParams.set('block', ask.block);
+  u.searchParams.set('ask', '1');
+  u.searchParams.set('seller', ask.seller);
+  u.searchParams.set('amt', ask.amount);
+  u.searchParams.set('price', ask.priceEth);
+  if (ask.note) u.searchParams.set('note', ask.note);
+  return u.toString();
+}
+
+async function copierLienAsk(ask) {
+  const lien = lienAskPour(ask);
+  if (!lien) { dire('Need a valid ask to share.', 'warn'); return; }
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(lien);
+      dire('Listing link copied (browser intent — not on-chain orderbook).\n' + lien, 'ok');
+      return;
+    }
+  } catch { /* fall through */ }
+  dire('Could not write clipboard — copy this listing link manually:\n' + lien, 'warn');
+}
+
+function ouvrirListForm(adr) {
+  selectAppSection('mes');
+  const pan = $('#listPanel');
+  if (pan) pan.hidden = false;
+  const tok = $('#listToken'); if (tok) tok.value = adr || '';
+  const info = $('#listInfo');
+  if (info) {
+    info.textContent = compte
+      ? ('Seller = connected wallet ' + compte + ' on ' + RESEAUX[chaine].nom
+        + '. Ask saved in this browser only — unsigned / unverified.')
+      : 'Connect wallet first — listing needs your address as seller (no custody).';
+  }
+  if (pan && pan.scrollIntoView) pan.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function askCourantDepuisForm() {
+  const block = (($('#listToken') && $('#listToken').value.trim()) || '');
+  const amount = (($('#listAmount') && $('#listAmount').value.trim()) || '');
+  const priceEth = (($('#listPrice') && $('#listPrice').value.trim()) || '');
+  const note = (($('#listNote') && $('#listNote').value.trim()) || '');
+  return { block, seller: compte, amount, priceEth, note };
+}
+
+function validerAskChamps(ask) {
+  if (!compte) return 'Connect your wallet first — seller address comes from the connected account.';
+  if (!/^0x[0-9a-fA-F]{40}$/.test(ask.block || '')) return 'Block token is not an address.';
+  const amt = montantHumain(ask.amount, 18); /* human units display — decimals checked at settle/Send */
+  if (amt.etat !== 'OK' || amt.valeur <= 0n) {
+    return 'Amount refused — digits and one decimal point only, must be > 0.';
+  }
+  const prix = montantHumain(ask.priceEth, 18);
+  if (prix.etat !== 'OK' || prix.valeur <= 0n) {
+    return 'Price (ETH) refused — digits and one decimal point only, must be > 0.';
+  }
+  return null;
+}
+
+let settleAskActif = null;
+
+function ouvrirSettle(ask) {
+  selectAppSection('market');
+  settleAskActif = ask;
+  const pan = $('#settlePanel');
+  if (pan) pan.hidden = false;
+  const det = $('#settleDetail');
+  const netBadge = chaine === 8453
+    ? pastille('REAL · costs ETH', 'warn')
+    : pastille('PRACTICE · free', 'ok');
+  if (det) {
+    det.innerHTML = ligne('object of sale', enTexte('B-20 units of ' + ask.block)
+        + ' — look is contract metadata shared by all holders, not exclusive IP')
+      + ligne('network', netBadge + ' ' + enTexte(RESEAUX[chaine].nom))
+      + ligne('seller', '<span class="mono">' + enTexte(ask.seller) + '</span>'
+        + ' ' + pastille('UNVERIFIED INTENT', 'warn'))
+      + ligne('amount offered', enTexte(ask.amount) + ' whole token units (decimals re-read at Send)')
+      + ligne('ask price', enTexte(ask.priceEth) + ' ETH total')
+      + (ask.note ? ligne('note', enTexte(ask.note)) : '')
+      + ligne('settlement', enTexte('not atomic · no escrow · page builds txs, wallet signs'));
+  }
+  const info = $('#settleInfo');
+  if (info) info.textContent = 'Checklist ready. Buyer pays first (step 1), then seller Opens Send (step 2) — or agree reverse order with the same risk.';
+  const s1 = $('#settleStep1'), s2 = $('#settleStep2');
+  if (s1) s1.classList.remove('on');
+  if (s2) s2.classList.remove('on');
+  if (pan && pan.scrollIntoView) pan.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  /* Prefill Lookup Read so engraved look is visible beside settle. */
+  if (/^0x[0-9a-fA-F]{40}$/.test(ask.block)) {
+    prefillBlockChamps(ask.block);
+    const luc = $('#lookupCard'); if (luc) luc.open = true;
+    const lireBtn = $('#lire'); if (lireBtn) setTimeout(() => lireBtn.click(), 30);
+  }
+}
+
+function rafraichirMarche() {
+  const board = $('#marketBoard');
+  if (!board) return;
+  const filtre = (($('#mkFiltreCreateur') && $('#mkFiltreCreateur').value.trim()) || '').toLowerCase();
+  const mode = (($('#mkFiltreAsk') && $('#mkFiltreAsk').value) || 'asks');
+  let asks = lireAsksLocaux();
+  if (mode === 'mine') {
+    if (!compte) {
+      board.innerHTML = ligne('state', pastille('CONNECT WALLET', 'warn'))
+        + ligne('', 'Mine filter needs a connected seller address.');
+      return;
+    }
+    asks = asks.filter((a) => a.seller.toLowerCase() === compte.toLowerCase());
+  }
+  if (filtre) {
+    if (/^0x[0-9a-fA-F]{40}$/.test(filtre)) {
+      asks = asks.filter((a) => a.seller.toLowerCase() === filtre || a.block.toLowerCase() === filtre);
+    } else {
+      board.innerHTML = ligne('state', pastille('FILTER INVALID', 'warn'))
+        + ligne('', 'Creator/seller filter must be a 0x address when set.');
+      return;
+    }
+  }
+  const intro = $('#marketIntro');
+  if (intro) {
+    intro.innerHTML = 'Listings below are <b>browser / link intents</b> on <b>'
+      + enTexte(RESEAUX[chaine].nom)
+      + '</b> — unsigned and unverified. Object of sale = <b>token units</b>, not design rights. '
+      + pastille(chaine === 8453 ? 'REAL' : 'PRACTICE', chaine === 8453 ? 'warn' : 'ok');
+  }
+  if (asks.length === 0) {
+    board.innerHTML = '<p class="expl">No browser listings on this network'
+      + (mode === 'mine' ? ' for your address' : '')
+      + '. Empty board ≠ invented depth. Use <b>List</b> on My blocks (or List on Market after Create).</p>';
+    return;
+  }
+  const cards = [];
+  for (const a of asks.slice(0, 60)) {
+    const netPill = chaine === 8453 ? pastille('REAL', 'warn') : pastille('PRACTICE', 'ok');
+    cards.push('<article class="mkItem" data-block="' + enAttribut(a.block) + '"'
+      + ' data-seller="' + enAttribut(a.seller) + '">'
+      + '<div class="mkHead"><div class="mkNom">' + enTexte(a.block.slice(0, 10) + '…' + a.block.slice(-4))
+      + '</div><div class="mkBadge">' + netPill + ' ' + pastille('BROWSER ASK', 'dim')
+      + ' ' + pastille('UNVERIFIED', 'warn') + '</div></div>'
+      + '<div class="mkAdr">' + enTexte(a.block) + '</div>'
+      + ligne('seller', '<span class="mkSeller">' + enTexte(a.seller) + '</span>')
+      + '<div class="mkAsk">' + enTexte(a.amount) + ' units · ' + enTexte(a.priceEth) + ' ETH</div>'
+      + (a.note ? ligne('note', enTexte(a.note)) : '')
+      + ligne('honesty', enTexte('Fungible units — engraved look shared by all holders of this contract'))
+      + '<div class="mbActions">'
+      + '<button type="button" class="act sec mkOpen">Open / Read</button>'
+      + '<button type="button" class="act mkSettle">Settle (handshake)</button>'
+      + '<button type="button" class="act sec mkCopy">Copy listing link</button>'
+      + '</div></article>');
+  }
+  board.innerHTML = cards.join('');
+  for (const art of board.querySelectorAll('.mkItem')) {
+    const block = art.getAttribute('data-block');
+    const seller = art.getAttribute('data-seller');
+    const ask = asks.find((x) => x.block.toLowerCase() === block.toLowerCase()
+      && x.seller.toLowerCase() === seller.toLowerCase());
+    const open = art.querySelector('.mkOpen');
+    const settle = art.querySelector('.mkSettle');
+    const copy = art.querySelector('.mkCopy');
+    if (open) open.onclick = () => {
+      prefillBlockChamps(block);
+      const luc = $('#lookupCard'); if (luc) luc.open = true;
+      $('#lire').click();
+      if (luc) luc.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    if (settle && ask) settle.onclick = () => ouvrirSettle(ask);
+    if (copy && ask) copy.onclick = () => copierLienAsk(ask);
+  }
+}
+
+function appliquerDeepLinkAsk() {
+  let params;
+  try { params = new URLSearchParams(location.search); } catch { return; }
+  const askFlag = (params.get('ask') || params.get('list') || '').trim();
+  if (askFlag !== '1' && askFlag.toLowerCase() !== 'true') return;
+  const block = (params.get('block') || '').trim();
+  const seller = (params.get('seller') || '').trim();
+  const amount = (params.get('amt') || params.get('amount') || '').trim();
+  const priceEth = (params.get('price') || '').trim();
+  const note = (params.get('note') || '').trim();
+  if (!/^0x[0-9a-fA-F]{40}$/.test(block)) {
+    dire('Deep link ask ignored — ?block= missing or invalid.', 'warn');
+    return;
+  }
+  if (seller && !/^0x[0-9a-fA-F]{40}$/.test(seller)) {
+    dire('Deep link ask ignored — ?seller= is not an address.', 'warn');
+    return;
+  }
+  if (!amount || !priceEth) {
+    /* Open list form prefilled when seller is self / missing price — still honest. */
+    selectAppSection(seller && compte && seller.toLowerCase() === compte.toLowerCase() ? 'mes' : 'market');
+    if (seller && compte && seller.toLowerCase() === compte.toLowerCase()) {
+      ouvrirListForm(block);
+      dire('Opened list form from link (amount/price missing on URL).', 'ok');
+    } else {
+      dire('Ask link incomplete (need amt + price). Opened Market — listings are browser intents.', 'warn');
+      rafraichirMarche();
+    }
+    return;
+  }
+  const ask = {
+    block,
+    seller: seller || '0x0000000000000000000000000000000000000000',
+    amount,
+    priceEth,
+    note,
+    chainId: chaine,
+    createdAt: Date.now(),
+    unverified: true,
+    fromLink: true,
+  };
+  if (ask.seller === '0x0000000000000000000000000000000000000000') {
+    dire('Ask link has no seller — cannot settle pay-to without a seller address.', 'warn');
+    selectAppSection('market');
+    return;
+  }
+  /* Also persist into localStorage under seller key so board shows it on this browser. */
+  sauverAskLocal(ask);
+  ouvrirSettle(ask);
+  dire('Opened ask from link (unverified browser intent).\n'
+    + 'Object of sale = token units · settlement not atomic · counterparty risk.', 'warn');
+}
+
+const _listFermer = $('#listFermer');
+if (_listFermer) _listFermer.onclick = () => {
+  const pan = $('#listPanel'); if (pan) pan.hidden = true;
+};
+const _listSauver = $('#listSauver');
+if (_listSauver) _listSauver.onclick = async () => {
+  const ask = askCourantDepuisForm();
+  const err = validerAskChamps(ask);
+  if (err) return dire(err, 'bad');
+  /* Fail-closed decimals before claiming a listable token (never invent 18). */
+  const dec = await lireDecimales(ask.block);
+  if (dec === null) {
+    return dire('⛔ Could not read token decimals — listing aborted (fail closed). Nothing saved.', 'bad');
+  }
+  const amtDec = montantHumain(ask.amount, dec);
+  if (amtDec.etat !== 'OK' || amtDec.valeur <= 0n) {
+    return dire('Amount refused for this token\'s ' + dec + ' decimals — listing aborted.\n'
+      + ((amtDec.pourquoi) || 'must be > 0'), 'bad');
+  }
+  const r = sauverAskLocal(ask);
+  if (!r.ok) return dire('Could not save browser listing — ' + (r.pourquoi || 'unknown'), 'bad');
+  const info = $('#listInfo');
+  if (info) info.textContent = 'Saved browser listing for ' + ask.block
+    + ' · ' + ask.amount + ' units @ ' + ask.priceEth + ' ETH · seller ' + ask.seller
+    + ' · decimals on-chain: ' + dec + ' (Send will re-read).';
+  dire('Browser listing saved (unsigned intent — not on-chain orderbook).\n'
+    + 'Open Market tab to browse, or Copy listing link to share.', 'ok');
+  if (typeof rafraichirMarche === 'function') rafraichirMarche();
+};
+const _listCopier = $('#listCopier');
+if (_listCopier) _listCopier.onclick = async () => {
+  const ask = askCourantDepuisForm();
+  const err = validerAskChamps(ask);
+  if (err) return dire(err, 'bad');
+  await copierLienAsk(ask);
+};
+
+const _mkRaf = $('#mkRafraichir');
+if (_mkRaf) _mkRaf.onclick = () => rafraichirMarche();
+const _mkVers = $('#mkVersMy');
+if (_mkVers) _mkVers.onclick = () => {
+  selectAppSection('mes');
+  dire('Find my blocks, then tap List on a card — object of sale = token units.', 'ok');
+};
+const _mkFiltreC = $('#mkFiltreCreateur');
+if (_mkFiltreC) _mkFiltreC.addEventListener('change', () => rafraichirMarche());
+const _mkFiltreA = $('#mkFiltreAsk');
+if (_mkFiltreA) _mkFiltreA.addEventListener('change', () => rafraichirMarche());
+
+const _settleFermer = $('#settleFermer');
+if (_settleFermer) _settleFermer.onclick = () => {
+  const pan = $('#settlePanel'); if (pan) pan.hidden = true;
+  settleAskActif = null;
+};
+
+const _settlePay = $('#settlePay');
+if (_settlePay) _settlePay.onclick = async () => {
+  const ask = settleAskActif;
+  if (!ask) return dire('No active ask — open Settle from a Market card or ask link.', 'warn');
+  if (!compte) return dire('Connect your wallet first (buyer pays ETH).', 'bad');
+  if (!/^0x[0-9a-fA-F]{40}$/.test(ask.seller)) return dire('Seller address invalid — refuse pay.', 'bad');
+  if (ask.seller.toLowerCase() === compte.toLowerCase()) {
+    return dire('You are the seller on this ask — Pay ETH is for the buyer. Use step 2 Send after they pay.', 'warn');
+  }
+  if (!consentArgentOk()) {
+    return dire('Mainnet consent required before Market ETH pay.\n'
+      + 'Tick the mainnet cost confirmations above (Practice needs none). Same gate as Send.', 'bad');
+  }
+  const prix = montantHumain(ask.priceEth, 18);
+  if (prix.etat !== 'OK' || prix.valeur <= 0n) {
+    return dire('Ask price unreadable — pay aborted (fail closed).', 'bad');
+  }
+  const info = $('#settleInfo');
+  if (info) info.textContent = 'Preparing ETH value transfer ' + ask.priceEth
+    + ' → seller ' + ask.seller + ' on ' + RESEAUX[chaine].nom
+    + '… NOT atomic with token Send.';
+  dire('⚠ Counterparty risk: paying ETH does NOT move block tokens.\n'
+    + 'Seller must still Send ' + ask.amount + ' units of ' + ask.block + ' to you.\n'
+    + 'No escrow. Wallet will open for a plain ETH transfer.', 'warn');
+  const r = await envoyerTx({
+    to: ask.seller,
+    data: '0x',
+    value: '0x' + prix.valeur.toString(16),
+    nom: 'Market ask pay ' + ask.priceEth + ' ETH to seller (not atomic · not escrow)',
+  });
+  if (r && r.ok) {
+    const s1 = $('#settleStep1'); if (s1) s1.classList.add('on');
+    if (info) info.textContent = 'ETH pay confirmed: ' + r.hash
+      + ' — next: seller must Send tokens to ' + compte + ' (step 2).';
+    dire('ETH pay confirmed.\n' + r.hash
+      + '\nTokens are NOT yours yet — seller must Send. Not atomic.', 'ok');
+  }
+};
+
+const _settleSend = $('#settleSend');
+if (_settleSend) _settleSend.onclick = () => {
+  const ask = settleAskActif;
+  if (!ask) return dire('No active ask.', 'warn');
+  /* Prefill Send: token = block, amount = ask amount, recipient = buyer if connected seller. */
+  ouvrirSendForm(ask.block);
+  const amt = $('#sendMontant'); if (amt) amt.value = ask.amount;
+  const to = $('#sendTo');
+  if (to) {
+    if (compte && ask.seller && compte.toLowerCase() === ask.seller.toLowerCase()) {
+      to.value = '';
+      to.placeholder = 'Buyer address (they paid you ETH)';
+      dire('Send form opened as seller — paste the buyer address who paid you, amount prefilled.\n'
+        + 'Decimals will be re-read fail-closed before transfer.', 'ok');
+    } else if (compte) {
+      /* Buyer view: remind seller must send TO buyer */
+      to.value = compte;
+      dire('Send form opened with your address as recipient — the SELLER must connect and confirm this transfer.\n'
+        + 'If you are the buyer, do not Send your own tokens here.', 'warn');
+    }
+  }
+  const s2 = $('#settleStep2'); if (s2) s2.classList.add('on');
+};
+
+
 /* ══ SLICE 1 — My blocks (creator scan) + Send (ERC-20 transfer) ══════════════════════════════
  * ⛔ Index = listerCreations + creationsDe (tx.from). Pas de liste hors-chaine inventee.
  * ⛔ Pool « present » = Launch native ETH PoolKey (fee 0 · spacing 200) slot0 sqrtPrice ≠ 0.
@@ -6471,6 +7030,7 @@ async function chargerMesBlocks() {
       + '<button type="button" class="act sec mbOpen">Open</button>'
       + '<button type="button" class="act sec mbShare">Copy share link</button>'
       + '<button type="button" class="act sec mbSend">Send</button>'
+      + '<button type="button" class="act sec mbList">List</button>'
       + '</div></article>');
   }
   if (gardees.length > 40) {
@@ -6482,6 +7042,7 @@ async function chargerMesBlocks() {
     const open = art.querySelector('.mbOpen');
     const share = art.querySelector('.mbShare');
     const send = art.querySelector('.mbSend');
+    const list = art.querySelector('.mbList');
     if (open) open.onclick = () => {
       prefillBlockChamps(adr);
       const luc = $('#lookupCard'); if (luc) luc.open = true;
@@ -6490,6 +7051,7 @@ async function chargerMesBlocks() {
     };
     if (share) share.onclick = () => copierLienPartage(adr);
     if (send) send.onclick = () => ouvrirSendForm(adr);
+    if (list) list.onclick = () => ouvrirListForm(adr);
   }
 }
 
@@ -6560,8 +7122,9 @@ if (typeof restaurerVerrouLancementNatifAuChargement === 'function') {
 setFunnel('Idle');
 majCtaPacket();
 await rafraichir();
-/* Slice 1: honor ?block= (and keep ?cb=) after UI is ready. */
+/* Slice 1 + Market: honor ?block= (and keep ?cb=); ask/list opens Market settle. */
 if (typeof appliquerDeepLinkBlock === 'function') appliquerDeepLinkBlock();
+if (typeof appliquerDeepLinkAsk === 'function') appliquerDeepLinkAsk();
 
 /* ══ WALLET accountsChanged / chainChanged — INVALIDATE STALE PLANS ═══════════════════════════
  * ⛔ Mesure de trou 2026-09-07 : aucun listener. Work out Launch → switch MetaMask account →
