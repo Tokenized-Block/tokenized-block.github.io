@@ -68,6 +68,8 @@ main{max-width:560px;margin:0 auto}
    *    Palette/funnel stay on this path (visual-2 kept). Other cards masonry into dig columns. */
   main > header,
   main > .tabs,
+  main > #appNav,
+  main > #storyStrip,
   main > #funnel,
   main > #gardeMainnet,
   main > #createZone,
@@ -167,7 +169,7 @@ body.simple .avance{display:none}
 .row{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);align-items:baseline}
 .row:last-child{border-bottom:0}
 .k{color:var(--dim);flex:0 0 100px;font-size:12.5px}
-.v{flex:1;font-family:ui-monospace,Consolas,monospace;font-size:12.5px;word-break:break-all}
+.v{flex:1;font-family:ui-monospace,Consolas,monospace;font-size:12.5px;word-break:normal;overflow-wrap:break-word}
 .pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:700;font-family:ui-sans-serif,sans-serif}
 .p-ok{background:#0d3a22;color:var(--ok)}.p-warn{background:#3a2c0a;color:var(--warn)}
 .p-bad{background:#3a1414;color:var(--bad)}.p-dim{background:#1b2745;color:var(--dim)}
@@ -320,7 +322,7 @@ padding:26px 22px 20px;max-width:420px;width:100%;text-align:center}
 #ov[data-phase="ok"] .ovTitre{color:var(--ok)}
 #ov[data-phase="ok"] .ovMarque{stroke:var(--ok);stroke-dasharray:44;stroke-dashoffset:44;
 animation:trace .42s .3s ease-out forwards}
-@keyframes atterrit{0%{transform:scale(.72)}70%{transform:scale(1.07)}100%{transform:scale(1)}}
+@keyframes atterrit{0%{transform:scale(.88)}60%{transform:scale(1.03)}100%{transform:scale(1)}}
 @keyframes recolle{from{transform:translate(18px,-16px) scale(1.3);opacity:.2}to{transform:none;opacity:1}}
 @keyframes trace{to{stroke-dashoffset:0}}
 
@@ -330,8 +332,8 @@ animation:trace .42s .3s ease-out forwards}
 #ov[data-phase="fail"] .ovTitre{color:var(--bad)}
 #ov[data-phase="fail"] .ovMarque{stroke:var(--bad);stroke-dasharray:34;stroke-dashoffset:34;
 animation:trace .3s .18s ease-out forwards}
-@keyframes secousse{0%,100%{transform:translateX(0)}20%{transform:translateX(-9px)}
-40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(3px)}}
+@keyframes secousse{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}
+50%{transform:translateX(4px)}75%{transform:translateX(-2px)}}
 @keyframes eclate{to{transform:translate(26px,-22px) rotate(18deg);opacity:0}}
 
 /* ══ LECTURE EN VERTICAL ═══════════════════════════════════════════════════════════════════════
@@ -614,9 +616,158 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
   #carteASigner .kv,#etatToken.kv,#fiche.kv{grid-template-columns:1fr}
 }
 
+/* ══ PUBLIC POLISH (feat/tblock-ui-public-polish) — story · share · motion · overflow ══
+ * Honest Create → Share → My blocks strip. Dig multi-col KEPT (no compact-only collapse).
+ * No fee / RPC / Permit2 / decimals / Farcaster changes. */
+#storyStrip{margin:0 0 12px;padding:12px 14px;border-radius:13px;border:1px solid #3a5a9a;
+  background:linear-gradient(180deg,#101c34 0%,var(--bg2) 100%);box-shadow:0 0 0 1px rgba(77,140,255,.10)}
+#storyStrip .ssLab{margin:0 0 8px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+  font-weight:700;color:#9eb6e0}
+#storyStrip ol{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px;align-items:stretch}
+#storyStrip li{flex:1 1 140px;display:flex;flex-direction:column;gap:2px;padding:10px 12px;
+  border-radius:12px;border:1px solid var(--line);background:rgba(5,13,36,.35);min-width:0}
+#storyStrip .ssTop{display:flex;align-items:center;gap:8px}
+#storyStrip .ssN{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;
+  border-radius:50%;font-size:11px;font-weight:800;background:var(--blue);color:#fff;flex:0 0 auto}
+#storyStrip .ssT{font-weight:800;font-size:13.5px;color:var(--fg)}
+#storyStrip .ssD{font-size:12px;color:var(--dim);line-height:1.35;word-break:break-word}
+
+/* Create | My blocks nav — clearer labels + hints */
+#appNav{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 12px;padding:4px;background:var(--bg2);
+  border:1px solid var(--line);border-radius:14px}
+#appNav .appTab{flex:1 1 140px;min-height:52px;padding:10px 14px;border-radius:11px;
+  border:1px solid transparent;background:transparent;color:var(--dim);font:inherit;
+  font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;gap:2px;
+  transition:background .18s ease,color .18s ease,border-color .18s ease,box-shadow .18s ease}
+#appNav .appTab .tabLab{font-size:15px;font-weight:800;line-height:1.2}
+#appNav .appTab .tabHint{font-size:11.5px;font-weight:500;opacity:.8;letter-spacing:0}
+#appNav .appTab[aria-selected="true"]{color:var(--fg);border-color:#4d8cff;background:#132038;
+  box-shadow:0 0 0 1px rgba(77,140,255,.18)}
+#appNav .appTab:hover{color:var(--fg)}
+#appNav .appTab:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+
+/* Share salience — Copy share link readable after Lookup / create */
+.shareBar{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;padding:10px;border-radius:12px;
+  border:1px solid #3a5a9a;background:rgba(19,32,56,.55)}
+.shareBar button{flex:1 1 140px;min-height:44px}
+.shareBar .btnCopyShare,
+button.btnCopyShare,
+.mbActions .mbShare{
+  opacity:1 !important;font-weight:800 !important;color:var(--fg) !important;
+  border-color:#4d8cff !important;background:#1a3358 !important}
+.shareBar .btnCopyShare:hover,
+button.btnCopyShare:hover,
+.mbActions .mbShare:hover{background:#243f6a !important;color:#fff !important}
+
+/* Soft deep-link landing highlight (?block=) */
+#lookupCard.deepLinkOn,#rendu.deepLinkOn,#nextSteps.deepLinkOn{
+  border-color:#4d8cff;box-shadow:0 0 0 1px rgba(77,140,255,.22);
+  animation:deepLinkSoft 1.4s ease}
+@keyframes deepLinkSoft{
+  0%{box-shadow:0 0 0 0 rgba(77,140,255,.45)}
+  40%{box-shadow:0 0 0 4px rgba(77,140,255,.22)}
+  100%{box-shadow:0 0 0 1px rgba(77,140,255,.18)}
+}
+
+/* Motion — smoother section / tab / panel transitions; less janky show/hide */
+.tabs button,.nsTab,.swapDirBtn,.appTab{
+  transition:background .2s ease,color .2s ease,border-color .2s ease,box-shadow .2s ease,opacity .2s ease}
+#mesBlocksCard,#createZone,#lookupCard,#nextSteps,#ctaPacket,#funnel{
+  transition:opacity .22s ease, transform .22s ease, border-color .22s ease, box-shadow .22s ease}
+.nsPanel{animation:nsFade .2s ease}
+@keyframes nsFade{from{opacity:.4;transform:translateY(6px)}to{opacity:1;transform:none}}
+#ov{animation:ovIn .22s ease-out}
+@media (prefers-reduced-motion: reduce){
+  #storyStrip,#appNav .appTab,#lookupCard.deepLinkOn,#rendu.deepLinkOn,#nextSteps.deepLinkOn,
+  .nsPanel,#mesBlocksCard,#createZone{animation:none !important;transition:none !important}
+}
+
+/* ══ P0 UI nits 2026-09-08 — tab↔pane · CTA wrap · gallery side card ══ */
+/* Active tab owns primary pane: Create form vs My blocks */
+main[data-app="mes"] > #funnel,
+main[data-app="mes"] > #createZone,
+main[data-app="mes"] > #carteLook,
+main[data-app="mes"] > #ctaPacket,
+main[data-app="mes"] > #gardeDoubleCreate,
+main[data-app="mes"] > #gardeAdrCreate,
+main[data-app="mes"] > #agir,
+main[data-app="mes"] > #relire,
+main[data-app="mes"] > #ouvrirLancement,
+main[data-app="mes"] > #etat,
+main[data-app="mes"] > #carteASigner,
+main[data-app="mes"] > #carteEtat,
+main[data-app="mes"] > #warningsStrip,
+main[data-app="mes"] > #bascule,
+main[data-app="mes"] > #shareAvantCreate,
+main[data-app="mes"] > #shareApresCreate {
+  display: none !important;
+}
+main[data-app="mes"] > #mesBlocksCard { column-span: all; }
+@media (min-width: 1000px) {
+  main[data-app="mes"] > #mesBlocksCard { column-span: none; }
+}
+/* CTA / prose: never mid-word break; addresses may wrap */
+.v{word-break:normal;overflow-wrap:break-word}
+.mono,.mbAdr,#mesBlocksVue .mbAdr,.row .v.mono{
+  word-break:break-all;overflow-wrap:anywhere}
+.ctaPhrase{white-space:nowrap}
+#mesBlocksVue .v{word-break:normal;overflow-wrap:break-word}
+/* Disabled Share/Send (logged-out / pre-create) */
+.shareMuted{opacity:.95}
+.shareMuted button:disabled{opacity:.45;cursor:not-allowed}
+.shareWhy{margin:8px 0 0;font-size:12.5px;color:var(--dim);line-height:1.4;
+  word-break:normal;overflow-wrap:break-word;flex:1 1 100%}
+/* Gallery select → side card + footer actions (works logged-out) */
+.galLayout{display:grid;gap:12px;align-items:start}
+@media (min-width:720px){
+  .galLayout:has(#galerieFiche:not([hidden])){
+    grid-template-columns:minmax(0,1fr) minmax(200px,260px);
+  }
+}
+#galerieFiche{border:1px solid #3a5a9a;border-radius:12px;padding:12px;
+  background:rgba(19,32,56,.55)}
+#galerieFiche[hidden]{display:none !important}
+#galerieFiche .gfPreview{display:block;width:min(120px,100%);height:auto;margin:0 auto 8px;
+  border-radius:10px}
+#galerieFiche .gfSym{font-weight:800;text-align:center;margin:0 0 6px}
+#galerieFiche .gfAdr{font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--dim);
+  word-break:break-all;margin:0 0 10px}
+#galerieFiche .gfActions,#galerieFooter{display:flex;flex-wrap:wrap;gap:8px}
+#galerieFiche .gfActions button,#galerieFooter button{flex:1 1 90px;min-height:40px}
+#galerieFooter{margin-top:10px;padding-top:8px;border-top:1px solid var(--line)}
+#galerieFooter[hidden]{display:none !important}
+.galerie .vignette[aria-selected="true"] svg,
+.galerie .vignette[aria-current="true"] svg{
+  outline:2px solid var(--fg);outline-offset:2px}
+
+/* Images / text — overflow clamp on gallery, Create preview, Read panel */
+.createPrimary{max-width:100%;overflow:hidden}
+#apercu{display:block;width:min(136px,100%);height:auto;max-height:160px;margin:0 auto;
+  border-radius:12px;object-fit:contain}
+.galerie{align-items:start}
+.galerie .vignette{max-width:100%;overflow:hidden}
+.galerie .vignette svg,.galerie .vignette img{
+  width:100%;max-width:100%;max-height:96px;height:auto;object-fit:contain;
+  border-radius:8px;display:block;margin:0 auto}
+.galerie figcaption{font-size:11px;color:var(--dim);margin-top:4px;max-width:100%;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;word-break:break-all}
+#rendu{overflow:hidden;max-width:100%}
+#rendu .v,#rendu .row .v{word-break:break-word;overflow-wrap:anywhere;max-width:100%}
+#rendu img,.renduImg{max-width:min(160px,100%);max-height:160px;width:auto;height:auto;
+  object-fit:contain;border-radius:10px;display:block}
+.mbItem .mbNom{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;
+  word-break:break-all}
+#fiche .v,#etatToken .v{word-break:break-word;overflow-wrap:anywhere}
+@media (max-width:640px){
+  #storyStrip ol{flex-direction:column}
+  #storyStrip li{flex:1 1 auto}
+  #apercu{width:min(112px,100%);max-height:140px}
+}
+
+
 </style>
 <body class="simple">
-<main>
+<main data-app="create">
 <header>
   <svg id="marque" viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg"></svg>
   <div><h1>Tokenized Block</h1><p class="sub">Tokenized-Block.app · Build a block → B-20 on Base · no admin, no minter.</p></div>
@@ -631,11 +782,36 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
   <button id="t8453" aria-selected="false">Real · costs ETH<span class="k"> · Base mainnet</span></button>
 </div>
 
-<!-- Slice 1: primary product nav — Create vs wallet My blocks (on-chain index only). -->
+<!-- Slice 1 + public polish: Create vs My blocks nav + honest above-fold story. -->
 <nav id="appNav" aria-label="App sections">
-  <button type="button" class="appTab" id="tabCreate" aria-selected="true" data-app="create">Create</button>
-  <button type="button" class="appTab" id="tabMesBlocks" aria-selected="false" data-app="mes">My blocks</button>
+  <button type="button" class="appTab" id="tabCreate" aria-selected="true" data-app="create">
+    <span class="tabLab">Create</span>
+    <span class="tabHint">Make your block</span>
+  </button>
+  <button type="button" class="appTab" id="tabMesBlocks" aria-selected="false" data-app="mes">
+    <span class="tabLab">My blocks</span>
+    <span class="tabHint">What you created on-chain</span>
+  </button>
 </nav>
+
+<!-- Honest product story — Create → Share → My blocks (no revenue claims). -->
+<aside id="storyStrip" aria-label="Create, share, find your blocks">
+  <p class="ssLab">How it works</p>
+  <ol>
+    <li>
+      <div class="ssTop"><span class="ssN">1</span><span class="ssT">Create</span></div>
+      <span class="ssD">Name your block — engraved on Base, no admin.</span>
+    </li>
+    <li>
+      <div class="ssTop"><span class="ssN">2</span><span class="ssT">Share</span></div>
+      <span class="ssD">Copy a link so anyone can open that block.</span>
+    </li>
+    <li>
+      <div class="ssTop"><span class="ssN">3</span><span class="ssT">My blocks</span></div>
+      <span class="ssD">Find creations paid by your wallet on-chain.</span>
+    </li>
+  </ol>
+</aside>
 
 <!-- ⛔ P11 dig-adapt (X-DIG 2026-09-07): status funnel for Instant Create.
      Labels map to real wallet/chain states. Never invent a green « Instant » success. -->
@@ -864,6 +1040,12 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
      CTA secondary ouvre le lancement unilateral existant (lancement.js) — pas de frais OpenLaunch. -->
 <button class="act sec" id="ouvrirLancement" type="button">Launch this block — token-only, one transaction</button>
 <div id="etat">Name your block, then connect your wallet to Create.</div>
+<!-- P0: Create→share visible without wallet — disabled until a block exists -->
+<div id="shareAvantCreate" class="shareBar shareMuted" aria-label="Share and Send after Create">
+  <button type="button" class="act sec" disabled>Share</button>
+  <button type="button" class="act sec" disabled>Send</button>
+  <p class="shareWhy">After Create + connect — Share and Send need your block address and wallet.</p>
+</div>
 
 <div class="card cardQuiet" id="carteASigner">
   <details id="signDetails">
@@ -896,7 +1078,7 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
 <details class="card" id="mesBlocksCard" hidden>
   <summary>
     <span class="secHead">My blocks</span>
-    <span class="secWhy">Blocks your connected wallet created on this network — scanned on-chain, not a vault.</span>
+    <span class="secWhy">Your connected wallet’s creations on this network — scanned on-chain, not a vault.</span>
   </summary>
   <p class="expl" id="mesBlocksIntro">Connect a wallet, then scan. Creators come from each creation tx (<code>tx.from</code>), never from the log alone.</p>
   <label for="mesBlocs">How far back (blocks)</label>
@@ -1120,8 +1302,24 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
      faire. Si elle echoue, elle se tait plutot que d inventer. -->
 <div id="carteGalerie" style="display:none">
   <h2 class="secHead">Blocks people made</h2>
-  <div id="galerie" class="galerie"></div>
+  <div class="galLayout">
+    <div id="galerie" class="galerie"></div>
+    <aside id="galerieFiche" hidden aria-label="Selected gallery block">
+      <div id="galerieFichePreview"></div>
+      <p class="gfSym" id="galerieFicheSym"></p>
+      <p class="gfAdr" id="galerieFicheAdr"></p>
+      <div class="gfActions">
+        <button type="button" class="act sec" id="galerieOpen">Open</button>
+        <button type="button" class="act sec" id="galerieCopyLink">Copy link</button>
+      </div>
+    </aside>
+  </div>
   <div id="galerieNote" class="k" style="margin-top:10px"></div>
+  <div id="galerieFooter" hidden aria-label="Selected block actions">
+    <button type="button" class="act sec" id="galerieRead">Read</button>
+    <button type="button" class="act sec" id="galerieCopyAdr">Copy address</button>
+    <button type="button" class="act sec" id="galerieShare">Share</button>
+  </div>
 </div>
 </details>
 
@@ -1477,9 +1675,11 @@ function appliquerDeepLinkBlock() {
   if (document.body.classList.contains('simple')) {
     const b = $('#bascule'); if (b) b.click();
   }
-  const luc = $('#lookupCard'); if (luc) luc.open = true;
-  const ns = $('#nextSteps'); if (ns) ns.open = true;
+  const luc = $('#lookupCard'); if (luc) { luc.open = true; luc.classList.add('deepLinkOn'); }
+  const ns = $('#nextSteps'); if (ns) { ns.open = true; ns.classList.add('deepLinkOn'); }
   if (typeof selectNextStep === 'function') selectNextStep('swap');
+  /* Soft highlight when ?block= lands — honest deep-link cue, not a fake success. */
+  const rendu = $('#rendu'); if (rendu) rendu.classList.add('deepLinkOn');
   /* Read after a tick so #lire handler and modules are fully wired. */
   setTimeout(() => {
     const lireBtn = $('#lire');
@@ -1487,20 +1687,28 @@ function appliquerDeepLinkBlock() {
     const cible = $('#lookupCard') || $('#lecture');
     if (cible && cible.scrollIntoView) cible.scrollIntoView({ behavior: 'smooth', block: 'start' });
     dire('Opened shared block from link.\n' + raw, 'ok');
+    setTimeout(() => {
+      for (const el of [luc, ns, rendu]) {
+        if (el) el.classList.remove('deepLinkOn');
+      }
+    }, 2200);
   }, 50);
 }
 
-/** Primary Create ↔ My blocks nav (labeled UI, not coordinates). */
+/** Primary Create ↔ My blocks nav — tab must match visible primary pane. */
 function selectAppSection(name) {
   const create = name === 'create';
   const tC = $('#tabCreate'), tM = $('#tabMesBlocks');
   if (tC) tC.setAttribute('aria-selected', create ? 'true' : 'false');
   if (tM) tM.setAttribute('aria-selected', create ? 'false' : 'true');
+  const main = document.querySelector('main');
+  if (main) main.setAttribute('data-app', create ? 'create' : 'mes');
   const mb = $('#mesBlocksCard');
   if (mb) {
     mb.hidden = create;
     if (!create) mb.open = true;
   }
+  if (typeof majShareAvantCreate === 'function') majShareAvantCreate();
   if (!create) {
     const intro = $('#mesBlocksIntro');
     if (intro) {
@@ -1511,16 +1719,46 @@ function selectAppSection(name) {
     if (!compte) {
       const vue = $('#mesBlocksVue'), liste = $('#mesBlocksListe');
       if (vue) vue.innerHTML = ligne('state', pastille('CONNECT WALLET', 'warn'))
-        + ligne('', 'My blocks needs a connected address. Use Connect wallet, then Find my blocks.');
-      if (liste) liste.innerHTML = '';
+        + ligne('', 'My blocks needs a connected address. Use <span class="ctaPhrase">Connect wallet</span>, then Find my blocks.');
+      if (liste) liste.innerHTML = barrePartageMutee()
+        + '<button type="button" class="act" id="mesCtaConnect" style="margin-top:10px">Connect wallet</button>';
+      const b = $('#mesCtaConnect');
+      if (b) b.onclick = () => { const a = $('#agir'); if (a) a.click(); };
+    }
+    if (mb && mb.scrollIntoView) {
+      requestAnimationFrame(() => mb.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
+  } else {
+    const cz = $('#createZone');
+    if (cz && cz.scrollIntoView) {
+      requestAnimationFrame(() => cz.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     }
   }
+}
+
+/** Disabled Share/Send — visible without wallet; one-line why. */
+function barrePartageMutee() {
+  return '<div class="shareBar shareMuted" aria-label="Share and Send unavailable yet">'
+    + '<button type="button" class="act sec" disabled>Share</button>'
+    + '<button type="button" class="act sec" disabled>Send</button>'
+    + '<p class="shareWhy">After Create + connect — then Share / Send unlock for your block.</p>'
+    + '</div>';
+}
+
+/** Hide muted Create share once a real post-create share bar has a block. */
+function majShareAvantCreate() {
+  const avant = $('#shareAvantCreate');
+  if (!avant) return;
+  const real = $('#shareApresCreate');
+  const has = real && /^0x[0-9a-fA-F]{40}$/.test(real.getAttribute('data-block') || '');
+  avant.hidden = !!has;
 }
 document.addEventListener('click', (ev) => {
   const t = ev.target && ev.target.closest && ev.target.closest('#appNav .appTab');
   if (!t) return;
   selectAppSection(t.getAttribute('data-app') === 'mes' ? 'mes' : 'create');
 });
+if (typeof majShareAvantCreate === 'function') majShareAvantCreate();
 
 /** Share + Send bar HTML for a known block address (Lookup / post-create / My blocks). */
 function barrePartageEtSend(adr) {
@@ -2639,6 +2877,43 @@ function paramsLogoDepuisApparence(a, lettre) {
  *    flatteur — 909 remplit mieux une galerie que 116 — le bug serait parti en production avec
  *    un chiffre qui a l air d un succes.
  * ⇒ La galerie suit desormais le reseau CHOISI, le DIT, et se refait quand on en change. */
+/** Gallery select → side card (preview + address + Copy link / Open) even logged-out. */
+function selectionnerGalerie(adr, btn) {
+  if (!/^0x[0-9a-fA-F]{40}$/.test(adr || '')) return;
+  document.documentElement.dataset.galBlock = adr;
+  const boite = $('#galerie');
+  if (boite) {
+    for (const v of boite.querySelectorAll('.vignette')) {
+      const on = v === btn || v.getAttribute('data-block') === adr;
+      v.setAttribute('aria-selected', on ? 'true' : 'false');
+      v.setAttribute('aria-current', on ? 'true' : 'false');
+    }
+  }
+  const fiche = $('#galerieFiche'), foot = $('#galerieFooter');
+  const prev = $('#galerieFichePreview'), symEl = $('#galerieFicheSym'), adrEl = $('#galerieFicheAdr');
+  if (prev) {
+    const svg = btn && btn.querySelector('svg');
+    prev.innerHTML = '';
+    if (svg) {
+      const clone = svg.cloneNode(true);
+      clone.classList.add('gfPreview');
+      clone.removeAttribute('width');
+      clone.removeAttribute('height');
+      prev.appendChild(clone);
+    }
+  }
+  if (symEl) {
+    const cap = btn && btn.querySelector('figcaption');
+    symEl.textContent = cap ? cap.textContent : '';
+  }
+  if (adrEl) adrEl.textContent = adr;
+  if (fiche) fiche.hidden = false;
+  if (foot) foot.hidden = false;
+  if (fiche && fiche.scrollIntoView) {
+    requestAnimationFrame(() => fiche.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+  }
+}
+
 async function remplirGalerie() {
   const boite = $('#galerie'), note = $('#galerieNote');
   const R = RESEAUX[chaine];
@@ -2674,12 +2949,35 @@ async function remplirGalerie() {
       const b = e.target.closest('button[data-block]');
       if (!b) return;
       const a = b.getAttribute('data-block');
+      selectionnerGalerie(a, b);
+    };
+    /* Wire side-card / footer actions once per rebuild */
+    const openBtn = $('#galerieOpen'), readBtn = $('#galerieRead');
+    const copyL = $('#galerieCopyLink'), copyA = $('#galerieCopyAdr'), shareB = $('#galerieShare');
+    const goRead = () => {
+      const a = (document.documentElement.dataset.galBlock) || '';
+      if (!/^0x[0-9a-fA-F]{40}$/.test(a)) return;
       $('#lecture').value = a;
-      /* ⛔ ON OUVRE LES REGLAGES AVANCES SI BESOIN : le lecteur y vit, et envoyer quelqu un vers
-       *    une carte masquee lui ferait croire que le clic n a rien fait. */
-      if (document.body.classList.contains('simple')) $('#bascule').click();
+      if (document.body.classList.contains('simple')) {
+        const bas = $('#bascule'); if (bas && bas.getAttribute('aria-expanded') !== 'true') bas.click();
+      }
+      const luc = $('#lookupCard'); if (luc) luc.open = true;
       $('#lire').click();
       $('#lecture').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+    if (openBtn) openBtn.onclick = goRead;
+    if (readBtn) readBtn.onclick = goRead;
+    if (copyL) copyL.onclick = () => copierLienPartage(document.documentElement.dataset.galBlock || '');
+    if (shareB) shareB.onclick = () => copierLienPartage(document.documentElement.dataset.galBlock || '');
+    if (copyA) copyA.onclick = async () => {
+      const a = document.documentElement.dataset.galBlock || '';
+      if (!/^0x[0-9a-fA-F]{40}$/.test(a)) return;
+      try {
+        await navigator.clipboard.writeText(a);
+        dire('Address copied.\n' + a, 'ok');
+      } catch {
+        dire('Could not copy — select the address manually.\n' + a, 'warn');
+      }
     };
     const rates = (r.fenetresRatees || []).length;
     /* ⛔ LE RESEAU EN PREMIER. Sans lui, des jetons de test se lisent comme de vrais lancements —
@@ -3013,6 +3311,7 @@ function apresCreationConfirmee(adr) {
   bar.innerHTML = '<button type="button" class="act sec btnCopyShare">Copy share link</button>'
     + '<button type="button" class="act sec btnOpenSend">Send</button>';
   brancherBarrePartage(bar.parentNode || bar);
+  if (typeof majShareAvantCreate === 'function') majShareAvantCreate();
 }
 
 /** Open advanced settings if needed, scroll to unilateral Launch, keep prefilled address. */
@@ -3097,7 +3396,7 @@ async function lireBlock(adr) {
       const src = sourceImage(m.doc.image);
       if (m.doc.description) vue += ligne('about', enTexte(m.doc.description));
       if (src) vue += '<div class="row"><span class="k">image</span><span class="v">'
-        + '<img src="' + enAttribut(src) + '" alt="" style="width:120px;height:auto;border-radius:10px;display:block"></span></div>';
+        + '<img class="renduImg" src="' + enAttribut(src) + '" alt=""></span></div>';
       else if (m.doc.image) vue += ligne('image', pastille('SCHEME REFUSED', 'warn'));
     }
     /* Slice 1: share link + Send on Lookup success surface. */
@@ -6062,7 +6361,8 @@ async function chargerMesBlocks() {
   if (!compte) {
     vue.innerHTML = ligne('state', pastille('CONNECT WALLET', 'warn'))
       + ligne('', 'Connect your wallet, then Find my blocks. Empty custody is not claimed.');
-    liste.innerHTML = '<button type="button" class="act" id="mesCtaConnect">Connect wallet</button>';
+    liste.innerHTML = barrePartageMutee()
+      + '<button type="button" class="act" id="mesCtaConnect" style="margin-top:10px">Connect wallet</button>';
     const b = $('#mesCtaConnect');
     if (b) b.onclick = () => { const a = $('#agir'); if (a) a.click(); };
     return;
