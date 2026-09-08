@@ -496,6 +496,45 @@ export function sqrtPriceDepuisPrix({ prixNum, prixDen, decDevise, decBlock, dev
   return isqrt((num << 192n) / den);
 }
 
+/**
+ * L INVERSE : combien d unites de DEVISE vaut UN jeton entier de block, depuis le sqrtPriceX96 lu.
+ *
+ * ⛔ ECRIT COMME L INVERSE EXACT DE `sqrtPriceDepuisPrix`, ET TESTE PAR ALLER-RETOUR. C est cette
+ *    fonction-la dont la convention d arguments m avait fait publier un sqrtPrice faux de 1e8 le
+ *    2026-09-06 : le tick voisin tombait juste, et la colonne d a cote etait fausse. Le seul test
+ *    qui aurait attrape ca est l aller-retour, parce qu il ne peut pas se tromper dans le meme
+ *    sens deux fois.
+ *
+ * ⚠️ REND UN `number`, ET C EST ASSUME : c est un prix D AFFICHAGE, pour une capitalisation lisible.
+ *    ⛔ NE JAMAIS s en servir pour construire une calldata — les montants signes se calculent en
+ *    BigInt, exactement, par `sqrtPriceDepuisPrix` et `montantsPosition`.
+ *
+ * @param {bigint} sqrtPriceX96  lu dans slot0
+ * @param {number} decDevise     decimales de la devise, LUES
+ * @param {number} decBlock      decimales du block, LUES
+ * @param {boolean} deviseEst0   la devise est-elle currency0 ?
+ * @returns {number|null} null si l entree n est pas exploitable — jamais 0, qui se lirait « gratuit »
+ */
+export function prixDepuisSqrt({ sqrtPriceX96, decDevise, decBlock, deviseEst0 }) {
+  let s;
+  try { s = BigInt(sqrtPriceX96); } catch { return null; }
+  if (s <= 0n) return null;
+  if (!Number.isInteger(decDevise) || !Number.isInteger(decBlock)) return null;
+  if (decDevise < 0 || decBlock < 0 || decDevise > 36 || decBlock > 36) return null;
+  /* ratio d UNITES DE BASE currency1/currency0 = (s / 2^96)^2.
+   * ⚠️ On divise AVANT de convertir : (s^2 << 64) / 2^192 garde 64 bits de fraction, la ou
+   *    `Number(s*s)` deborderait le double sur des prix ordinaires. */
+  const Q192 = 1n << 192n;
+  const ratioFix = (s * s * (1n << 64n)) / Q192;      /* ratio en virgule fixe 64 bits */
+  const ratio = Number(ratioFix) / Number(1n << 64n); /* unites de base : c1 par c0 */
+  if (!Number.isFinite(ratio) || ratio <= 0) return null;
+  const eB = 10 ** decBlock, eD = 10 ** decDevise;
+  /* devise = currency0 : 1 unite de base de devise -> `ratio` unites de base de block.
+   *   1 block entier = eB unites de base -> eB / ratio unites de base de devise -> / eD entiers. */
+  const prix = deviseEst0 ? (eB / ratio) / eD : (ratio * eB) / eD;
+  return Number.isFinite(prix) && prix > 0 ? prix : null;
+}
+
 /** sqrtPriceX96 aux bornes de la pleine etendue. ⛔ Valeurs du protocole, pas calculees ici :
  *  TickMath.MIN_SQRT_PRICE et MAX_SQRT_PRICE. Les recalculer introduirait un arrondi la ou
  *  Uniswap utilise des constantes exactes. */

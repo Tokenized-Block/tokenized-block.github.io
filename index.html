@@ -1766,10 +1766,11 @@ import { cleDePool, etatPool, encodeInitialize, encodeApprove, encodePermit2Appr
   montantsPosition, liquiditeUnilaterale,
   /* ⛔ LES DEUX QUI PERMETTENT LA TRANSACTION UNIQUE. Sans elles, creer la pool et y placer la
    *    supply restent deux signatures — donc un etat intermediaire ou une pool vide survit. */
-  encodeInitializePool, encodeMulticall } from './pool.js';
+  encodeInitializePool, encodeMulticall, prixDepuisSqrt } from './pool.js';
 import { parametresLancement, tickMinAligne, VALO_PLANCHER_ETH, classementValoLancement } from './lancement.js';
 import { apparenceDepuisAdresse } from './apparence.js';
 import { vitalite, commentPrendreSoin, SIGNES as SIGNES_VITAUX } from './vitalite.js';
+import { pointsDeVie, capitalisation, etatPaliers } from './pointsdevie.js';
 import { consentementValide, marquerConsentement } from './consentement.js';
 import { verdictPhoto, chercherQualite, octetsUri, PHOTO_MAX } from './photo.js';
 
@@ -4006,6 +4007,36 @@ function peindreVitalite(adr, ajout) {
       + '. ' + enTexte(v.cequecenestpas) + '</span>';
   }
 
+  /* ⛔ LES POINTS DE VIE : `capitalisation ^ (1/3)`, l echelle de Phil (k=10, M=100, B=1000).
+   * ⚠️ Sans capitalisation mesurable on n affiche PAS « 0 PV » — on dit qu il n y a pas de prix.
+   *    Zero se lirait « ce block est mort » alors qu il n a jamais ete echange. */
+  if (board) {
+    const capV = vitFaits.faits.capitalisation;
+    const pv = pointsDeVie(typeof capV === 'number' ? capV : null);
+    const pal = etatPaliers(typeof capV === 'number' ? capV : null);
+    board.innerHTML += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid #1c2740">'
+      + '<span class="bhHistBoardLabel">HP</span>'
+      + (pv === null
+        ? pastille('NO PRICE', 'dim') + ' <span class="k">'
+          + enTexte(vitFaits.faits.pourquoiCap || 'market cap not measurable')
+          + ' — this is <b>not</b> 0 HP: a block that was never quoted is not a dead block.</span>'
+        : pastille(pv + ' HP', pv >= 100 ? 'ok' : 'warn')
+          + ' <span class="k">market cap ' + enTexte(String(Math.round(capV * 1e6) / 1e6))
+          + ' ' + enTexte(vitFaits.faits.deviseCap || '?')
+          + ' · HP = cube root of market cap (1k→10, 1M→100, 1B→1000). '
+          + 'Price × supply, both re-readable — nobody paints this bar. '
+          + '<b>It goes down too.</b></span>')
+      + (pal.palier
+        ? '<br><span class="bhHistBoardLabel">Tier</span>' + pastille(pal.palier.titre, 'ok')
+          + ' <span class="k">opens ' + enTexte(pal.palier.ouvre) + '.'
+          + (pal.prochain ? ' Next: <b>' + enTexte(pal.prochain.titre) + '</b> at '
+            + enTexte(String(pal.prochain.mc)) + ' — ' + enTexte(String(Math.round(pal.prochain.manque)))
+            + ' to go.' : '')
+          + ' ' + enTexte(pal.note) + '</span>'
+        : '<br><span class="k">' + enTexte(pal.note) + '</span>')
+      + '</div>';
+  }
+
   const list = $('#blockHomeVitalsList');
   if (list) {
     list.innerHTML = SIGNES_VITAUX.map((d) => {
@@ -4812,10 +4843,28 @@ async function ouvrirBlockHome(adr, opts) {
      * rien n a pu etre lu du tout.
      * ⚠️ `pool` est passe en booleen STRICT : un `null` (lecture ratee) doit rester non mesure, pas
      * devenir « pas de pool ». `!!null` vaudrait `false`, donc on ne l ecrit pas. */
-    peindreVitalite(adr, {
-      supply: tot, cap,
-      pooleCote: typeof pool === 'boolean' ? pool : (pool && typeof pool.presente === 'boolean' ? pool.presente : null),
-    });
+    /* ⛔ MON PROPRE BUG DE CABLAGE, CORRIGE. J attendais un booleen ou `{presente}` ; la fonction
+     * rend `{etat: 'YES'|'NO'|'UNREAD'}`. Resultat a l ecran : « Tradable — NOT MEASURED » sur des
+     * blocks dont la pool existe. Ecrire une lecture defensive (`typeof … === 'boolean'`) sans
+     * verifier ce que la fonction rend VRAIMENT, c est se proteger contre la mauvaise forme.
+     * ⚠️ Et les trois etats sont conserves : `UNREAD` reste `null`, jamais `false`. */
+    const cote = pool && pool.etat === 'YES' ? true : (pool && pool.etat === 'NO' ? false : null);
+    peindreVitalite(adr, { supply: tot, cap, pooleCote: cote });
+
+    /* ⛔ LES POINTS DE VIE : `prix x supply`, la barre que personne ne peut peindre.
+     * ⚠️ Le prix vient du sqrtPriceX96 DEJA LU par `poolLaunchPresente` — pas d un second appel.
+     * ⚠️ `ETH_NATIF` est l adresse zero, donc TOUJOURS currency0 face a un block `0xb2…` : la
+     *    devise est currency0, et c est ce qui est passe. Le supposer sans le dire serait exactement
+     *    l erreur d argument qui avait fait publier un prix faux de 1e8. */
+    if (pool && pool.sqrt && dec !== null && tot !== null) {
+      const prixEth = prixDepuisSqrt({ sqrtPriceX96: pool.sqrt, decDevise: 18, decBlock: dec, deviseEst0: true });
+      const c = capitalisation({ supply: tot, decimales: dec, prix: prixEth, devise: 'ETH' });
+      peindreVitalite(adr, { capitalisation: c.valeur, deviseCap: c.devise, pourquoiCap: c.pourquoi });
+    } else {
+      peindreVitalite(adr, { capitalisation: null, deviseCap: null,
+        pourquoiCap: !pool || !pool.sqrt ? 'no initialized pool — this block has never been quoted'
+          : 'decimals or supply unread' });
+    }
 
     let shareLine = ligne('your balance', pastille('CONNECT WALLET', 'dim')
       + ' <span class="k">balanceOf needs a connected wallet — EXISTS read, not shown without it</span>');
@@ -8664,9 +8713,13 @@ async function poolLaunchPresente(jeton) {
     }, 'latest']);
     if (!s0 || s0 === '0x' || s0.length < 66) return { etat: 'UNREAD', note: 'empty slot0 answer' };
     const sqrt = BigInt('0x' + String(s0).slice(2, 66));
+    /* ⛔ LE `sqrt` EST RENDU, IL N EST PLUS JETE. Il etait lu puis abandonne — « une valeur LUE
+     * puis JETEE est un defaut », et celle-ci est le PRIX de la pool : sans elle il n y a pas de
+     * capitalisation, donc pas de points de vie. Le rappeler a la chaine une seconde fois pour la
+     * meme donnee serait deux fois le meme trajet reseau pour un chiffre deja en main. */
     return sqrt === 0n
-      ? { etat: 'NO', note: 'Launch ETH pool not initialized (sqrtPrice 0)' }
-      : { etat: 'YES', note: 'Launch ETH pool initialized' };
+      ? { etat: 'NO', sqrt: null, note: 'Launch ETH pool not initialized (sqrtPrice 0)' }
+      : { etat: 'YES', sqrt, note: 'Launch ETH pool initialized' };
   } catch (e) {
     return { etat: 'UNREAD', note: (e && e.message) || String(e) };
   }
