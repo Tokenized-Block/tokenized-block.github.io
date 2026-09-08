@@ -1428,33 +1428,41 @@ function ecrireCreateFeeSession(s) {
   } catch { /* private mode / quota */ }
 }
 /** Return session fee if still valid on-chain for this compte+chaine+amount; else null (and clear). */
-async function createFeeDejaConfirmee(fraisWei) {
+/** @returns {{kind:'none'}|{kind:'pending',hash:string}|{kind:'ok',session:object}}
+ * pending = session remembered but RPC could not re-read tx yet — MUST NOT re-charge. */
+async function createFeeSessionEtat(fraisWei) {
   const s = lireCreateFeeSession();
-  if (!s || !compte || fraisWei <= 0n) return null;
-  if (s.chaine !== chaine) return null;
-  if (String(s.from).toLowerCase() !== String(compte).toLowerCase()) return null;
-  if (String(s.to).toLowerCase() !== FEE_WALLET.toLowerCase()) return null;
-  if (String(s.wei) !== fraisWei.toString()) return null;
-  if (!/^0x[0-9a-fA-F]{64}$/.test(s.hash)) { ecrireCreateFeeSession(null); return null; }
+  if (!s || !compte || fraisWei <= 0n) return { kind: 'none' };
+  /* chaine may be number or string after JSON — compare loosely */
+  if (Number(s.chaine) !== Number(chaine)) return { kind: 'none' };
+  if (String(s.from).toLowerCase() !== String(compte).toLowerCase()) return { kind: 'none' };
+  if (String(s.to).toLowerCase() !== FEE_WALLET.toLowerCase()) return { kind: 'none' };
+  if (String(s.wei) !== fraisWei.toString()) return { kind: 'none' };
+  if (!/^0x[0-9a-fA-F]{64}$/.test(s.hash)) { ecrireCreateFeeSession(null); return { kind: 'none' }; }
   let receipt = null;
   try { receipt = await rpc('eth_getTransactionReceipt', [s.hash]); } catch { receipt = null; }
-  if (!receipt || receipt.status !== '0x1') {
+  if (!receipt) return { kind: 'pending', hash: s.hash };
+  if (receipt.status !== '0x1') {
     ecrireCreateFeeSession(null);
-    return null;
+    return { kind: 'none' };
   }
   let tx = null;
   try { tx = await rpc('eth_getTransactionByHash', [s.hash]); } catch { tx = null; }
-  if (!tx) return null; /* keep session — do not invent; retry next click */
+  if (!tx) return { kind: 'pending', hash: s.hash };
   if (String(tx.from || '').toLowerCase() !== String(compte).toLowerCase()) {
-    ecrireCreateFeeSession(null); return null;
+    ecrireCreateFeeSession(null); return { kind: 'none' };
   }
   if (String(tx.to || '').toLowerCase() !== FEE_WALLET.toLowerCase()) {
-    ecrireCreateFeeSession(null); return null;
+    ecrireCreateFeeSession(null); return { kind: 'none' };
   }
   let val = 0n;
-  try { val = BigInt(tx.value || '0x0'); } catch { ecrireCreateFeeSession(null); return null; }
-  if (val < fraisWei) { ecrireCreateFeeSession(null); return null; }
-  return s;
+  try { val = BigInt(tx.value || '0x0'); } catch { ecrireCreateFeeSession(null); return { kind: 'none' }; }
+  if (val < fraisWei) { ecrireCreateFeeSession(null); return { kind: 'none' }; }
+  return { kind: 'ok', session: s };
+}
+async function createFeeDejaConfirmee(fraisWei) {
+  const e = await createFeeSessionEtat(fraisWei);
+  return e.kind === 'ok' ? e.session : null;
 }
 let chaine = 84532, compte = null, dernier = null;
 /* Soft-gate session state — declared early so relireJeton (above) never hits TDZ. */
@@ -2476,7 +2484,11 @@ for (const id of [84532, 8453]) $('#t' + id).onclick = () => {
    *    Switching Practice↔Real without clearing left Launch/Liq/Swap able to Sign octets
    *    simulated on the other network (page chaine updates; plancement.donnee does not). */
   if (typeof invaliderPlansTravail === 'function') invaliderPlansTravail('page Practice/Real tab');
-  if (typeof ecrireCreateFeeSession === 'function') ecrireCreateFeeSession(null);
+  /* Keep Real fee session when switching onto Real (8453); clear only on mismatch. */
+  if (typeof lireCreateFeeSession === 'function' && typeof ecrireCreateFeeSession === 'function') {
+    const feeS = lireCreateFeeSession();
+    if (!feeS || Number(feeS.chaine) !== Number(id)) ecrireCreateFeeSession(null);
+  }
   peuplerDevises();
   /* ⛔ LA GALERIE SUIT LE RESEAU. Sans ce rappel, elle garderait les blocks de l ancien reseau
    *    sous une note qui nommerait le nouveau — un mensonge pire que l absence de note. */
@@ -5557,8 +5569,17 @@ $('#agir').onclick = async () => {
     const fraisWei = createServiceFeeWei();
     let feeHashNote = '';
     if (fraisWei > 0n) {
-      const deja = await createFeeDejaConfirmee(fraisWei);
-      if (deja) {
+      const feeEtat = await createFeeSessionEtat(fraisWei);
+      if (feeEtat.kind === 'pending') {
+        setFunnel('Ready');
+        afficherTx('fail', 'Fee session pending re-read — Create NOT sent (no second fee)');
+        return dire('⛔ Create paused — a service fee hash is remembered for this tab, but the node did not re-read it yet.\n'
+          + feeEtat.hash
+          + '\nNOT charging a second 0.00005 ETH. Wait a moment and click Create again.\n'
+          + 'If this keeps failing, check the fee tx on Basescan before paying anything.', 'warn');
+      }
+      if (feeEtat.kind === 'ok') {
+        const deja = feeEtat.session;
         feeHashNote = deja.hash;
         dire('Service fee already confirmed this session (no second charge):\n'
           + deja.hash
