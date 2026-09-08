@@ -4659,8 +4659,10 @@ async function etatSwap() {
     empeche = 'RPC throttled — Quote again in a few seconds';
   } else if (autorise && forme === null) empeche = 'The router rejected both encodings';
   b.disabled = empeche !== null;
+  /* teach 2026-09-08: show quoted human in-amount on CTA so wallet mismatch is visible before send. */
+  const inHumain = formaterUnites(montant, decIn) + (acheter ? (' ' + v.quoteNom) : ' blocks');
   b.textContent = empeche ? empeche
-    : (autorise ? 'Run: 2. swap' : 'Run: 1. approve Permit2 → Router');
+    : (autorise ? ('Run: 2. swap · ' + inHumain) : ('Run: 1. approve Permit2 → Router · up to ' + inHumain));
   /* Native ETH buy: no Permit2 approve. ERC20 in: MAX Permit2→Router disclose. */
   const swapApproMax = !empeche && !autorise && !entreeEstNatif;
   if (swapApproMax) {
@@ -4680,7 +4682,7 @@ async function etatSwap() {
   /* Re-force Real thin fail-closed after gardeMainnet (force-refuse only elsewhere). */
   if (minceBloqueReal && b) b.disabled = true;
   return {
-    b20, cle, zeroForOne, montant, ur, autorise, forme, transport: !!transportForme, sortie,
+    b20, cle, zeroForOne, montant, decIn, ur, autorise, forme, transport: !!transportForme, sortie,
     sortieMin: sortieMinPlan, perte, minceVsMid, midNonMesure, minceBloqueReal,
     acheter, entreeEstNatif, jetonEntree, valeur: valeurHex || '0x0',
   };
@@ -5832,20 +5834,33 @@ function appliquerLabelSwap() {
   const nom = dS ? dS.nom : 'ETH';
   if (lab) lab.textContent = buy ? (nom + ' to spend') : 'How many blocks to sell';
 }
+/**
+ * teach 2026-09-08 STOP-SHIP: editing #swapMontant (or Buy/Sell) must not leave a stale
+ * planSwap.montant for send — Quote UI can show 0.0001 while calldata still encodes a prior 1.
+ * Clear plan + disable Run until a fresh Quote binds the field again.
+ */
+function invaliderPlanSwap(pourquoi) {
+  planSwap = null;
+  resetGardePermit2Max('swap');
+  const box = $('#swapVue');
+  if (box) box.innerHTML = '';
+  const b = $('#swapAgir');
+  if (b) { b.disabled = true; b.textContent = 'Run the next step'; }
+  if (pourquoi) console.info('[tblock] planSwap cleared:', pourquoi);
+}
 document.querySelectorAll('.swapDirBtn').forEach((btn) => {
   btn.addEventListener('click', () => {
     const buy = btn.id === 'swapBuy';
     $('#swapBuy')?.setAttribute('aria-pressed', buy ? 'true' : 'false');
     $('#swapSell')?.setAttribute('aria-pressed', buy ? 'false' : 'true');
     appliquerLabelSwap();
-    planSwap = null;
-    resetGardePermit2Max('swap');
-    const box = $('#swapVue');
-    if (box) box.innerHTML = '';
-    const b = $('#swapAgir');
-    if (b) { b.disabled = true; b.textContent = 'Run the next step'; }
+    invaliderPlanSwap('Buy/Sell direction changed');
   });
 });
+if ($('#swapMontant')) {
+  $('#swapMontant').addEventListener('input', () => invaliderPlanSwap('swap amount edited'));
+  $('#swapMontant').addEventListener('change', () => invaliderPlanSwap('swap amount changed'));
+}
 appliquerLabelSwap();
 
 $('#swapEtat').onclick = async () => {
@@ -5872,6 +5887,28 @@ $('#swapAgir').onclick = async () => {
   }
   if (!planSwap) { planSwap = await etatSwap(); if (!planSwap) return; }
   const p = planSwap;
+  /* teach 2026-09-08 STOP-SHIP: re-parse #swapMontant with same montantHumain+decimals as Quote.
+   * If field ≠ planSwap.montant, refuse send and force re-Quote (show both). Do not trust stale plan. */
+  {
+    const dec = (p.decIn != null) ? p.decIn : null;
+    if (dec == null) {
+      invaliderPlanSwap('plan missing decIn');
+      return dire('Quote is incomplete (no in-decimals) — press « Quote it » again.\nNothing was sent.', 'bad');
+    }
+    const eNow = montantHumain($('#swapMontant').value, dec);
+    const maintenant = (eNow.etat === 'OK') ? eNow.valeur : null;
+    if (maintenant === null || maintenant !== p.montant) {
+      const planH = formaterUnites(p.montant, dec);
+      const fieldH = (maintenant === null)
+        ? ('(not an amount: ' + String($('#swapMontant').value) + ')')
+        : formaterUnites(maintenant, dec);
+      invaliderPlanSwap('field ≠ planSwap.montant at send');
+      return dire('Amount changed since Quote — nothing was sent.\n'
+        + 'Quoted in: ' + planH + '\n'
+        + 'Field now: ' + fieldH + '\n'
+        + 'Press « Quote it » again, then Run.', 'bad');
+    }
+  }
   /* ⛔ THIN-POOL fail-closed on Real (GROK-SUPER dig §2) — disabled attr is not enough. */
   if (p.minceBloqueReal || (chaine === MAINNET && (p.sortie === null || p.minceVsMid || p.midNonMesure
       || (p.sortie !== null && (p.perte === null || p.perte === undefined))))) {
