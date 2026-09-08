@@ -5877,6 +5877,20 @@ async function construirePlan() {
   } else if (needsInitPool && classementValoPool.etat === 'OK') {
     valoPoolExtra += ligne('too-cheap gate', pastille('OK', 'ok')
       + ' ≥ 1 ' + enTexte(v.quoteNom) + ' whole-supply — no extra confirm');
+  } else if (needsInitPool) {
+    /* ⛔⛔ LE TROISIEME ETAT N AVAIT PAS DE BRANCHE — ET LE COMMENTAIRE DEUX LIGNES PLUS HAUT DIT
+     * « TROIS ETATS, JAMAIS DEUX ». `valoPoolNum` vaut `NaN` des que la valeur saisie est
+     * illisible, donc `classementValoLancement` rend ILLISIBLE ici — contrairement au chemin
+     * Launch, qui refuse AVANT d appeler le classificateur. Le jumeau divergeait.
+     * ⛔ CE QUE CA DONNAIT : ni garde, ni « OK », RIEN. Les deux autres etats ont chacun leur
+     * ligne ; celui-la laissait un trou, et un trou se lit comme « rien a signaler » — c est-a-dire
+     * exactement comme le cas OK, sur le reglage qui grave un prix POUR TOUJOURS.
+     * ⚠️ L envoi etait deja ferme par ailleurs (sans valeur lisible, les besoins ne se calculent
+     * pas). Ce qui manquait n etait donc pas la garde : c etait de le DIRE. Une garde qui protege
+     * sans expliquer laisse chercher au mauvais endroit. */
+    valoPoolExtra += ligne('too-cheap gate', pastille('CANNOT JUDGE', 'warn')
+      + ' the starting value could not be read, so this app cannot tell you whether it is too cheap. '
+      + 'It is <b>not</b> saying the value is fine — it is saying it does not know. Init+mint stays closed.');
   }
   if (needsInitPool && classementValoPool.etat === 'OK' && Number(valeurVoulue) === VALO_PLANCHER_ETH) {
     valoPoolExtra += ligne('floor edge', pastille('EXACTLY 1', 'warn')
@@ -7860,6 +7874,29 @@ $('#poolAgir').onclick = async () => {
     return dire('Unlimited Permit2 / ERC20 approve — tick the acknowledge on Real first.\n'
       + 'MAX_UINT256 (ERC20→Permit2) / MAX_UINT160 (Permit2→spender) last until you revoke.', 'bad');
   }
+  /* ⛔⛔ LA SEULE GARDE DE CE GESTIONNAIRE QUI NE SE REJOUAIT PAS AU CLIC — ET C EST CELLE QUI
+   * EMPECHE UN MINT SANS BORNE DE MONTANT. Les quatre au-dessus (consentement, devise, valorisation,
+   * Permit2) sont toutes revalidees ici parce que « `disabled` ne suffit pas » ; celle-la vivait
+   * uniquement dans `b.disabled = empeche !== null`.
+   * ⛔ CE QUE CA OUVRAIT, ET C EST MESURE : sans besoins calcules, l encodage retombe sur
+   * `MAX_UINT128`, c est-a-dire AUCUN plafond. Et `initializePool` sur une pool DEJA initialisee
+   * NE REVERT PAS — mesure du 2026-09-09 par `double-initialize.mjs` sur le PositionManager de
+   * Base mainnet, deux appels dans la meme simulation, les DEUX passent. Donc un `needsInit`
+   * perime laisse le mint s executer AU PRIX DE L AUTRE, et sans plafond il prend ce que la pool
+   * demande, quel qu il soit.
+   * ⚠️ On ne peut pas rejouer `raisonDeBloquer` en entier ici : `manque` et `soldeInconnu` sont
+   * calcules dans `construirePlan` et ne voyagent pas sur `plan`. On rejoue donc EXACTEMENT sa
+   * moitie « inconstructible », et ce commentaire nomme le jumeau pour que les deux bougent
+   * ensemble — le correctif qui rate son jumeau est le motif le plus repete de ce depot. */
+  if (s.mint && (plan.besoinQ === null || plan.besoinQ === undefined
+      || plan.besoinB === null || plan.besoinB === undefined
+      || plan.sqrtPrix === null || plan.sqrtPrix === undefined)) {
+    return dire('⛔ Nothing was sent — the amounts for this mint were not measured.\n'
+      + 'Without them this app would have to send an UNBOUNDED mint (no max0/max1), and if someone '
+      + 'else initialized this pool meanwhile, it would place your liquidity at THEIR price.\n'
+      + 'Measured 2026-09-09: initializePool on an already-initialized pool does NOT revert — so a '
+      + 'stale « needs init » will not stop it.\nClick « Read the six steps » again.', 'bad');
+  }
   try {
     let data = s.data;
     if (s.mint) {
@@ -7879,10 +7916,15 @@ $('#poolAgir').onclick = async () => {
          * l arrondi et un eventuel mouvement entre la lecture et l inclusion.
          * ⚠️ Si le besoin n a pas pu etre calcule, on NE POSE PAS de borne arbitraire : on
          *    refuse plus haut. Une borne inventee est pire qu aucune — elle a l air d une garde. */
-        max0: plan.besoinQ === null || plan.besoinB === null ? MAX_UINT128
-          : ((plan.quoteEst0 ? plan.besoinQ : plan.besoinB) * 102n) / 100n,
-        max1: plan.besoinQ === null || plan.besoinB === null ? MAX_UINT128
-          : ((plan.quoteEst0 ? plan.besoinB : plan.besoinQ) * 102n) / 100n,
+        /* ⛔ PLUS DE REPLI SUR `MAX_UINT128`. Le commentaire au-dessus disait deja « on refuse plus
+         * haut » — mais le code, lui, posait un plafond INFINI si on arrivait ici quand meme. Une
+         * garde qui vit dans un commentaire n est pas une garde. Le refus est desormais EXECUTE au
+         * clic ; ce ternaire ne peut donc plus etre atteint avec des besoins nuls, et s il l etait
+         * par un chemin futur il vaut mieux LEVER que signer sans plafond.
+         * ⚠️ `MAX_UINT128` reste importe et utilise ailleurs : on ne le retire pas du module. */
+        max0: (() => { if (plan.besoinQ === null || plan.besoinB === null) throw new Error('mint sans besoins mesures : refus d encoder un plafond infini');
+          return ((plan.quoteEst0 ? plan.besoinQ : plan.besoinB) * 102n) / 100n; })(),
+        max1: ((plan.quoteEst0 ? plan.besoinB : plan.besoinQ) * 102n) / 100n,
         proprietaire: compte, deadline });
       /* ⛔⛔ ATOMIC INIT+MINT (Liquidity = Launch). needsInit ⇒ POSM multicall(initializePool, mint).
        *    Sending initialize alone left an empty engraved pool if mint was refused. Fail-closed
