@@ -574,6 +574,39 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
 }
 #carteASigner summary .secHead, #carteEtat summary .secHead{font-size:14px}
 
+/* ── Slice 1 2026-09-08: deep-link / My blocks / Send / light polish ── */
+#appNav{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 12px}
+#appNav .appTab{flex:1 1 120px;min-height:44px;padding:10px 12px;border-radius:10px;
+  border:1px solid var(--line);background:var(--bg2);color:var(--dim);font:inherit;
+  font-weight:700;cursor:pointer}
+#appNav .appTab[aria-selected="true"]{color:var(--fg);border-color:#4d8cff;background:#132038}
+#appNav .appTab:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+#mesBlocksCard,#createZone,#lookupCard,#nextSteps{
+  transition:opacity .18s ease, transform .18s ease}
+#mesBlocksCard[hidden]{display:none !important}
+#mesBlocksListe{margin-top:10px}
+.mbItem{border:1px solid var(--line);border-radius:12px;padding:12px;margin:0 0 10px;
+  background:var(--bg2);display:grid;gap:8px}
+.mbItem .mbHead{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;justify-content:space-between}
+.mbItem .mbNom{font-weight:800;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.mbItem .mbAdr{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;color:var(--dim);
+  word-break:break-all}
+.mbItem .mbStats{display:flex;flex-wrap:wrap;gap:6px}
+.mbActions{display:flex;flex-wrap:wrap;gap:8px}
+.mbActions button{flex:1 1 110px;min-height:44px}
+#sendPanel{margin-top:12px;padding:12px;border:1px dashed var(--line);border-radius:12px;
+  background:rgba(5,13,36,.35)}
+#sendPanel[hidden]{display:none !important}
+#sendPanel .sendTitre{font-weight:800;margin:0 0 8px}
+.shareBar{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.shareBar button{flex:1 1 140px;min-height:44px}
+/* Overflow / image polish — Create preview + gallery cards stay in column */
+.createPrimary,#apercu{max-width:100%;overflow:hidden}
+#apercu{display:block;width:min(200px,100%);height:auto;margin:0 auto}
+.galerie .vignette svg,.galerie .vignette img{max-width:100%;height:auto}
+#rendu img{max-width:min(160px,100%);height:auto;border-radius:10px;display:block}
+.nsPanel{animation:nsFade .16s ease}
+@keyframes nsFade{from{opacity:.55;transform:translateY(4px)}to{opacity:1;transform:none}}
 @media (max-width:640px){
   #warningsStrip{flex-direction:column;gap:6px}
   #nextSteps .nsTab{flex:1 1 100%}
@@ -597,6 +630,12 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
   <button id="t84532" aria-selected="true">Practice · free<span class="k"> · Base Sepolia</span></button>
   <button id="t8453" aria-selected="false">Real · costs ETH<span class="k"> · Base mainnet</span></button>
 </div>
+
+<!-- Slice 1: primary product nav — Create vs wallet My blocks (on-chain index only). -->
+<nav id="appNav" aria-label="App sections">
+  <button type="button" class="appTab" id="tabCreate" aria-selected="true" data-app="create">Create</button>
+  <button type="button" class="appTab" id="tabMesBlocks" aria-selected="false" data-app="mes">My blocks</button>
+</nav>
 
 <!-- ⛔ P11 dig-adapt (X-DIG 2026-09-07): status funnel for Instant Create.
      Labels map to real wallet/chain states. Never invent a green « Instant » success. -->
@@ -852,6 +891,36 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
 
 <!-- ⛔ MESURE, PAS INTUITION : simple mode folds Advanced; signed plan identical. -->
 <button class="bascule" id="bascule" aria-expanded="false">Advanced · supply, salt, decimals</button>
+
+<!-- Slice 1: My blocks — creator index on-chain (index-blocks.js), not off-chain custody. -->
+<details class="card" id="mesBlocksCard" hidden>
+  <summary>
+    <span class="secHead">My blocks</span>
+    <span class="secWhy">Blocks your connected wallet created on this network — scanned on-chain, not a vault.</span>
+  </summary>
+  <p class="expl" id="mesBlocksIntro">Connect a wallet, then scan. Creators come from each creation tx (<code>tx.from</code>), never from the log alone.</p>
+  <label for="mesBlocs">How far back (blocks)</label>
+  <input id="mesBlocs" value="40000" inputmode="numeric">
+  <div class="mbActions" style="margin-top:10px">
+    <button type="button" class="act sec" id="mesChercher">Find my blocks</button>
+    <button type="button" class="act sec" id="mesVersCreate">Create a block</button>
+  </div>
+  <div id="mesBlocksVue"></div>
+  <div id="mesBlocksListe"></div>
+  <div id="sendPanel" hidden>
+    <p class="sendTitre">Send block tokens</p>
+    <p class="expl" style="margin:0 0 8px;color:#f0c674">ERC-20 <code>transfer</code> of this block’s token only. Practice vs Real follows the page tab. Wallet must confirm.</p>
+    <label for="sendToken">Block token</label>
+    <input id="sendToken" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
+    <label for="sendTo">Recipient</label>
+    <input id="sendTo" placeholder="0x…" spellcheck="false" autocapitalize="off">
+    <label for="sendMontant">Amount (whole token units)</label>
+    <input id="sendMontant" value="1" inputmode="decimal" placeholder="1">
+    <div id="sendInfo" class="k" style="margin-top:8px"></div>
+    <button type="button" class="act" id="sendAgir" style="margin-top:10px">Send — confirm in wallet</button>
+    <button type="button" class="act sec" id="sendFermer" style="margin-top:8px">Close send form</button>
+  </div>
+</details>
 
 <!-- Next steps: Launch / Liquidity / Swap — one panel at a time; collapsed by default
      Quick audit: tabs Launch/Liq/Swap → #ns-launch/#ns-liq/#ns-swap;
@@ -1347,6 +1416,138 @@ document.addEventListener('click', (ev) => {
   selectNextStep(t.getAttribute('data-ns'));
 });
 
+/* ══ SLICE 1 2026-09-08 — deep link ?block= · My blocks · Send · share ═══════
+ * ⛔ Pas de custodie hors-chaine : My blocks = creationsDe(tx.from) + lectures on-chain.
+ * ⛔ Share link n invente rien : meme origine, query block= (+ cb= conserve si present).
+ * ⛔ Send = ERC-20 transfer via envoyerTx ; Real respecte consentArgentOk. */
+
+/** Prefill Lookup + Next-steps token fields with a block address. */
+function prefillBlockChamps(adr) {
+  if (!/^0x[0-9a-fA-F]{40}$/.test(adr)) return false;
+  for (const id of ['lecture', 'lancBlock', 'poolToken', 'swapToken']) {
+    const n = $('#' + id); if (n) n.value = adr;
+  }
+  return true;
+}
+
+/** Build a share URL: keep existing ?cb=, set/replace ?block=. Absolute when possible. */
+function lienPartagePour(adr) {
+  const a = String(adr || '').trim();
+  if (!/^0x[0-9a-fA-F]{40}$/.test(a)) return null;
+  let u;
+  try { u = new URL(location.href); }
+  catch {
+    const base = (typeof SITE_ORIGIN_LIVE !== 'undefined' ? SITE_ORIGIN_LIVE : '') + '/';
+    u = new URL(base);
+  }
+  u.searchParams.set('block', a);
+  /* cb= coexistence: URLSearchParams keeps other params; nothing to drop. */
+  return u.toString();
+}
+
+async function copierLienPartage(adr) {
+  const lien = lienPartagePour(adr);
+  if (!lien) { dire('Need a valid block address to share.', 'warn'); return; }
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(lien);
+      dire('Share link copied.\n' + lien, 'ok');
+      return;
+    }
+  } catch { /* fall through */ }
+  /* Fail closed to visible text — never claim copied if we could not. */
+  dire('Could not write clipboard — copy this link manually:\n' + lien, 'warn');
+}
+
+/**
+ * Apply ?block=0x… from the URL: fill fields, open Lookup + Read, open Next steps.
+ * Optional ?cb= is left untouched (cachebust coexistence).
+ */
+function appliquerDeepLinkBlock() {
+  let params;
+  try { params = new URLSearchParams(location.search); } catch { return; }
+  const raw = (params.get('block') || '').trim();
+  if (!raw) return;
+  if (!/^0x[0-9a-fA-F]{40}$/.test(raw)) {
+    dire('Deep link ?block= is not a valid address — ignored.\n' + raw, 'warn');
+    return;
+  }
+  prefillBlockChamps(raw);
+  if (document.body.classList.contains('simple')) {
+    const b = $('#bascule'); if (b) b.click();
+  }
+  const luc = $('#lookupCard'); if (luc) luc.open = true;
+  const ns = $('#nextSteps'); if (ns) ns.open = true;
+  if (typeof selectNextStep === 'function') selectNextStep('swap');
+  /* Read after a tick so #lire handler and modules are fully wired. */
+  setTimeout(() => {
+    const lireBtn = $('#lire');
+    if (lireBtn) lireBtn.click();
+    const cible = $('#lookupCard') || $('#lecture');
+    if (cible && cible.scrollIntoView) cible.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    dire('Opened shared block from link.\n' + raw, 'ok');
+  }, 50);
+}
+
+/** Primary Create ↔ My blocks nav (labeled UI, not coordinates). */
+function selectAppSection(name) {
+  const create = name === 'create';
+  const tC = $('#tabCreate'), tM = $('#tabMesBlocks');
+  if (tC) tC.setAttribute('aria-selected', create ? 'true' : 'false');
+  if (tM) tM.setAttribute('aria-selected', create ? 'false' : 'true');
+  const mb = $('#mesBlocksCard');
+  if (mb) {
+    mb.hidden = create;
+    if (!create) mb.open = true;
+  }
+  if (!create) {
+    const intro = $('#mesBlocksIntro');
+    if (intro) {
+      intro.textContent = compte
+        ? ('Connected: ' + compte + ' — scan finds blocks this address created (tx.from). Not a custody list.')
+        : 'Connect your wallet first — My blocks lists creations paid by YOUR address on-chain.';
+    }
+    if (!compte) {
+      const vue = $('#mesBlocksVue'), liste = $('#mesBlocksListe');
+      if (vue) vue.innerHTML = ligne('state', pastille('CONNECT WALLET', 'warn'))
+        + ligne('', 'My blocks needs a connected address. Use Connect wallet, then Find my blocks.');
+      if (liste) liste.innerHTML = '';
+    }
+  }
+}
+document.addEventListener('click', (ev) => {
+  const t = ev.target && ev.target.closest && ev.target.closest('#appNav .appTab');
+  if (!t) return;
+  selectAppSection(t.getAttribute('data-app') === 'mes' ? 'mes' : 'create');
+});
+
+/** Share + Send bar HTML for a known block address (Lookup / post-create / My blocks). */
+function barrePartageEtSend(adr) {
+  if (!/^0x[0-9a-fA-F]{40}$/.test(adr)) return '';
+  return '<div class="shareBar" data-block="' + enAttribut(adr) + '">'
+    + '<button type="button" class="act sec btnCopyShare">Copy share link</button>'
+    + '<button type="button" class="act sec btnOpenSend">Send</button>'
+    + '<button type="button" class="act sec btnOpenNs">Next steps</button>'
+    + '</div>';
+}
+
+function brancherBarrePartage(racine) {
+  if (!racine) return;
+  for (const bar of racine.querySelectorAll('.shareBar')) {
+    const adr = bar.getAttribute('data-block');
+    const c = bar.querySelector('.btnCopyShare');
+    const s = bar.querySelector('.btnOpenSend');
+    const n = bar.querySelector('.btnOpenNs');
+    if (c) c.onclick = () => copierLienPartage(adr);
+    if (s) s.onclick = () => ouvrirSendForm(adr);
+    if (n) n.onclick = () => {
+      prefillBlockChamps(adr);
+      const ns = $('#nextSteps'); if (ns) ns.open = true;
+      if (typeof selectNextStep === 'function') selectNextStep('swap');
+      if (ns) ns.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+  }
+}
 
 const abi = await (await fetch('./abi.json')).json();
 /**
@@ -2500,6 +2701,10 @@ for (const id of [84532, 8453]) $('#t' + id).onclick = () => {
    *    sous une note qui nommerait le nouveau — un mensonge pire que l absence de note. */
   $('#carteGalerie').style.display = 'none';
   const gw = $('#carteGalerieWrap'); if (gw) gw.hidden = true;
+  /* Slice 1: My blocks list is per-network — clear rather than show the wrong chain. */
+  const ml = $('#mesBlocksListe'), mv = $('#mesBlocksVue');
+  if (ml) ml.innerHTML = '';
+  if (mv) mv.innerHTML = '';
   remplirGalerie();
   majCtaPacket(); dire('Network: ' + RESEAUX[id].nom + '.'); rafraichir();
 };
@@ -2759,6 +2964,19 @@ function apresCreationConfirmee(adr) {
     cta.dataset.block = adr;
   }
   setFunnel('Ready-to-Launch');
+  /* Slice 1: post-create share surface — Copy share link next to Launch CTA. */
+  let bar = $('#shareApresCreate');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'shareApresCreate';
+    bar.className = 'shareBar';
+    const host = cta && cta.parentNode ? cta.parentNode : $('#createZone');
+    if (host) host.appendChild(bar);
+  }
+  bar.setAttribute('data-block', adr);
+  bar.innerHTML = '<button type="button" class="act sec btnCopyShare">Copy share link</button>'
+    + '<button type="button" class="act sec btnOpenSend">Send</button>';
+  brancherBarrePartage(bar.parentNode || bar);
 }
 
 /** Open advanced settings if needed, scroll to unilateral Launch, keep prefilled address. */
@@ -2846,7 +3064,10 @@ async function lireBlock(adr) {
         + '<img src="' + enAttribut(src) + '" alt="" style="width:120px;height:auto;border-radius:10px;display:block"></span></div>';
       else if (m.doc.image) vue += ligne('image', pastille('SCHEME REFUSED', 'warn'));
     }
+    /* Slice 1: share link + Send on Lookup success surface. */
+    vue += barrePartageEtSend(adr);
     box.innerHTML = vue;
+    brancherBarrePartage(box);
   } catch (e) { box.innerHTML = ligne('state', pastille('READ FAILED', 'dim')) + ligne('cause', enTexte(e.message)); }
 }
 
@@ -5731,6 +5952,220 @@ $('#agir').onclick = async () => {
   }
 };
 
+/* ══ SLICE 1 — My blocks (creator scan) + Send (ERC-20 transfer) ══════════════════════════════
+ * ⛔ Index = listerCreations + creationsDe (tx.from). Pas de liste hors-chaine inventee.
+ * ⛔ Pool « present » = Launch native ETH PoolKey (fee 0 · spacing 200) slot0 sqrtPrice ≠ 0.
+ *    Autre devise / autre PoolKey = autre pool — on ne la pretend pas « launch ».
+ * ⛔ Send = transfer(address,uint256) via envoyerTx ; Real → consentArgentOk. */
+
+function encodeTransfer(destinataire, montant) {
+  /* Minimal ERC-20 transfer — same pad/sel4 discipline as approve paths. */
+  return '0x' + sel4('transfer(address,uint256)') + pad(destinataire)
+    + BigInt(montant).toString(16).padStart(64, '0');
+}
+
+/** Launch-pool presence for a block: yes / no / unread (never invent). */
+async function poolLaunchPresente(jeton) {
+  try {
+    const V = V4[chaine];
+    if (!V || !V.stateView) return { etat: 'UNREAD', note: 'no StateView on this network config' };
+    const cle = cleDePool(ETH_NATIF, jeton, { fee: 0, tickSpacing: 200 });
+    const s0 = await rpc('eth_call', [{
+      to: V.stateView,
+      data: '0x' + sel4('getSlot0(bytes32)') + poolId(cle).slice(2),
+    }, 'latest']);
+    if (!s0 || s0 === '0x' || s0.length < 66) return { etat: 'UNREAD', note: 'empty slot0 answer' };
+    const sqrt = BigInt('0x' + String(s0).slice(2, 66));
+    return sqrt === 0n
+      ? { etat: 'NO', note: 'Launch ETH pool not initialized (sqrtPrice 0)' }
+      : { etat: 'YES', note: 'Launch ETH pool initialized' };
+  } catch (e) {
+    return { etat: 'UNREAD', note: (e && e.message) || String(e) };
+  }
+}
+
+async function soldeBlockPourCompte(jeton) {
+  if (!compte) return null;
+  try {
+    const raw = await rpc('eth_call', [{
+      to: jeton,
+      data: '0x' + sel4('balanceOf(address)') + pad(compte),
+    }, 'latest']);
+    return BigInt(raw);
+  } catch { return null; }
+}
+
+async function decimalesOu18(jeton) {
+  try {
+    const raw = await rpc('eth_call', [{ to: jeton, data: '0x' + sel4('decimals()') }, 'latest']);
+    return Number(BigInt(raw));
+  } catch { return 18; }
+}
+
+function ouvrirSendForm(adr) {
+  selectAppSection('mes');
+  const pan = $('#sendPanel');
+  if (pan) pan.hidden = false;
+  const tok = $('#sendToken'); if (tok) tok.value = adr || '';
+  const info = $('#sendInfo');
+  if (info) info.textContent = compte
+    ? ('From connected wallet ' + compte + ' on ' + RESEAUX[chaine].nom + '.')
+    : 'Connect wallet first — Send opens your wallet for ERC-20 transfer.';
+  if (pan && pan.scrollIntoView) pan.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function chargerMesBlocks() {
+  const vue = $('#mesBlocksVue'), liste = $('#mesBlocksListe');
+  if (!vue || !liste) return;
+  if (!compte) {
+    vue.innerHTML = ligne('state', pastille('CONNECT WALLET', 'warn'))
+      + ligne('', 'Connect your wallet, then Find my blocks. Empty custody is not claimed.');
+    liste.innerHTML = '<button type="button" class="act" id="mesCtaConnect">Connect wallet</button>';
+    const b = $('#mesCtaConnect');
+    if (b) b.onclick = () => { const a = $('#agir'); if (a) a.click(); };
+    return;
+  }
+  const blocs = Math.max(1000, Math.min(120000,
+    parseInt((($('#mesBlocs') && $('#mesBlocs').value) || '40000').replace(/\D/g, ''), 10) || 40000));
+  vue.innerHTML = ligne('state', 'scanning last ' + blocs + ' blocks on ' + RESEAUX[chaine].nom + '…');
+  liste.innerHTML = '';
+  let r;
+  try {
+    r = await listerCreations({ rpc, blocs, surProgres: (p) => {
+      vue.innerHTML = ligne('state', 'scanned ' + p.parcouru + ' / ' + p.total
+        + ' · ' + p.trouvees + ' creations seen');
+    } });
+  } catch (e) {
+    vue.innerHTML = ligne('state', pastille('SCAN FAILED', 'bad')) + ligne('why', enTexte(e.message));
+    return;
+  }
+  let entete = ligne('window', 'blocks ' + r.fenetre.de + ' → ' + r.fenetre.a)
+    + ligne('found', r.creations.length + ' creation(s) in window')
+    + ligne('creator filter', enTexte(compte));
+  if (r.fenetresRatees.length) {
+    entete += ligne('⛔ gaps', r.fenetresRatees.length + ' window(s) unread — list incomplete');
+  }
+  const aExaminer = r.creations.slice(0, PLAFOND_RESOLUTIONS);
+  const tronque = r.creations.length - aExaminer.length;
+  vue.innerHTML = entete + ligne('state', 'resolving creators…');
+  const { gardees, nonResolues } = await creationsDe({
+    rpc, creations: aExaminer, adresse: compte, concurrence: CONCURRENCE,
+    surProgres: (p) => {
+      vue.innerHTML = entete + ligne('state', 'resolving ' + p.faits + ' / ' + p.total
+        + ' · ' + p.trouves + ' yours');
+    },
+  });
+  entete += ligne('checked', aExaminer.length + ' tx'
+    + (tronque > 0 ? ' · ⛔ ' + tronque + ' not checked (cap ' + PLAFOND_RESOLUTIONS + ')' : ''));
+  if (nonResolues.length) entete += ligne('⚠️ unknown', nonResolues.length + ' creator unread');
+  entete += ligne('yours', gardees.length + ' block(s)');
+  vue.innerHTML = entete;
+
+  if (gardees.length === 0) {
+    liste.innerHTML = '<p class="expl">No blocks from this address in the scanned window. '
+      + 'That is « none here », not « none exist ».</p>'
+      + '<button type="button" class="act" id="mesCtaCreate">Create your block</button>';
+    const c = $('#mesCtaCreate');
+    if (c) c.onclick = () => selectAppSection('create');
+    return;
+  }
+
+  const cards = [];
+  for (const c of gardees.slice(0, 40)) {
+    const adr = c.jeton;
+    const solde = await soldeBlockPourCompte(adr);
+    const dec = await decimalesOu18(adr);
+    const pool = await poolLaunchPresente(adr);
+    const soldeTxt = solde === null ? 'balance unread'
+      : (formaterUnites(solde, dec) + ' ' + (c.symbole || ''));
+    const poolPill = pool.etat === 'YES' ? pastille('LAUNCH POOL YES', 'ok')
+      : pool.etat === 'NO' ? pastille('LAUNCH POOL NO', 'warn')
+      : pastille('LAUNCH POOL UNREAD', 'dim');
+    const nom = (c.nom || '—') + (c.symbole ? ' · ' + c.symbole : '');
+    cards.push('<article class="mbItem" data-adr="' + enAttribut(adr) + '">'
+      + '<div class="mbHead"><div class="mbNom">' + enTexte(nom) + '</div>'
+      + '<div class="mbStats">' + poolPill + '</div></div>'
+      + '<div class="mbAdr">' + enTexte(adr) + '</div>'
+      + ligne('your balance', enTexte(soldeTxt))
+      + ligne('pool', enTexte(pool.note))
+      + '<div class="mbActions">'
+      + '<button type="button" class="act sec mbOpen">Open</button>'
+      + '<button type="button" class="act sec mbShare">Copy share link</button>'
+      + '<button type="button" class="act sec mbSend">Send</button>'
+      + '</div></article>');
+  }
+  if (gardees.length > 40) {
+    cards.push('<p class="k">Showing 40 most recent of ' + gardees.length + '.</p>');
+  }
+  liste.innerHTML = cards.join('');
+  for (const art of liste.querySelectorAll('.mbItem')) {
+    const adr = art.getAttribute('data-adr');
+    const open = art.querySelector('.mbOpen');
+    const share = art.querySelector('.mbShare');
+    const send = art.querySelector('.mbSend');
+    if (open) open.onclick = () => {
+      prefillBlockChamps(adr);
+      const luc = $('#lookupCard'); if (luc) luc.open = true;
+      $('#lire').click();
+      if (luc) luc.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    if (share) share.onclick = () => copierLienPartage(adr);
+    if (send) send.onclick = () => ouvrirSendForm(adr);
+  }
+}
+
+const _mesChercher = $('#mesChercher');
+if (_mesChercher) _mesChercher.onclick = () => chargerMesBlocks();
+const _mesVersCreate = $('#mesVersCreate');
+if (_mesVersCreate) _mesVersCreate.onclick = () => selectAppSection('create');
+const _sendFermer = $('#sendFermer');
+if (_sendFermer) _sendFermer.onclick = () => {
+  const pan = $('#sendPanel'); if (pan) pan.hidden = true;
+};
+const _sendAgir = $('#sendAgir');
+if (_sendAgir) _sendAgir.onclick = async () => {
+  const jeton = ($('#sendToken') && $('#sendToken').value.trim()) || '';
+  const to = ($('#sendTo') && $('#sendTo').value.trim()) || '';
+  const montantTxt = ($('#sendMontant') && $('#sendMontant').value) || '';
+  if (!compte) return dire('Connect your wallet first.', 'bad');
+  if (!/^0x[0-9a-fA-F]{40}$/.test(jeton)) return dire('Send: block token is not an address.', 'bad');
+  if (!/^0x[0-9a-fA-F]{40}$/.test(to)) return dire('Send: recipient is not an address.', 'bad');
+  if (to.toLowerCase() === compte.toLowerCase()) {
+    return dire('Send refused — recipient is your own connected wallet.', 'warn');
+  }
+  if (!consentArgentOk()) {
+    return dire('Mainnet consent required before Send.\n'
+      + 'Tick the mainnet cost confirmations above (Practice needs none).', 'bad');
+  }
+  const dec = await decimalesOu18(jeton);
+  const m = montantHumain(montantTxt, dec);
+  if (m.etat !== 'OK') {
+    return dire('Send amount refused — ' + (m.pourquoi || m.etat)
+      + '\nNothing was sent.', 'bad');
+  }
+  if (m.valeur <= 0n) return dire('Send amount must be > 0. Nothing was sent.', 'bad');
+  const solde = await soldeBlockPourCompte(jeton);
+  if (solde === null) {
+    return dire('⛔ Could not read your balance for this token — Send aborted (fail closed).', 'bad');
+  }
+  if (solde < m.valeur) {
+    return dire('⛔ Insufficient balance. Have ' + formaterUnites(solde, dec)
+      + ', need ' + formaterUnites(m.valeur, dec) + '. Nothing was sent.', 'bad');
+  }
+  const data = encodeTransfer(to, m.valeur);
+  const info = $('#sendInfo');
+  if (info) info.textContent = 'Preparing transfer of ' + formaterUnites(m.valeur, dec)
+    + ' → ' + to + ' on ' + RESEAUX[chaine].nom + '…';
+  const r = await envoyerTx({
+    to: jeton, data, value: '0x0',
+    nom: 'ERC-20 transfer of block tokens to ' + to,
+  });
+  if (r && r.ok) {
+    dire('Send confirmed.\n' + r.hash, 'ok');
+    if (info) info.textContent = 'Confirmed: ' + r.hash;
+  }
+};
+
 /* ⛔ L INITIALISATION VIT EN BAS, apres TOUTES les declarations qu elle lit. Un appel place plus
  * haut s executait avant `const DEVISES` et vidait la page entiere. */
 peuplerDevises();
@@ -5740,6 +6175,8 @@ if (typeof restaurerVerrouLancementNatifAuChargement === 'function') {
 setFunnel('Idle');
 majCtaPacket();
 await rafraichir();
+/* Slice 1: honor ?block= (and keep ?cb=) after UI is ready. */
+if (typeof appliquerDeepLinkBlock === 'function') appliquerDeepLinkBlock();
 
 /* ══ WALLET accountsChanged / chainChanged — INVALIDATE STALE PLANS ═══════════════════════════
  * ⛔ Mesure de trou 2026-09-07 : aucun listener. Work out Launch → switch MetaMask account →
@@ -5766,6 +6203,12 @@ await rafraichir();
       'warn');
     try { await rafraichir(); } catch { /* ignore */ }
     gardeMainnet();
+    /* Slice 1: My blocks is per-account — clear stale list, refresh intro if open. */
+    const ml = $('#mesBlocksListe'), mv = $('#mesBlocksVue');
+    if (ml) ml.innerHTML = '';
+    if (mv) mv.innerHTML = '';
+    const mesOpen = $('#mesBlocksCard') && !$('#mesBlocksCard').hidden;
+    if (mesOpen && typeof selectAppSection === 'function') selectAppSection('mes');
   });
   window.ethereum.on('chainChanged', (hex) => {
     invaliderPlansTravail('chainChanged');
