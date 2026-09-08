@@ -1222,7 +1222,7 @@ function majCtaPacket() {
   if (btn && compte) {
     btn.textContent = practice
       ? 'Create the block'
-      : 'Create — 0.00005 ETH service fee + gas';
+      : (lireCreateFeeSession() ? 'Create — fee paid · gas only' : 'Create — 0.00005 ETH service fee + gas');
   }
 }
 
@@ -1396,6 +1396,65 @@ function createServiceFeeWei() {
 function feeWalletScanUrl() {
   const scan = (RESEAUX[chaine] && RESEAUX[chaine].scan) || 'https://basescan.org';
   return scan + '/address/' + FEE_WALLET;
+}
+/* ⛔ REAL CREATE FEE SESSION (2026-09-08 smoke): fee is a SEPARATE tx before Create.
+ * Measure: paid 0x78f16bda… then Rabby Create sim failed / cancel → hard refresh →
+ * page asked for 0.00005 ETH again. Fee lived only in the Create click stack.
+ * ⇒ sessionStorage keyed by {from,chaine,wei,to,hash}; skip re-charge only after
+ * receipt 0x1 + tx from/to/value re-check. Clear on Create success, account change,
+ * Practice/Real flip. Never invent a paid fee. */
+const CREATE_FEE_SESSION_CLE = 'tb-create-fee-session';
+function lireCreateFeeSession() {
+  try {
+    const raw = sessionStorage.getItem(CREATE_FEE_SESSION_CLE);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    if (!o || !o.hash || !o.from || o.chaine == null || o.wei == null || !o.to) return null;
+    return {
+      hash: String(o.hash),
+      from: String(o.from),
+      to: String(o.to),
+      chaine: o.chaine,
+      wei: String(o.wei),
+    };
+  } catch { return null; }
+}
+function ecrireCreateFeeSession(s) {
+  try {
+    if (!s) sessionStorage.removeItem(CREATE_FEE_SESSION_CLE);
+    else sessionStorage.setItem(CREATE_FEE_SESSION_CLE, JSON.stringify({
+      hash: s.hash, from: s.from, to: s.to, chaine: s.chaine, wei: String(s.wei),
+    }));
+  } catch { /* private mode / quota */ }
+}
+/** Return session fee if still valid on-chain for this compte+chaine+amount; else null (and clear). */
+async function createFeeDejaConfirmee(fraisWei) {
+  const s = lireCreateFeeSession();
+  if (!s || !compte || fraisWei <= 0n) return null;
+  if (s.chaine !== chaine) return null;
+  if (String(s.from).toLowerCase() !== String(compte).toLowerCase()) return null;
+  if (String(s.to).toLowerCase() !== FEE_WALLET.toLowerCase()) return null;
+  if (String(s.wei) !== fraisWei.toString()) return null;
+  if (!/^0x[0-9a-fA-F]{64}$/.test(s.hash)) { ecrireCreateFeeSession(null); return null; }
+  let receipt = null;
+  try { receipt = await rpc('eth_getTransactionReceipt', [s.hash]); } catch { receipt = null; }
+  if (!receipt || receipt.status !== '0x1') {
+    ecrireCreateFeeSession(null);
+    return null;
+  }
+  let tx = null;
+  try { tx = await rpc('eth_getTransactionByHash', [s.hash]); } catch { tx = null; }
+  if (!tx) return null; /* keep session — do not invent; retry next click */
+  if (String(tx.from || '').toLowerCase() !== String(compte).toLowerCase()) {
+    ecrireCreateFeeSession(null); return null;
+  }
+  if (String(tx.to || '').toLowerCase() !== FEE_WALLET.toLowerCase()) {
+    ecrireCreateFeeSession(null); return null;
+  }
+  let val = 0n;
+  try { val = BigInt(tx.value || '0x0'); } catch { ecrireCreateFeeSession(null); return null; }
+  if (val < fraisWei) { ecrireCreateFeeSession(null); return null; }
+  return s;
 }
 let chaine = 84532, compte = null, dernier = null;
 /* Soft-gate session state — declared early so relireJeton (above) never hits TDZ. */
@@ -2417,6 +2476,7 @@ for (const id of [84532, 8453]) $('#t' + id).onclick = () => {
    *    Switching Practice↔Real without clearing left Launch/Liq/Swap able to Sign octets
    *    simulated on the other network (page chaine updates; plancement.donnee does not). */
   if (typeof invaliderPlansTravail === 'function') invaliderPlansTravail('page Practice/Real tab');
+  if (typeof ecrireCreateFeeSession === 'function') ecrireCreateFeeSession(null);
   peuplerDevises();
   /* ⛔ LA GALERIE SUIT LE RESEAU. Sans ce rappel, elle garderait les blocks de l ancien reseau
    *    sous une note qui nommerait le nouveau — un mensonge pire que l absence de note. */
@@ -5490,34 +5550,55 @@ $('#agir').onclick = async () => {
         + 'Check the new address in « What you will sign », tick the gate, then Create again.\n'
         + (adr || ''), 'bad');
     }
-    /* ⛔ OVERNIGHT ECONOMY 2026-09-07: Real Create service fee BEFORE Create.
+    /* ⛔ OVERNIGHT ECONOMY 2026-09-07 + FEE-SESSION 2026-09-08: Real Create service fee BEFORE Create.
      * Separate visible ETH transfer to FEE_WALLET — never marketed as gas.
-     * Fail-closed: if fee transfer fails / is declined / receipt ≠ 0x1, Create is NOT sent. */
+     * Fail-closed: if fee transfer fails / is declined / receipt ≠ 0x1, Create is NOT sent.
+     * If fee already confirmed this session (sessionStorage + on-chain re-check), skip re-charge. */
     const fraisWei = createServiceFeeWei();
+    let feeHashNote = '';
     if (fraisWei > 0n) {
-      dire('Real Create: first a Tokenized Block service fee of 0.00005 ETH to\n'
-        + FEE_WALLET
-        + '\n(This is NOT network gas — gas still goes to Base validators.)\n'
-        + 'Create will open only after this transfer confirms.', 'warn');
-      afficherTx('wallet', 'Confirm the 0.00005 ETH Tokenized Block service fee (not gas).');
-      const frais = await envoyerTx({
-        to: FEE_WALLET,
-        data: '0x',
-        value: '0x' + fraisWei.toString(16),
-        nom: 'Tokenized Block Create service fee 0.00005 ETH (not gas)'
-      });
-      if (!frais || !frais.ok) {
-        setFunnel('Blocked');
-        afficherTx('fail', 'Service fee failed — Create NOT sent');
-        return dire('⛔ Create was NOT sent — Tokenized Block service fee did not confirm.\n'
-          + 'No Create calldata was broadcast. Fix the fee transfer (or decline), then try again.\n'
-          + 'Fee wallet: ' + FEE_WALLET + '\nAmount: 0.00005 ETH (service fee, not gas).', 'bad');
+      const deja = await createFeeDejaConfirmee(fraisWei);
+      if (deja) {
+        feeHashNote = deja.hash;
+        dire('Service fee already confirmed this session (no second charge):\n'
+          + deja.hash
+          + '\nRe-checked on-chain: status 0x1, to fee wallet, value ≥ 0.00005 ETH.\n'
+          + 'Next: Create only (factory calldata, value 0 — network gas separate).', 'ok');
+      } else {
+        dire('Real Create: first a Tokenized Block service fee of 0.00005 ETH to\n'
+          + FEE_WALLET
+          + '\n(This is NOT network gas — gas still goes to Base validators.)\n'
+          + 'Create will open only after this transfer confirms.', 'warn');
+        afficherTx('wallet', 'Confirm the 0.00005 ETH Tokenized Block service fee (not gas).');
+        const frais = await envoyerTx({
+          to: FEE_WALLET,
+          data: '0x',
+          value: '0x' + fraisWei.toString(16),
+          nom: 'Tokenized Block Create service fee 0.00005 ETH (not gas)'
+        });
+        if (!frais || !frais.ok) {
+          setFunnel('Blocked');
+          afficherTx('fail', 'Service fee failed — Create NOT sent');
+          return dire('⛔ Create was NOT sent — Tokenized Block service fee did not confirm.\n'
+            + 'No Create calldata was broadcast. Fix the fee transfer (or decline), then try again.\n'
+            + 'Fee wallet: ' + FEE_WALLET + '\nAmount: 0.00005 ETH (service fee, not gas).', 'bad');
+        }
+        ecrireCreateFeeSession({
+          hash: frais.hash,
+          from: compte,
+          to: FEE_WALLET,
+          chaine,
+          wei: fraisWei.toString(),
+        });
+        feeHashNote = frais.hash;
+        dire('Service fee confirmed: ' + frais.hash
+          + '\nRemembered for this tab/session — a Create refuse will not re-charge.\n'
+          + 'Next: Create the block (factory calldata, value 0 — network gas separate).', 'ok');
       }
-      dire('Service fee confirmed: ' + frais.hash
-        + '\nNext: Create the block (factory calldata, value 0 — network gas separate).', 'ok');
     }
     const feeNote = fraisWei > 0n
-      ? '\nTokenized Block service fee 0.00005 ETH already confirmed (separate tx).'
+      ? ('\nTokenized Block service fee 0.00005 ETH already confirmed (separate tx'
+        + (feeHashNote ? ': ' + feeHashNote : '') + ').')
       : '\nPractice: no Tokenized Block service fee.';
     dire('Your wallet will open.\nGas limit from estimate + 25% margin: ' + gaz.toString()
       + ' (estimate ' + mesure.gaz.toString() + ').'
@@ -5525,8 +5606,24 @@ $('#agir').onclick = async () => {
       + '\nRe-read the destination and the start of `data` before accepting.\n'
       + 'Network gas → Base validators (not Tokenized Block).', 'warn');
     afficherTx('wallet', 'Confirm the creation in your wallet.');
-    const hash = await window.ethereum.request({ method: 'eth_sendTransaction',
-      params: [{ from: compte, to: FACTORY, value: '0x0', data: dernier.data, gas: '0x' + gaz.toString(16) }] });
+    let hash;
+    try {
+      hash = await window.ethereum.request({ method: 'eth_sendTransaction',
+        params: [{ from: compte, to: FACTORY, value: '0x0', data: dernier.data, gas: '0x' + gaz.toString(16) }] });
+    } catch (eCreate) {
+      setFunnel('Ready');
+      if (fraisWei > 0n && feeHashNote) {
+        afficherTx('fail', 'Create not sent — fee already paid this session');
+        return dire('⛔ Create was NOT sent ('
+          + (refusUtilisateur(eCreate) ? 'wallet refuse / cancel' : (eCreate.message || String(eCreate)))
+          + ').\nTokenized Block service fee stays confirmed for this tab:\n'
+          + feeHashNote
+          + '\nClick Create again — this page will NOT ask for a second 0.00005 ETH fee.\n'
+          + 'If Rabby says « Node service unavailable », retry Create (fee skip) or switch RPC; do not re-pay.',
+          refusUtilisateur(eCreate) ? 'warn' : 'bad');
+      }
+      throw eCreate;
+    }
     setFunnel('Pending');
     dire('Sent.\n' + hash + '\n\nWaiting for receipt…', 'ok');
     afficherTx('pending', 'Waiting for the block…', hash);
@@ -5562,6 +5659,7 @@ $('#agir').onclick = async () => {
         leverSoftGateCreate('code verified');
         await relireJeton(adr);
         apresCreationConfirmee(adr);
+        ecrireCreateFeeSession(null);
         afficherTx('ok', 'Your block lives at\n' + adr, hash);
         return dire('Created and VERIFIED on-chain.\n' + adr + '\n' + hash
           + '\n\nLaunch / Liquidity / Swap are prefilled. Use « Launch this block » below for unilateral launch.', 'ok');
@@ -5617,6 +5715,7 @@ await rafraichir();
     if (compte && nouveau && compte.toLowerCase() === nouveau.toLowerCase()) return;
     compte = nouveau;
     invaliderPlansTravail('accountsChanged');
+    if (typeof ecrireCreateFeeSession === 'function') ecrireCreateFeeSession(null);
     if (typeof resetGardeAdrCreate === 'function') resetGardeAdrCreate('accountsChanged');
     $('#gardeCase').checked = false;
     consentRestaureCetteSession = false;
@@ -5631,6 +5730,7 @@ await rafraichir();
   });
   window.ethereum.on('chainChanged', (hex) => {
     invaliderPlansTravail('chainChanged');
+    if (typeof ecrireCreateFeeSession === 'function') ecrireCreateFeeSession(null);
     let id = NaN;
     try { id = parseInt(hex, 16); } catch { id = NaN; }
     const nom = (RESEAUX[id] && RESEAUX[id].nom) || ('chain ' + hex);
