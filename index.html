@@ -879,9 +879,11 @@ main[data-app="market"] > #marketCard { column-span: all; }
 
 <div id="gardeMainnet">
   <div class="t">⚠ Base mainnet — real money</div>
-  <p>Every action below will spend <b>real ETH</b>, and what you create is <b>permanent</b>: no
-  admin, no minter, no way to change the name, the logo or the description afterwards. Nobody can
-  undo it — not you, not us.</p>
+  <p><b>Create, Launch, Liquidity, Swap, Send, and Market pay</b> spend <b>real ETH</b>
+  (measured network gas beside those CTAs; Real Create also sends a separate 0.00005 ETH service fee).
+  Lookup, Quote, Read, gallery, and browsing asks do <b>not</b> spend — they are free to try.
+  What you create is <b>permanent</b>: no admin, no minter, no way to change the name, the logo or the
+  description afterwards. Nobody can undo it — not you, not us.</p>
   <label><input type="checkbox" id="gardeCase"> I understand this is mainnet and I accept the cost.</label>
   <!-- ⛔ MAINNET-DEEP-DIG trap #5 + C2 #8 (2026-09-07): 30d restore may pre-check `#gardeCase`, but
        habit-click Create / Launch / LP / Swap / Send without re-reading cost is refused. After restore
@@ -1784,6 +1786,79 @@ async function copierLienPartage(adr) {
  * Apply ?block=0x… from the URL: fill fields, open Lookup + Read, open Next steps.
  * Optional ?cb= is left untouched (cachebust coexistence).
  */
+/** Deep-link ?block= currently being resolved — used for first-class not-found UI. */
+let deepLinkBlockActif = null;
+
+function nomChaineCourte() {
+  return (RESEAUX[chaine] && RESEAUX[chaine].nom) || ('chain ' + chaine);
+}
+
+/** First-class missing/wrong-chain block state + recovery (flip Practice/Real or clear deep-link). */
+function htmlBlockIntrouvable(adr, cause) {
+  const autre = chaine === 8453 ? 84532 : 8453;
+  const autreNom = (RESEAUX[autre] && RESEAUX[autre].nom) || String(autre);
+  const causeL = cause ? ligne('why', enTexte(cause)) : '';
+  return ligne('state', pastille('BLOCK NOT FOUND ON ' + nomChaineCourte().toUpperCase(), 'bad'))
+    + ligne('', 'No contract code at <span class="mono">' + enTexte(adr) + '</span> on <b>'
+      + enTexte(nomChaineCourte()) + '</b>. Wrong network deep-link and a never-created address look the same here — we do not invent which.')
+    + causeL
+    + ligne('recovery', 'Switch Practice/Real if the block lives on the other Base network, or clear the deep-link and paste a known address.')
+    + '<div class="mbActions" style="margin-top:10px">'
+    + '<button type="button" class="act sec dlFlipChain" data-adr="' + enAttribut(adr) + '">Switch to '
+      + enTexte(autreNom) + '</button>'
+    + '<button type="button" class="act sec dlClearBlock">Clear deep-link</button>'
+    + '</div>';
+}
+
+function brancherRecupBlockIntrouvable(root) {
+  if (!root) return;
+  for (const flip of root.querySelectorAll('.dlFlipChain')) {
+    flip.onclick = () => {
+      const adr = flip.getAttribute('data-adr') || (deepLinkBlockActif || '');
+      const autre = chaine === 8453 ? 84532 : 8453;
+      const btn = $('#t' + autre);
+      if (btn) btn.click();
+      else { dire('Network tab missing — flip Practice/Real manually.', 'warn'); return; }
+      /* Re-check same ?block= on the new network after tab side-effects settle. */
+      setTimeout(async () => {
+        if (!adr || !/^0x[0-9a-fA-F]{40}$/.test(adr)) return;
+        deepLinkBlockActif = adr.toLowerCase();
+        prefillBlockChamps(adr);
+        let code = null, cause = null;
+        try { code = await rpc('eth_getCode', [adr, 'latest']); }
+        catch (e) { cause = e && e.message ? e.message : String(e); }
+        if (code === '0x' || code == null) {
+          dire('Block not found on ' + nomChaineCourte() + '.\n' + adr, 'bad');
+          const box = $('#rendu');
+          if (box) { box.innerHTML = htmlBlockIntrouvable(adr, cause || 'still empty after switch'); brancherRecupBlockIntrouvable(box); }
+          const sv = $('#swapVue');
+          if (sv) { sv.innerHTML = htmlBlockIntrouvable(adr, 'Cannot quote — no contract on this network'); brancherRecupBlockIntrouvable(sv); }
+          return;
+        }
+        const lireBtn = $('#lire'); if (lireBtn) lireBtn.click();
+        dire('Block found on ' + nomChaineCourte() + ' after switch.\n' + adr, 'ok');
+        const sv = $('#swapVue'); if (sv) sv.innerHTML = '';
+      }, 80);
+    };
+  }
+  for (const clr of root.querySelectorAll('.dlClearBlock')) {
+    clr.onclick = () => {
+      deepLinkBlockActif = null;
+      try {
+        const u = new URL(location.href);
+        u.searchParams.delete('block');
+        history.replaceState(null, '', u.pathname + u.search + u.hash);
+      } catch { /* ignore */ }
+      for (const id of ['lecture', 'lancBlock', 'poolToken', 'swapToken', 'sendToken']) {
+        const el = $('#' + id); if (el) el.value = '';
+      }
+      const box = $('#rendu'); if (box) box.innerHTML = '';
+      const sv = $('#swapVue'); if (sv) sv.innerHTML = '';
+      dire('Deep-link cleared — paste a block address or open Lookup.', 'ok');
+    };
+  }
+}
+
 function appliquerDeepLinkBlock() {
   let params;
   try { params = new URLSearchParams(location.search); } catch { return; }
@@ -1793,6 +1868,7 @@ function appliquerDeepLinkBlock() {
     dire('Deep link ?block= is not a valid address — ignored.\n' + raw, 'warn');
     return;
   }
+  deepLinkBlockActif = raw.toLowerCase();
   prefillBlockChamps(raw);
   if (document.body.classList.contains('simple')) {
     const b = $('#bascule'); if (b) b.click();
@@ -1802,12 +1878,37 @@ function appliquerDeepLinkBlock() {
   if (typeof selectNextStep === 'function') selectNextStep('swap');
   /* Soft highlight when ?block= lands — honest deep-link cue, not a fake success. */
   const rendu = $('#rendu'); if (rendu) rendu.classList.add('deepLinkOn');
-  /* Read after a tick so #lire handler and modules are fully wired. */
-  setTimeout(() => {
-    const lireBtn = $('#lire');
-    if (lireBtn) lireBtn.click();
+  /* Verify on-chain code before claiming the share opened — missing/wrong-chain ≠ silent Swap fail. */
+  setTimeout(async () => {
     const cible = $('#lookupCard') || $('#lecture');
     if (cible && cible.scrollIntoView) cible.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    let code = null, cause = null;
+    try { code = await rpc('eth_getCode', [raw, 'latest']); }
+    catch (e) { cause = e && e.message ? e.message : String(e); }
+    if (code === '0x' || code == null) {
+      const msg = 'Block not found on ' + nomChaineCourte()
+        + '.\n' + raw
+        + '\nSwitch Practice/Real if it lives on the other network, or clear the deep-link.';
+      dire(msg, 'bad');
+      const box = $('#rendu');
+      if (box) {
+        box.innerHTML = htmlBlockIntrouvable(raw, cause || (code === '0x' ? 'eth_getCode returned empty' : 'eth_getCode unread'));
+        brancherRecupBlockIntrouvable(box);
+      }
+      const sv = $('#swapVue');
+      if (sv) {
+        sv.innerHTML = htmlBlockIntrouvable(raw, 'Cannot quote — no contract on this network');
+        brancherRecupBlockIntrouvable(sv);
+      }
+      setTimeout(() => {
+        for (const el of [luc, ns, rendu]) {
+          if (el) el.classList.remove('deepLinkOn');
+        }
+      }, 2200);
+      return;
+    }
+    const lireBtn = $('#lire');
+    if (lireBtn) lireBtn.click();
     dire('Opened shared block from link.\n' + raw, 'ok');
     setTimeout(() => {
       for (const el of [luc, ns, rendu]) {
@@ -3487,10 +3588,20 @@ async function lireBlock(adr) {
     const code = await rpc('eth_getCode', [adr, 'latest']);
     if (code === '0x') {
       const sousPrefixe = /^0xb200/i.test(adr);
-      box.innerHTML = ligne('state', pastille(sousPrefixe ? 'NOT YET CREATED' : 'NO CODE', 'warn'))
-        + ligne('', sousPrefixe
-          ? 'A B20 address with nothing living at it yet — that is not the same as "not a B20".'
-          : 'Nothing is deployed at this address on this network.');
+      const fromDl = deepLinkBlockActif && String(adr).toLowerCase() === deepLinkBlockActif;
+      if (fromDl || sousPrefixe) {
+        box.innerHTML = htmlBlockIntrouvable(adr, sousPrefixe
+          ? 'Empty code at a B20-shaped address on ' + nomChaineCourte()
+          : 'Nothing deployed at this address on ' + nomChaineCourte());
+        brancherRecupBlockIntrouvable(box);
+        if (fromDl) {
+          dire('Block not found on ' + nomChaineCourte() + '.\n' + adr
+            + '\nSwitch Practice/Real or clear the deep-link.', 'bad');
+        }
+        return;
+      }
+      box.innerHTML = ligne('state', pastille('NO CODE', 'warn'))
+        + ligne('', 'Nothing is deployed at this address on this network.');
       return;
     }
     const txt = async (sel) => { try { return chaineDe(await rpc('eth_call', [{ to: adr, data: sel }, 'latest'])); } catch { return null; } };
@@ -4549,6 +4660,16 @@ async function etatSwap() {
   try { decB = Number(BigInt(await rpc('eth_call', [{ to: b20, data: abi.selecteurs['decimals()'] }, 'latest']))); }
   catch (e) { causeDec = e && e.message ? e.message : String(e); }
   if (decB === null) {
+    const fromDl = deepLinkBlockActif && String(b20).toLowerCase() === deepLinkBlockActif;
+    let codeChk = null;
+    try { codeChk = await rpc('eth_getCode', [b20, 'latest']); } catch { codeChk = null; }
+    if (fromDl || codeChk === '0x') {
+      box.innerHTML = htmlBlockIntrouvable(b20, causeDec || (codeChk === '0x'
+        ? 'No contract code — decimals() cannot run'
+        : 'decimals() unread'));
+      brancherRecupBlockIntrouvable(box);
+      return null;
+    }
     box.innerHTML = ligne('state', pastille('COULD NOT READ THE BLOCK DECIMALS', 'warn'))
       + ligne('why', enTexte(causeDec || 'not measured'))
       + ligne('what to do', 'Click "Quote it" again in a few seconds.');
@@ -6549,15 +6670,19 @@ function lienAskPour(ask) {
   u.searchParams.set('amt', ask.amount);
   u.searchParams.set('price', ask.priceEth);
   if (ask.note) u.searchParams.set('note', ask.note);
-  /* Practice vs Real deep-link: same chain id as page / ask (84532 Sepolia · 8453 Base). */
-  const cid = (ask.chainId != null ? ask.chainId : chaine);
-  if (cid === 8453 || cid === 84532) u.searchParams.set('chain', String(cid));
+  /* Practice vs Real deep-link: chainId required on ask (fail closed — never invent). */
+  const cid = (ask.chainId != null && ask.chainId !== '') ? Number(ask.chainId) : null;
+  if (cid !== 8453 && cid !== 84532) return null;
+  u.searchParams.set('chain', String(cid));
   return u.toString();
 }
 
 async function copierLienAsk(ask) {
   const lien = lienAskPour(ask);
-  if (!lien) { dire('Need a valid ask to share.', 'warn'); return; }
+  if (!lien) {
+    dire('Need a valid ask with chainId (84532 Practice / 8453 Real) to share — copy aborted.', 'warn');
+    return;
+  }
   try {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       await navigator.clipboard.writeText(lien);
@@ -6588,12 +6713,17 @@ function askCourantDepuisForm() {
   const amount = (($('#listAmount') && $('#listAmount').value.trim()) || '');
   const priceEth = (($('#listPrice') && $('#listPrice').value.trim()) || '');
   const note = (($('#listNote') && $('#listNote').value.trim()) || '');
-  return { block, seller: compte, amount, priceEth, note };
+  /* Fail-closed: list/copy always stamp page chainId (84532 / 8453) — never omit. */
+  return { block, seller: compte, amount, priceEth, note, chainId: chaine };
 }
 
 function validerAskChamps(ask) {
   if (!compte) return 'Connect your wallet first — seller address comes from the connected account.';
   if (!/^0x[0-9a-fA-F]{40}$/.test(ask.block || '')) return 'Block token is not an address.';
+  const cid = ask && ask.chainId != null && ask.chainId !== '' ? Number(ask.chainId) : null;
+  if (cid !== 8453 && cid !== 84532) {
+    return 'Ask chainId required (84532 Practice or 8453 Real) — list/copy refused (fail closed).';
+  }
   const amt = montantHumain(ask.amount, 18); /* human units display — decimals checked at settle/Send */
   if (amt.etat !== 'OK' || amt.valeur <= 0n) {
     return 'Amount refused — digits and one decimal point only, must be > 0.';
@@ -6609,7 +6739,11 @@ let settleAskActif = null;
 
 /** Ask network vs page Practice/Real — refuse money path on mismatch (fail closed). */
 function askChaineMismatch(ask) {
-  if (!ask || ask.chainId == null || ask.chainId === '') return null;
+  if (!ask) return null;
+  /* Missing chainId = fail-closed (do not skip mismatch). List/copy must stamp chainId. */
+  if (ask.chainId == null || ask.chainId === '') {
+    return 'Ask has no chainId — refuse. Re-list or open a link with ?chain=84532 (Practice) or 8453 (Real). Nothing was sent.';
+  }
   const id = Number(ask.chainId);
   if (id !== 8453 && id !== 84532) {
     return 'Ask chainId ' + ask.chainId + ' is not Practice (84532) or Real (8453) — refuse.';
@@ -6697,7 +6831,16 @@ function rafraichirMarche() {
   if (asks.length === 0) {
     board.innerHTML = '<p class="expl">No browser listings on this network'
       + (mode === 'mine' ? ' for your address' : '')
-      + '. Empty board ≠ invented depth. Use <b>List</b> on My blocks (or List on Market after Create).</p>';
+      + '. Empty board ≠ invented depth — we do <b>not</b> invent sample orders.</p>'
+      + '<div class="mkRisk" role="note" style="margin-top:10px">'
+      + '<b>Ask shape (example — not a live listing):</b> '
+      + '<span class="mono">?block=0xb200…&amp;ask=1&amp;seller=0x…&amp;amt=1&amp;price=0.01&amp;chain='
+      + enTexte(String(chaine)) + '</span>'
+      + '<br>Fields: block token · seller · amount (whole units) · price ETH total · chain (84532 Practice / 8453 Real).'
+      + '<br><b>Two-step settle (honest):</b> (1) buyer pays ask ETH to seller wallet — tokens do <b>not</b> move; '
+      + '(2) seller Opens Send and confirms the listed amount to the buyer — ETH does <b>not</b> move with that Send. '
+      + 'Not atomic · no escrow · counterparty can walk away after step 1.'
+      + '<br>Use <b>List</b> on My blocks (or List on Market after Create) to add a real browser intent.</div>';
     return;
   }
   const cards = [];
@@ -6796,13 +6939,19 @@ function appliquerDeepLinkAsk() {
     return;
   }
   const urlChain = lireChainDepuisUrl(params);
+  if (urlChain == null) {
+    dire('Ask link missing ?chain= / ?chainId= — refuse (fail closed).\n'
+      + 'Add chain=84532 (Practice) or chain=8453 (Real), then reopen.', 'bad');
+    selectAppSection('market');
+    return;
+  }
   const ask = {
     block,
     seller: seller || '0x0000000000000000000000000000000000000000',
     amount,
     priceEth,
     note,
-    chainId: (urlChain != null ? urlChain : chaine),
+    chainId: urlChain,
     createdAt: Date.now(),
     unverified: true,
     fromLink: true,
@@ -7235,14 +7384,30 @@ if (_sendAgir) _sendAgir.onclick = async () => {
   if (r && r.ok) {
     dire('Send confirmed.\n' + r.hash, 'ok');
     if (info) info.textContent = 'Confirmed: ' + r.hash;
-    /* Settle step 2 = tokens moved (not merely Open Send). Match active ask when present. */
+    /* Settle step 2 = tokens moved (not merely Open Send). Verify block + amount + to vs ask. */
     const ask = settleAskActif;
     if (ask && ask.block && String(ask.block).toLowerCase() === jeton.toLowerCase()) {
-      const s2 = $('#settleStep2'); if (s2) s2.classList.add('on');
+      const askAmt = montantHumain(String(ask.amount), dec);
+      const amtMatch = askAmt.etat === 'OK' && askAmt.valeur === m.valeur;
+      const toMatch = /^0x[0-9a-fA-F]{40}$/.test(to)
+        && to.toLowerCase() !== String(ask.seller || '').toLowerCase();
       const infoSettle = $('#settleInfo');
-      if (infoSettle) {
-        infoSettle.textContent = 'Send confirmed: ' + r.hash
-          + ' — settle step 2 complete for this ask (still not atomic with ETH pay).';
+      if (amtMatch && toMatch) {
+        const s2 = $('#settleStep2'); if (s2) s2.classList.add('on');
+        if (infoSettle) {
+          infoSettle.textContent = 'Send confirmed: ' + r.hash
+            + ' — settle step 2 complete for this ask (amount + recipient match; still not atomic with ETH pay).';
+        }
+      } else {
+        if (infoSettle) {
+          infoSettle.textContent = 'Send confirmed: ' + r.hash
+            + ' — but amount/recipient do not match the active ask'
+            + (!amtMatch ? ' (amount ' + enTexte(montantTxt) + ' ≠ ask ' + enTexte(String(ask.amount)) + ')' : '')
+            + (!toMatch ? ' (recipient must be buyer, not seller)' : '')
+            + '. Step 2 NOT marked complete. Still not atomic.';
+        }
+        dire('Send confirmed, but it does not match the active ask amount/recipient — '
+          + 'settle step 2 left unmarked (honesty).', 'warn');
       }
     }
   } else if (info && !r) {
