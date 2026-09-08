@@ -1847,6 +1847,10 @@ function brancherRecupBlockIntrouvable(root) {
       try {
         const u = new URL(location.href);
         u.searchParams.delete('block');
+        /* C2 soft #43: Clear must drop ask deep-link too — keep ?cb= / ?chain= as appropriate. */
+        for (const k of ['ask', 'list', 'seller', 'amt', 'amount', 'price', 'note']) {
+          u.searchParams.delete(k);
+        }
         history.replaceState(null, '', u.pathname + u.search + u.hash);
       } catch { /* ignore */ }
       for (const id of ['lecture', 'lancBlock', 'poolToken', 'swapToken', 'sendToken']) {
@@ -4799,7 +4803,12 @@ async function etatSwap() {
     }
   } catch (e) {
     quoteCause = e && e.message ? e.message : String(e);
-    vue += ligne('quote', pastille('NO QUOTE', 'warn')) + ligne('why', enTexte(quoteCause));
+    /* Dig post-#41: user copy — no usable pool/quote; do not invent liquidity. */
+    const whyQ = /execution reverted/i.test(String(quoteCause || ''))
+      ? 'no usable pool/quote found (chain refused the quoter call — often empty/near-empty book)'
+      : (quoteCause || 'no usable pool/quote found');
+    vue += ligne('quote', pastille('NO USABLE POOL/QUOTE FOUND', 'warn'))
+      + ligne('why', enTexte(whyQ));
     /* ⛔ Sell sur Launch frais : pool initialisee + Buy cote → pas d ETH cote devise.
      *    Mesure 2026-09-07 (retest apres PR #11) : « execution reverted » / NO QUOTE sur sell
      *    frais ; Buy tiny ETH→blocks passe. Dire la cause mesuree, pas un vague revert. */
@@ -4877,7 +4886,7 @@ async function etatSwap() {
     }
     if (forme === null) for (const [k, c] of Object.entries(causes || {})) vue += ligne(k, enTexte(String(c).slice(0, 120)));
   } else if (autorise && compte && sortie === null) {
-    vue += ligne('2. swap', pastille('NO QUOTE — NOTHING TO SEND', 'dim'));
+    vue += ligne('2. swap', pastille('NO USABLE POOL/QUOTE — NOTHING TO SEND', 'dim'));
   } else {
     vue += ligne('2. swap', pastille(autorise ? 'CONNECT WALLET' : 'AFTER STEP 1', 'dim'));
   }
@@ -7389,6 +7398,7 @@ if (_sendAgir) _sendAgir.onclick = async () => {
     if (ask && ask.block && String(ask.block).toLowerCase() === jeton.toLowerCase()) {
       const askAmt = montantHumain(String(ask.amount), dec);
       const amtMatch = askAmt.etat === 'OK' && askAmt.valeur === m.valeur;
+      /* Ask has no buyer field — step2 match is recipient ≠ seller (not « is buyer »). */
       const toMatch = /^0x[0-9a-fA-F]{40}$/.test(to)
         && to.toLowerCase() !== String(ask.seller || '').toLowerCase();
       const infoSettle = $('#settleInfo');
@@ -7396,14 +7406,14 @@ if (_sendAgir) _sendAgir.onclick = async () => {
         const s2 = $('#settleStep2'); if (s2) s2.classList.add('on');
         if (infoSettle) {
           infoSettle.textContent = 'Send confirmed: ' + r.hash
-            + ' — settle step 2 complete for this ask (amount + recipient match; still not atomic with ETH pay).';
+            + ' — settle step 2 complete for this ask (amount match + recipient ≠ seller; ask has no buyer field — still not atomic with ETH pay).';
         }
       } else {
         if (infoSettle) {
           infoSettle.textContent = 'Send confirmed: ' + r.hash
             + ' — but amount/recipient do not match the active ask'
             + (!amtMatch ? ' (amount ' + enTexte(montantTxt) + ' ≠ ask ' + enTexte(String(ask.amount)) + ')' : '')
-            + (!toMatch ? ' (recipient must be buyer, not seller)' : '')
+            + (!toMatch ? ' (recipient must be a valid address ≠ seller — ask has no buyer field)' : '')
             + '. Step 2 NOT marked complete. Still not atomic.';
         }
         dire('Send confirmed, but it does not match the active ask amount/recipient — '
