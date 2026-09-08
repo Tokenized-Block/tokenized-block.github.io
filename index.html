@@ -1250,6 +1250,10 @@ main[data-app="market"] > #marketCard { column-span: all; }
        avec temoin positif ET temoin negatif). -->
   <div class="nsPanel on" id="ns-launch" role="tabpanel" data-ns="launch">
     <p class="expl">Put the <b>whole supply</b> in the pool with <b>only the token</b>. Buyers bring the ETH — no capital needed to launch.</p>
+    <!-- STOCK-QUOTE HONESTY 2026-09-08: GH Pages Launch is native ETH only (fee 0 / spacing 200).
+         Tokenized-stock quotes (Coinbase B20 on Base) are OpenLaunch LaunchForm + issuer registry —
+         not this create track. Do not imply "any quote asset" here. -->
+    <p class="expl" style="margin:6px 0 0;color:#f0c674" id="lancQuoteHonesty">Launch quote on this page is <b>native ETH only</b> (Uniswap v4 PoolKey fee <b>0</b> · tickSpacing <b>200</b>). This selector does <b>not</b> price the Launch pool in WETH, USDC, or a tokenized stock. Enterprise self-stock valuation (buyers pay in NVDAc / AAPLc / …) ships on <b>OpenLaunch</b> Launch — registry addresses only, never invented tickers.</p>
     <label for="lancBlock">Block to launch</label>
     <input id="lancBlock" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
     <label for="lancValo">What the whole supply is worth at the start — in ETH</label>
@@ -1309,6 +1313,7 @@ main[data-app="market"] > #marketCard { column-span: all; }
       Launch. Liquidity / Swap stay on <b>ETH</b> to match the pool that holds your supply, unless
       you knowingly want a second pool. Swap has the same ack (quote shared via this selector).</p>
       <label><input type="checkbox" id="gardeDeviseHorsLaunchCase"> I know this is a different pool than Launch — continue with WETH/USDC.</label>
+      <p class="expl" style="margin:8px 0 0;color:#9aa8bf">Tokenized stocks are <b>not</b> offered in this quote list — selecting one is refused (fail-closed). No soft-gate path for stock pairs on GH Pages.</p>
     </div>
     <label for="poolValeur">Starting value of the whole supply</label>
     <input id="poolValeur" value="10000" inputmode="numeric">
@@ -1358,6 +1363,7 @@ main[data-app="market"] > #marketCard { column-span: all; }
       <div class="t">⚠ Not the Launch pool</div>
       <p>After native Launch (<b>ETH · fee 0 · spacing 200</b>), <b>WETH</b>/<b>USDC</b> hit a <b>different PoolKey</b> (3000/60) — often empty. Tick here (or on Liquidity) before Run, or switch quote back to ETH on the Liquidity tab.</p>
       <label><input type="checkbox" id="gardeDeviseHorsLaunchCaseSwap"> I know this is a different pool than Launch — continue with WETH/USDC.</label>
+      <p class="expl" style="margin:8px 0 0;color:#9aa8bf">Tokenized stocks are <b>not</b> in the Liquidity quote selector — Quote/Swap refuse them here (fail-closed).</p>
     </div>
     <label>Direction</label>
     <div class="swapDir" role="group" aria-label="Buy or sell">
@@ -1505,8 +1511,11 @@ main[data-app="market"] > #marketCard { column-span: all; }
   get two different blocks. The same wallet with the same salt gets the same address — so a salt
   you have already used is already taken.</p>
 
-  <p class="expl"><b>Then it can be traded.</b> A block can be paired with another currency in a
-  Uniswap v4 pool, quoted, and swapped. The app builds every one of those transactions in your
+  <p class="expl"><b>Then it can be traded.</b> On <b>this</b> GH Pages create track, Launch pairs the
+  block with <b>native ETH</b> (fee 0 · spacing 200). Liquidity / Swap may also target <b>WETH</b> or
+  <b>USDC</b> on Base Real — those are different PoolKeys (fee 3000 · spacing 60), often empty after
+  Launch. <b>Tokenized-stock quotes are not selectable here</b> (Coinbase B20 stocks live in the
+  issuer registry / OpenLaunch LaunchForm). The app builds every offered transaction in your
   browser and shows you the state it reads back from the chain between each step.</p>
 
   <p class="expl"><b>This page never holds a key and never holds funds.</b> It encodes a
@@ -3364,6 +3373,30 @@ function peuplerDevises() {
         + d.nom + '. Decimals are read on-chain at Check (USDC is typically 6, not 18).';
     }
   }
+  /* Stock-quote honesty: supported list vs issuer registry (disclose + refuse, never selectable). */
+  let stockNote = $('#poolQuoteStockHonesty');
+  if (!stockNote) {
+    const selEl = $('#poolDevise');
+    if (selEl && selEl.parentNode) {
+      stockNote = document.createElement('p');
+      stockNote.id = 'poolQuoteStockHonesty';
+      stockNote.className = 'expl';
+      stockNote.style.cssText = 'margin:8px 0 0;color:#9aa8bf';
+      selEl.parentNode.insertBefore(stockNote, selEl.nextSibling);
+    }
+  }
+  if (stockNote) {
+    const noms = (typeof STOCKS_BASE_REGISTRY !== 'undefined')
+      ? STOCKS_BASE_REGISTRY.map((s) => s.symbol).join(', ')
+      : 'NVDAc, AAPLc, TSLAc, …';
+    /* noms = registry symbols only (A–Z / digits) — no user HTML. */
+    stockNote.textContent = 'Quote currencies on this page: ETH (Launch PoolKey), plus WETH'
+      + (chaine === 8453 ? ' / USDC (Base Real)' : ' (Practice)')
+      + '. Tokenized stocks are refused here — Coinbase B20 issuer registry on Base ('
+      + noms
+      + '). Addresses are never labelled as stocks unless they match that registry. To create a pool'
+      + ' priced in a chosen stock, use OpenLaunch Launch (Advanced → Stock), not this GH Pages Launch.';
+  }
   if (typeof syncGardeDeviseHorsLaunch === 'function') syncGardeDeviseHorsLaunch();
 }
 /* ⛔ CET APPEL EST DESCENDU EN BAS DU MODULE. Ici, il s executait AVANT la declaration de
@@ -3846,6 +3879,36 @@ const DEVISES = {
           { adr: '0x4200000000000000000000000000000000000006', nom: 'WETH', enveloppable: true },
           { adr: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', nom: 'USDC', enveloppable: false }],
 };
+/* ⛔ STOCK QUOTE REGISTRY DISCLOSE + REFUSE 2026-09-08 (DIG-B20-STOCK-PAIR).
+ * Source = Coinbase tokenized stocks on Base (B20), same static issuer list OpenLaunch
+ * `baseStocks.ts` / docs.base.org — NEVER invent tickers or addresses. These addresses are
+ * documented so the UX can name what it refuses; they are NOT added to DEVISES / #poolDevise.
+ * Pairing a created block with a chosen stock as Uniswap v4 quote = OpenLaunch LaunchForm path
+ * (HOSTED-BLOCK.md: keep GH Pages create track separate from OL Instant skin). */
+const STOCKS_BASE_REGISTRY = [
+  { symbol: 'AAPLc', nom: 'Apple', adr: '0xb200000000000000000000c2e324d24d7eecd1fb' },
+  { symbol: 'AMZNc', nom: 'Amazon', adr: '0xb200000000000000000000d9192b6b456483c2e8' },
+  { symbol: 'COINc', nom: 'Coinbase', adr: '0xb200000000000000000000c85a31389d71f3ecfb' },
+  { symbol: 'CRCLc', nom: 'Circle', adr: '0xb20000000000000000000019f6e7c675b73c2e4d' },
+  { symbol: 'GOOGLc', nom: 'Alphabet', adr: '0xb2000000000000000000002d0ba3164cc74f58b7' },
+  { symbol: 'INTCc', nom: 'Intel', adr: '0xb2000000000000000000004aff16039ba04bdfbc' },
+  { symbol: 'METAc', nom: 'Meta Platforms', adr: '0xb2000000000000000000008bc8786b856e61707c' },
+  { symbol: 'MSFTc', nom: 'Microsoft', adr: '0xb200000000000000000000ab99cfa739e253872b' },
+  { symbol: 'MSTRc', nom: 'Strategy', adr: '0xb2000000000000000000004884b426556b92883d' },
+  { symbol: 'NVDAc', nom: 'NVIDIA', adr: '0xb20000000000000000000078ee7ce2fe4908108c' },
+  { symbol: 'SNDKc', nom: 'Sandisk', adr: '0xb200000000000000000000397293cb8cda9a10c5' },
+  { symbol: 'SPCXc', nom: 'SpaceX', adr: '0xb2000000000000000000007b9fcbd005511acbd5' },
+  { symbol: 'TSLAc', nom: 'Tesla', adr: '0xb2000000000000000000001e800a7f5189430cd0' },
+];
+const STOCKS_BASE_BY_ADR = new Map(STOCKS_BASE_REGISTRY.map((s) => [s.adr.toLowerCase(), s]));
+/** True when quote address is a Coinbase B20 stock from the issuer registry — refuse on this page. */
+function estQuoteStockRefusee(adr) {
+  return STOCKS_BASE_BY_ADR.has(String(adr || '').toLowerCase());
+}
+function etiquetteStockRefusee(adr) {
+  const s = STOCKS_BASE_BY_ADR.get(String(adr || '').toLowerCase());
+  return s ? (s.symbol + ' (' + s.nom + ')') : 'tokenized stock';
+}
 /** ⛔ Une seule definition : deux endroits qui testeraient « === 0x0 » autrement divergeraient. */
 function estEthNatif(adr) {
   return String(adr || '').toLowerCase() === ETH_NATIF;
@@ -3867,6 +3930,10 @@ const V4 = {
 function devise(chaine) {
   const liste = DEVISES[chaine] || [];
   const choisi = $('#poolDevise')?.value;
+  /* Fail-closed: registry stock address must never become the active Liquidity/Swap quote. */
+  if (typeof estQuoteStockRefusee === 'function' && estQuoteStockRefusee(choisi)) {
+    return null;
+  }
   return liste.find((d) => d.adr.toLowerCase() === String(choisi).toLowerCase()) || liste[0];
 }
 const PERMIT2 = '0x000000000022D473030F116dDEE9F6B43aC78BA3';
@@ -3978,7 +4045,16 @@ async function construirePlan() {
   /* ⛔ UN SEUL POINT DE VERITE POUR LA DEVISE. Deux endroits qui la liraient differemment
    * produiraient deux `PoolKey` differentes — donc deux pools, dont une vide. */
   const d0 = devise(chaine);
-  if (!d0) { $('#poolVue').innerHTML = ligne('state', pastille('NO QUOTE CURRENCY FOR THIS CHAIN', 'bad')); return null; }
+  if (!d0) {
+    const choisi = $('#poolDevise')?.value;
+    const stock = typeof estQuoteStockRefusee === 'function' && estQuoteStockRefusee(choisi);
+    const msg = stock
+      ? ('STOCK QUOTE REFUSED — ' + etiquetteStockRefusee(choisi)
+        + ' is a Coinbase B20 issuer-registry stock. This GH Pages track does not pair Launch/Liquidity/Swap with tokenized stocks. Use OpenLaunch Launch (Advanced → Stock).')
+      : 'NO QUOTE CURRENCY FOR THIS CHAIN';
+    $('#poolVue').innerHTML = ligne('state', pastille(msg, 'bad'));
+    return null;
+  }
   const v = { ...V4[chaine], quote: d0.adr, quoteNom: d0.nom, enveloppable: d0.enveloppable };
   if (!v) { box.innerHTML = ligne('state', pastille('CHAIN NOT SUPPORTED', 'bad')); return null; }
   /* ⛔ REFUSER, PAS NETTOYER. Voir `entierStrict` : l ancien `.replace(/\D/g,'')` lisait « 1.5 »
@@ -4667,7 +4743,16 @@ async function etatSwap() {
   const b20 = $('#swapToken').value.trim();
   if (!/^0x[0-9a-fA-F]{40}$/.test(b20)) { box.innerHTML = ligne('state', pastille('NOT AN ADDRESS', 'bad')); return null; }
   const dS = devise(chaine);
-  const v = dS ? { ...V4[chaine], quote: dS.adr, quoteNom: dS.nom, enveloppable: !!dS.enveloppable } : null;
+  if (!dS) {
+    const choisi = $('#poolDevise')?.value;
+    const stock = typeof estQuoteStockRefusee === 'function' && estQuoteStockRefusee(choisi);
+    box.innerHTML = ligne('state', pastille(stock
+      ? ('STOCK QUOTE REFUSED — ' + etiquetteStockRefusee(choisi)
+        + ' not selectable on GH Pages. OpenLaunch Launch (Advanced → Stock) for registry stock quotes.')
+      : 'NO QUOTE CURRENCY FOR THIS CHAIN', 'bad'));
+    return null;
+  }
+  const v = { ...V4[chaine], quote: dS.adr, quoteNom: dS.nom, enveloppable: !!dS.enveloppable };
   const ur = ROUTEUR[chaine], q = QUOTER[chaine];
   if (!v || !ur) { box.innerHTML = ligne('state', pastille('CHAIN NOT SUPPORTED', 'bad')); return null; }
   /* ⛔ Buy = depenser la devise (ETH/WETH/…) → recevoir des blocks. Sell = l inverse.
