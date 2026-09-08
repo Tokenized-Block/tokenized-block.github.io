@@ -1571,7 +1571,15 @@ async function rpc(m, p, essais = 4, attente = 350) {
 async function appelBrut(tx) {
   const r = await fetch(RESEAUX[chaine].rpc, { method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ jsonrpc: '2.0', id: ++n, method: 'eth_call', params: [tx, 'latest'] }) });
-  return r.json();
+  let j = null;
+  try { j = await r.json(); } catch {
+    return { error: { code: -32016, message: 'HTTP ' + r.status + ' — empty/non-JSON RPC body' } };
+  }
+  if (!r.ok) {
+    const msg = (j && j.error && j.error.message) ? j.error.message : ('HTTP ' + r.status);
+    return { error: { code: (j && j.error && j.error.code) || -32016, message: msg, httpStatus: r.status } };
+  }
+  return j;
 }
 /* ⛔ « J ai refuse » et « ca a plante » sont deux faits opposes. Les wallets rendent le code
  * EIP-1193 4001 pour un refus explicite ; sans lui on ne PRESUME pas, on dit « failed ». */
@@ -4030,16 +4038,22 @@ async function etatSwap() {
       : pastille('TO DO', 'warn'));
   }
 
-  let forme = null, causes = null;
+  let forme = null, causes = null, transportForme = false;
   if (autorise && compte && sortie !== null) {
     const bloc0 = await rpc('eth_getBlockByNumber', ['latest', false]);
     const deadline = BigInt(bloc0.timestamp) + 600n;
-    ({ forme, causes } = await formeAcceptee({
+    ({ forme, causes, transport: transportForme } = await formeAcceptee({
       appelBrut, ur, de: compte, cle, zeroForOne, montant, deadline,
       value: valeurHex || undefined,
     }));
-    vue += ligne('2. swap', forme === null ? pastille('BOTH SHAPES REJECTED', 'bad')
+    vue += ligne('2. swap', forme === null
+      ? (transportForme
+          ? pastille('RPC THROTTLED — RETRY', 'warn')
+          : pastille('BOTH SHAPES REJECTED', 'bad'))
       : pastille('READY · ' + (forme === AVEC_MINHOP ? 'with minHopPriceX36' : 'legacy shape'), 'ok'));
+    if (forme === null && transportForme) {
+      vue += ligne('rpc', 'Public RPC rate-limited both encodings — not proof the router rejects them. Quote again in a few seconds.');
+    }
     if (forme === null) for (const [k, c] of Object.entries(causes || {})) vue += ligne(k, enTexte(String(c).slice(0, 120)));
   } else if (autorise && compte && sortie === null) {
     vue += ligne('2. swap', pastille('NO QUOTE — NOTHING TO SEND', 'dim'));
@@ -4085,6 +4099,8 @@ async function etatSwap() {
     vue += ligne('⛔ Real · thin/unread',
       'Thin or unread pool — this page will not send. Re-Quote or reduce size. '
       + '<b>1% minOut does not protect you here.</b>');
+  } else if (autorise && forme === null && transportForme) {
+    empeche = 'RPC throttled — Quote again in a few seconds';
   } else if (autorise && forme === null) empeche = 'The router rejected both encodings';
   b.disabled = empeche !== null;
   b.textContent = empeche ? empeche
@@ -4108,7 +4124,7 @@ async function etatSwap() {
   /* Re-force Real thin fail-closed after gardeMainnet (force-refuse only elsewhere). */
   if (minceBloqueReal && b) b.disabled = true;
   return {
-    b20, cle, zeroForOne, montant, ur, autorise, forme, sortie,
+    b20, cle, zeroForOne, montant, ur, autorise, forme, transport: !!transportForme, sortie,
     sortieMin: sortieMinPlan, perte, minceVsMid, midNonMesure, minceBloqueReal,
     acheter, entreeEstNatif, jetonEntree, valeur: valeurHex || '0x0',
   };
@@ -5315,6 +5331,10 @@ $('#swapAgir').onclick = async () => {
       /* ⛔ Jeton D ENTREE : block en Sell, devise (WETH/USDC) en Buy ERC20 — jamais le block en Buy. */
       data = encodePermit2Approve(p.jetonEntree || p.b20, p.ur, MAX_UINT160, MAX_UINT48);
     } else {
+      if (p.forme === null && p.transport) {
+        return dire('RPC throttled both encodings — not a router reject.\n'
+          + 'Quote again in a few seconds. Nothing was sent.', 'warn');
+      }
       if (p.forme === null) return dire('The router rejected both encodings — nothing to sign.', 'bad');
       if (p.sortie === null) return dire('No quote — nothing to send.', 'bad');
       const bloc0 = await rpc('eth_getBlockByNumber', ['latest', false]);
