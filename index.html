@@ -797,6 +797,28 @@ main[data-app="market"] > #marketCard { column-span: all; }
   background:#241c10;border:1px solid #5a4420;border-radius:10px;padding:8px 10px}
 #blockHome .bhActions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 #blockHome .bhActions button{flex:1 1 110px;min-height:42px}
+/* History shell (2026-09-08) — fail-closed append-only evidence UI; no fake score */
+#blockHome .bhHistory{margin-top:14px;padding-top:12px;border-top:1px solid #1c2740}
+#blockHome .bhHistHead{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 12px;margin-bottom:8px}
+#blockHome .bhHistHead h3{margin:0;font-size:14px;font-weight:800;letter-spacing:.02em}
+#blockHome .bhHistSub{margin:0;font-size:12px;color:var(--dim);line-height:1.4;flex:1 1 200px}
+#blockHome .bhHistBoard{margin:0 0 10px;padding:8px 10px;border-radius:10px;border:1px solid #2a3a58;
+  background:#0a101c;font-size:12.5px;line-height:1.45;color:#c8d4ea}
+#blockHome .bhHistBoard .bhHistBoardLabel{font-weight:700;color:#9eb6d8;margin-right:6px}
+#blockHome .bhHistList{margin:0;padding:0;list-style:none;border:1px solid #1c2740;border-radius:10px;
+  background:#070b14;overflow:hidden}
+#blockHome .bhHistList li{display:grid;grid-template-columns:minmax(88px,1fr) minmax(120px,1.4fr) minmax(100px,1fr) minmax(80px,.9fr);
+  gap:6px 10px;padding:8px 10px;border-bottom:1px solid #1c2740;font-size:12px;line-height:1.35}
+#blockHome .bhHistList li:last-child{border-bottom:none}
+#blockHome .bhHistList .bhHEmpty{display:block;padding:12px 10px;color:#c9b896;font-size:12.5px;line-height:1.45;
+  background:#241c10;border:0;grid-template-columns:1fr}
+#blockHome .bhHistList .bhHCol{color:#8a9bb8;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em}
+#blockHome .bhHistList .bhHVal{color:#e8eef8;word-break:break-word}
+#blockHome .bhHistList a.mono{color:#7ec8ff;text-decoration:underline;text-underline-offset:2px}
+#blockHome .bhHistFoot{margin:8px 0 0;font-size:11.5px;color:var(--dim);line-height:1.4}
+@media (max-width:640px){
+  #blockHome .bhHistList li:not(.bhHEmpty){grid-template-columns:1fr 1fr}
+}
 main[data-app="mes"] > #blockHome,
 main[data-app="market"] > #blockHome{display:none !important}
 
@@ -1119,7 +1141,7 @@ main[data-app="market"] > #blockHome{display:none !important}
   <p class="shareWhy">After Create + connect — Share and Send need your block address and wallet.</p>
 </div>
 
-<!-- Block home companion stub: post-Create décor + re-readable chain facts (no fake HP / no custody). -->
+<!-- Block home companion stub: post-Create décor + honesty strip + History shell (no fake HP / no trust score). -->
 <div id="blockHome" aria-label="Block companion home" hidden>
   <div class="bhHead">
     <div class="bhDecor"><div id="blockHomeDecor"></div></div>
@@ -1131,6 +1153,16 @@ main[data-app="market"] > #blockHome{display:none !important}
       <div class="bhActions" id="blockHomeActions"></div>
     </div>
   </div>
+  <!-- History shell: append-only Transfer evidence UI — fail-closed until Transfer indexer exists. -->
+  <section class="bhHistory" id="blockHomeHistory" aria-label="Block transfer history">
+    <div class="bhHistHead">
+      <h3>History</h3>
+      <p class="bhHistSub">This block — creator empties / large sells as dated Transfer evidence + explorer links. Not a trust or scammer score.</p>
+    </div>
+    <div class="bhHistBoard" id="blockHomeHistBoard" role="status"></div>
+    <ul class="bhHistList" id="blockHomeHistList" aria-live="polite"></ul>
+    <p class="bhHistFoot" id="blockHomeHistFoot"></p>
+  </section>
 </div>
 
 <div class="card cardQuiet" id="carteASigner">
@@ -1971,11 +2003,19 @@ function appliquerDeepLinkBlock() {
     }
     const lireBtn = $('#lire');
     if (lireBtn) lireBtn.click();
-    let wantHome = false;
-    try { wantHome = new URLSearchParams(location.search).get('home') === '1'; } catch { wantHome = false; }
-    if (wantHome && typeof ouvrirBlockHome === 'function') {
-      ouvrirBlockHome(raw, { fromCreate: false });
-      dire('Opened companion home from link.\n' + raw, 'ok');
+    let wantHome = false, wantHist = false;
+    try {
+      const sp = new URLSearchParams(location.search);
+      wantHome = sp.get('home') === '1';
+      wantHist = sp.get('history') === '1';
+    } catch { wantHome = false; wantHist = false; }
+    if ((wantHome || wantHist) && typeof ouvrirBlockHome === 'function') {
+      await ouvrirBlockHome(raw, { fromCreate: false, focusHistory: wantHist });
+      dire((wantHist ? 'Opened companion History from link.\n' : 'Opened companion home from link.\n') + raw, 'ok');
+      if (wantHist) {
+        const h = $('#blockHomeHistory');
+        if (h && h.scrollIntoView) requestAnimationFrame(() => h.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+      }
     } else {
       dire('Opened shared block from link.\n' + raw, 'ok');
     }
@@ -3632,8 +3672,96 @@ function lienCompanionPour(adr) {
 }
 
 /**
+ * Block home History shell — append-only evidence UI, fail-closed without Transfer indexer.
+ * Never invents dumps, HP, trust/reputation badges, or scammer scores.
+ * Row grammar (when indexer lands): when · what · tx→explorer · aftermath.
+ */
+function scanBasePourChaine() {
+  try {
+    const R = (typeof RESEAUX !== 'undefined' && RESEAUX[chaine]) ? RESEAUX[chaine] : null;
+    return (R && R.scan) || 'https://basescan.org';
+  } catch { return 'https://basescan.org';
+}
+
+function lienTxExplorer(hash) {
+  const h = String(hash || '');
+  if (!/^0x[0-9a-fA-F]{64}$/.test(h)) return null;
+  return scanBasePourChaine() + '/tx/' + h;
+}
+
+/** Placeholder row markup for a future indexed Transfer event (not rendered until index exists). */
+function htmlHistRowPlaceholder(ev) {
+  const e = ev || {};
+  const when = e.when || '—';
+  const what = e.what || '—';
+  const after = e.aftermath || '—';
+  const hash = e.txHash || '';
+  const href = lienTxExplorer(hash);
+  const evidence = href
+    ? ('<a class="mono" href="' + href + '" target="_blank" rel="noopener noreferrer">'
+      + enTexte(hash.slice(0, 10) + '…' + hash.slice(-6)) + '</a>')
+    : '<span class="mono">' + enTexte(hash || 'tx pending index') + '</span>';
+  return '<li class="bhHRow">'
+    + '<div><div class="bhHCol">When</div><div class="bhHVal">' + enTexte(when) + '</div></div>'
+    + '<div><div class="bhHCol">What</div><div class="bhHVal">' + enTexte(what) + '</div></div>'
+    + '<div><div class="bhHCol">Evidence</div><div class="bhHVal">' + evidence + '</div></div>'
+    + '<div><div class="bhHCol">Aftermath</div><div class="bhHVal">' + enTexte(after) + '</div></div>'
+    + '</li>';
+}
+
+/**
+ * Paint History shell. Without a Transfer indexer there are no EXISTS eth_call counts for
+ * « emptied creator stake » across wallets — defer murder-board counts honestly.
+ * @param {string} adr block address
+ * @param {{ events?: Array, indexReady?: boolean }|undefined} opts
+ */
+function peindreBlockHomeHistory(adr, opts) {
+  const o = opts || {};
+  const board = $('#blockHomeHistBoard');
+  const list = $('#blockHomeHistList');
+  const foot = $('#blockHomeHistFoot');
+  const hist = $('#blockHomeHistory');
+  if (hist) hist.setAttribute('data-block', adr || '');
+
+  const indexReady = !!o.indexReady && Array.isArray(o.events);
+  /* Murder-board aggregates need Transfer logs — not computable from balanceOf alone. */
+  if (board) {
+    if (!indexReady) {
+      board.innerHTML = '<span class="bhHistBoardLabel">Murder board counts</span>'
+        + pastille('NEEDS TRANSFER INDEXER', 'warn')
+        + ' <span class="k">Emptied-creator / large-sell counts need indexed Transfer logs — '
+        + 'not available from EXISTS eth_call reads alone. Deferred; no invented K.</span>';
+    } else {
+      const n = o.events.length;
+      board.innerHTML = '<span class="bhHistBoardLabel">Indexed events (this block)</span>'
+        + pastille(String(n) + ' ROW' + (n === 1 ? '' : 'S'), n ? 'ok' : 'dim')
+        + ' <span class="k">Raw Transfer evidence count — not a trust or scammer score. Re-verify on explorer.</span>';
+    }
+  }
+
+  if (list) {
+    if (!indexReady || !o.events.length) {
+      list.innerHTML = '<li class="bhHEmpty" role="status">'
+        + '<b>No transfer index yet — history unavailable.</b> '
+        + 'This shell is ready for dated rows (when · what · tx hash → explorer · still holds?). '
+        + 'Until an indexer lands, we do <b>not</b> invent creator dumps or murders. '
+        + 'Local zero-balance for the connected wallet stays on the honesty strip above — wallet-only, not a global history.</li>';
+    } else {
+      list.innerHTML = o.events.map(htmlHistRowPlaceholder).join('');
+    }
+  }
+
+  if (foot) {
+    foot.innerHTML = 'Append-only evidence · no HP · no trust/reputation badge · no scammer score. '
+      + 'Pages Launch ≠ OpenLaunch ownerless locker. Explorer pattern: '
+      + '<span class="mono">' + enTexte(scanBasePourChaine()) + '/tx/&lt;hash&gt;</span>.';
+  }
+}
+
+/**
  * Block home companion stub — décor skin + honesty strip from EXISTING reads only.
  * Flags metaphors as metaphors. Never paints a fake HP / vitality score.
+ * History shell: fail-closed until Transfer indexer (see peindreBlockHomeHistory).
  */
 async function ouvrirBlockHome(adr, opts) {
   const o = opts || {};
@@ -3651,6 +3779,8 @@ async function ouvrirBlockHome(adr, opts) {
   const note = $('#blockHomeNote');
   const actions = $('#blockHomeActions');
   const decor = $('#blockHomeDecor');
+  /* History shell first paint: fail-closed empty — never invent Transfer rows while chain reads run. */
+  peindreBlockHomeHistory(adr, { indexReady: false });
   if (sub) {
     sub.textContent = o.fromCreate
       ? 'Just created — your block lives here in its décor. Facts below are re-read from the chain.'
@@ -3813,7 +3943,14 @@ async function ouvrirBlockHome(adr, opts) {
     };
   }
 
-  if (home.scrollIntoView) {
+  if (o.focusHistory) {
+    const hsec = $('#blockHomeHistory');
+    if (hsec && hsec.scrollIntoView) {
+      requestAnimationFrame(() => hsec.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    } else if (home.scrollIntoView) {
+      requestAnimationFrame(() => home.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
+  } else if (home.scrollIntoView) {
     requestAnimationFrame(() => home.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   }
 }
