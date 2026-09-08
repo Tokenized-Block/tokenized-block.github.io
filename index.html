@@ -780,6 +780,26 @@ main[data-app="market"] > #marketCard { column-span: all; }
   word-break:break-all;margin:0 0 10px}
 #galerieFiche .gfActions,#galerieFooter{display:flex;flex-wrap:wrap;gap:8px}
 #galerieFiche .gfActions button,#galerieFooter button{flex:1 1 90px;min-height:40px}
+/* ══ Block home companion stub (2026-09-08) — décor + honesty strip, no fake HP ══ */
+#blockHome{margin:14px 0;border:1px solid #3a5a9a;border-radius:14px;padding:14px 16px;
+  background:linear-gradient(160deg,#0c1424 0%,#121c32 55%,#0a101c 100%);display:none}
+#blockHome.on{display:block}
+#blockHome .bhHead{display:flex;flex-wrap:wrap;align-items:flex-start;gap:14px}
+#blockHome .bhDecor{flex:0 0 auto;width:min(148px,42vw);text-align:center}
+#blockHome .bhDecorSvg{display:block;width:100%;height:auto;border-radius:12px;
+  background:#070b14;border:1px solid #1c2740}
+#blockHome .bhMeta{flex:1 1 180px;min-width:0}
+#blockHome .bhTitle{margin:0 0 4px;font-size:17px;font-weight:800}
+#blockHome .bhSub{margin:0 0 8px;font-size:12.5px;color:var(--dim);line-height:1.4}
+#blockHome .bhStrip{margin-top:10px;padding-top:10px;border-top:1px solid #1c2740}
+#blockHome .bhStrip .row{padding:4px 0}
+#blockHome .bhMetaNote{margin:10px 0 0;font-size:12px;color:#c9b896;line-height:1.45;
+  background:#241c10;border:1px solid #5a4420;border-radius:10px;padding:8px 10px}
+#blockHome .bhActions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+#blockHome .bhActions button{flex:1 1 110px;min-height:42px}
+main[data-app="mes"] > #blockHome,
+main[data-app="market"] > #blockHome{display:none !important}
+
 #galerieFooter{margin-top:10px;padding-top:8px;border-top:1px solid var(--line)}
 #galerieFooter[hidden]{display:none !important}
 .galerie .vignette[aria-selected="true"] svg,
@@ -1097,6 +1117,20 @@ main[data-app="market"] > #marketCard { column-span: all; }
   <button type="button" class="act sec" disabled>Share</button>
   <button type="button" class="act sec" disabled>Send</button>
   <p class="shareWhy">After Create + connect — Share and Send need your block address and wallet.</p>
+</div>
+
+<!-- Block home companion stub: post-Create décor + re-readable chain facts (no fake HP / no custody). -->
+<div id="blockHome" aria-label="Block companion home" hidden>
+  <div class="bhHead">
+    <div class="bhDecor"><div id="blockHomeDecor"></div></div>
+    <div class="bhMeta">
+      <h2 class="bhTitle" id="blockHomeTitle">Your block</h2>
+      <p class="bhSub" id="blockHomeSub">Companion home — engraved look + on-chain facts you can re-read. Not a game HP bar.</p>
+      <div class="bhStrip kv" id="blockHomeStrip"></div>
+      <p class="bhMetaNote" id="blockHomeNote" role="note"></p>
+      <div class="bhActions" id="blockHomeActions"></div>
+    </div>
+  </div>
 </div>
 
 <div class="card cardQuiet" id="carteASigner">
@@ -1937,7 +1971,14 @@ function appliquerDeepLinkBlock() {
     }
     const lireBtn = $('#lire');
     if (lireBtn) lireBtn.click();
-    dire('Opened shared block from link.\n' + raw, 'ok');
+    let wantHome = false;
+    try { wantHome = new URLSearchParams(location.search).get('home') === '1'; } catch { wantHome = false; }
+    if (wantHome && typeof ouvrirBlockHome === 'function') {
+      ouvrirBlockHome(raw, { fromCreate: false });
+      dire('Opened companion home from link.\n' + raw, 'ok');
+    } else {
+      dire('Opened shared block from link.\n' + raw, 'ok');
+    }
     setTimeout(() => {
       for (const el of [luc, ns, rendu]) {
         if (el) el.classList.remove('deepLinkOn');
@@ -3577,6 +3618,207 @@ async function chercherSelLibre({ direEtat = true } = {}) {
 $('#selLibre').onclick = () => chercherSelLibre();
 
 /**
+ * Companion share URL: ?block= + home=1 (keeps ?cb= / ?chain=). Absolute when possible.
+ * ⛔ home=1 is UX routing only — vitality still comes from chain reads, never from the query.
+ */
+function lienCompanionPour(adr) {
+  const base = lienPartagePour(adr);
+  if (!base) return null;
+  try {
+    const u = new URL(base);
+    u.searchParams.set('home', '1');
+    return u.toString();
+  } catch { return base; }
+}
+
+/**
+ * Block home companion stub — décor skin + honesty strip from EXISTING reads only.
+ * Flags metaphors as metaphors. Never paints a fake HP / vitality score.
+ */
+async function ouvrirBlockHome(adr, opts) {
+  const o = opts || {};
+  if (!/^0x[0-9a-fA-F]{40}$/.test(adr || '')) return;
+  const home = $('#blockHome');
+  if (!home) return;
+  home.hidden = false;
+  home.classList.add('on');
+  home.setAttribute('data-block', adr);
+  if (typeof selectAppSection === 'function') selectAppSection('create');
+
+  const title = $('#blockHomeTitle');
+  const sub = $('#blockHomeSub');
+  const strip = $('#blockHomeStrip');
+  const note = $('#blockHomeNote');
+  const actions = $('#blockHomeActions');
+  const decor = $('#blockHomeDecor');
+  if (sub) {
+    sub.textContent = o.fromCreate
+      ? 'Just created — your block lives here in its décor. Facts below are re-read from the chain.'
+      : 'Companion home — engraved look + on-chain facts you can re-read. Not a game HP bar.';
+  }
+  if (strip) strip.innerHTML = ligne('state', 'reading companion facts…');
+  if (note) {
+    note.innerHTML = '<b>Hold / sell (metaphor, labeled):</b> Holding units keeps <i>your stake</i> with this companion. '
+      + 'Selling all units does <b>not</b> delete the contract (no admin on the TB create track) — you just no longer hold the stake. '
+      + '<b>Not an HP bar.</b> '
+      + '<br><b>Rug ≠ kill (honest):</b> On this Pages create track there is no admin key to « kill » the token. '
+      + 'TB Launch LP is <b>not</b> the OpenLaunch ownerless locker — this app does not offer remove-liquidity, '
+      + 'but that is <b>UX-only</b>, not an on-chain forever lock. OL Instant = can\'t pull LP; TB Create track ≠ that claim.';
+  }
+
+  /* Décor: prefer engraved URI image when readable; else address-derived SVG (apparence.js). */
+  let sym = '·', nom = 'Block';
+  try {
+    const S = abi.selecteurs;
+    const txt = async (sel) => { try { return chaineDe(await rpc('eth_call', [{ to: adr, data: sel }, 'latest'])); } catch { return null; } };
+    const num = async (sel) => { try { return BigInt(await rpc('eth_call', [{ to: adr, data: sel }, 'latest'])); } catch { return null; } };
+    nom = (await txt(S['name()'])) || 'Block';
+    sym = (await txt(S['symbol()'])) || '·';
+    if (title) title.textContent = nom + (sym && sym !== '·' ? ' · ' + sym : '');
+
+    let uri = null, vueUri = null;
+    for (const v of ['contractURI()', 'metadataURI()', 'tokenURI()', 'uri()']) {
+      const val = await txt(S[v] || sel4(v));
+      if (val) { uri = val; vueUri = v; break; }
+    }
+    if (decor) {
+      decor.innerHTML = '';
+      let painted = false;
+      if (uri) {
+        try {
+          const m = await metadonnees(uri);
+          if (m && m.etat === 'LU') {
+            const src = sourceImage(m.doc && m.doc.image);
+            if (src) {
+              const img = document.createElement('img');
+              img.className = 'bhDecorSvg';
+              img.alt = '';
+              img.src = src;
+              decor.appendChild(img);
+              painted = true;
+            }
+          }
+        } catch { /* fall through to SVG */ }
+      }
+      if (!painted) {
+        const svg = logoSvg(paramsLogoDepuisApparence(apparenceDepuisAdresse(adr), String(sym).slice(0, 11)));
+        decor.innerHTML = svg.replace('<svg ', '<svg class="bhDecorSvg" ');
+      }
+    }
+
+    const code = await rpc('eth_getCode', [adr, 'latest']);
+    const live = code && code !== '0x';
+    const tot = await num(S['totalSupply()']);
+    const cap = await num(S['supplyCap()']);
+    const dec = await lireDecimales(adr);
+    const solde = await soldeBlockPourCompte(adr);
+    const pool = await poolLaunchPresente(adr);
+
+    let shareLine = ligne('your balance', pastille('CONNECT WALLET', 'dim')
+      + ' <span class="k">balanceOf needs a connected wallet — EXISTS read, not shown without it</span>');
+    if (compte) {
+      if (solde === null || dec === null) {
+        shareLine = ligne('your balance', pastille('UNREAD', 'warn')
+          + ' <span class="k">balanceOf/decimals failed — fail closed, no invented 18</span>');
+      } else {
+        const balTxt = formaterUnites(solde, dec) + ' ' + sym;
+        let pct = '';
+        if (tot !== null && tot > 0n) {
+          /* Integer bps — never a floating « vitality score ». */
+          const bps = (solde * 10000n) / tot;
+          pct = ' · ' + (Number(bps) / 100).toFixed(2) + '% of totalSupply (connected wallet)';
+        }
+        shareLine = ligne('your balance', enTexte(balTxt) + enTexte(pct)
+          + ' <span class="k">EXISTS · balanceOf + totalSupply — labeled stake, not HP</span>');
+        if (solde === 0n) {
+          shareLine += ligne('stake metaphor', pastille('ZERO BALANCE', 'warn')
+            + ' Connected wallet holds 0 units — « sell-all / emptied » as a metaphor for this wallet only. '
+            + 'Contract still lives (no admin). Sell-all across all wallets needs Transfer indexing — NEEDS INDEXER.');
+        }
+      }
+    }
+
+    const poolPill = pool.etat === 'YES' ? pastille('LAUNCH POOL YES', 'ok')
+      : pool.etat === 'NO' ? pastille('LAUNCH POOL NO', 'warn')
+      : pastille('LAUNCH POOL UNREAD', 'dim');
+    const mintLine = (tot !== null && cap !== null && tot === cap)
+      ? pastille('CLOSED — SUPPLY = CAP', 'ok')
+      : pastille(tot === null || cap === null ? 'UNREAD' : 'supply < cap', tot === null || cap === null ? 'dim' : 'warn');
+
+    if (strip) {
+      strip.innerHTML = ligne('state', live ? pastille('LIVE ON ' + nomChaineCourte().toUpperCase(), 'ok')
+          : pastille('NO CODE', 'bad'))
+        + ligne('address', '<span class="mono">' + enTexte(adr) + '</span>')
+        + ligne('supply', tot === null ? '—' : (tot.toString() + (dec !== null ? ' (10^' + dec + ')' : ''))
+          + ' <span class="k">EXISTS · totalSupply()</span>')
+        + ligne('minting', mintLine)
+        + shareLine
+        + ligne('launch pool', poolPill + ' <span class="k">' + enTexte(pool.note)
+          + ' · EXISTS slot0 read — not « LP locked forever »</span>')
+        + ligne('LP lock claim', pastille('TB CREATE TRACK ≠ OL LOCKER', 'warn')
+          + ' <span class="k">OpenLaunch Instant locks LP in an ownerless locker. This Pages Launch path does not assert that.</span>')
+        + (uri ? ligne('appearance URI', enTexte(vueUri || 'uri') + ' · ' + enTexte(String(uri).slice(0, 64))
+          + (String(uri).length > 64 ? '…' : ''))
+          : ligne('appearance', 'address-derived SVG décor (apparence.js) — URI unread'));
+    }
+  } catch (e) {
+    if (strip) {
+      strip.innerHTML = ligne('state', pastille('READ FAILED', 'bad'))
+        + ligne('cause', enTexte(e && e.message ? e.message : String(e)));
+    }
+  }
+
+  if (actions) {
+    actions.innerHTML = '<button type="button" class="act sec" id="bhShare">Copy companion link</button>'
+      + '<button type="button" class="act sec" id="bhLaunch">Launch / Next steps</button>'
+      + '<button type="button" class="act sec" id="bhRead">Open Lookup</button>'
+      + '<button type="button" class="act sec" id="bhSend">Send</button>'
+      + '<button type="button" class="act sec" id="bhClose">Hide home</button>';
+    const sh = $('#bhShare');
+    if (sh) sh.onclick = async () => {
+      const lien = lienCompanionPour(adr);
+      if (!lien) { dire('Need a valid block address to share.', 'warn'); return; }
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(lien);
+          dire('Companion link copied (?block=&home=1).\n' + lien, 'ok');
+          return;
+        }
+      } catch { /* fall through */ }
+      dire('Could not write clipboard — copy this link manually:\n' + lien, 'warn');
+    };
+    const laun = $('#bhLaunch');
+    if (laun) laun.onclick = () => {
+      const cta = $('#ouvrirLancement');
+      if (cta) { cta.dataset.block = adr; cta.click(); }
+      else {
+        prefillBlockChamps(adr);
+        const ns = $('#nextSteps'); if (ns) ns.open = true;
+        if (typeof selectNextStep === 'function') selectNextStep('launch');
+      }
+    };
+    const rd = $('#bhRead');
+    if (rd) rd.onclick = () => {
+      prefillBlockChamps(adr);
+      const luc = $('#lookupCard'); if (luc) luc.open = true;
+      const lireBtn = $('#lire'); if (lireBtn) lireBtn.click();
+      if (luc) luc.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    const sd = $('#bhSend');
+    if (sd) sd.onclick = () => ouvrirSendForm(adr);
+    const cl = $('#bhClose');
+    if (cl) cl.onclick = () => {
+      home.classList.remove('on');
+      home.hidden = true;
+    };
+  }
+
+  if (home.scrollIntoView) {
+    requestAnimationFrame(() => home.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
+}
+
+/**
  * Prefill Launch / Liquidity / Swap (and Read) with a confirmed block address, and show the
  * secondary unilateral-Launch CTA. Called only after chain re-read sees code — never on tx-success alone.
  * ⛔ No OpenLaunch fees/custody: this only wires existing fields + lancement.js path.
@@ -3606,9 +3848,14 @@ function apresCreationConfirmee(adr) {
   bar.setAttribute('data-block', adr);
   bar.innerHTML = '<button type="button" class="act sec btnCopyShare">Copy share link</button>'
     + '<button type="button" class="act sec btnOpenSend">Send</button>'
-    + '<button type="button" class="act sec btnOpenList">List on Market</button>';
+    + '<button type="button" class="act sec btnOpenList">List on Market</button>'
+    + '<button type="button" class="act sec btnOpenHome">Block home</button>';
   brancherBarrePartage(bar.parentNode || bar);
+  const bh = bar.querySelector('.btnOpenHome');
+  if (bh) bh.onclick = () => ouvrirBlockHome(adr, { fromCreate: true });
   if (typeof majShareAvantCreate === 'function') majShareAvantCreate();
+  /* Post-create 2nd surface: companion home (décor + honesty strip). */
+  if (typeof ouvrirBlockHome === 'function') ouvrirBlockHome(adr, { fromCreate: true });
 }
 
 /** Open advanced settings if needed, scroll to unilateral Launch, keep prefilled address. */
@@ -7395,7 +7642,8 @@ async function chargerMesBlocks() {
       + ligne('your balance', enTexte(soldeTxt))
       + ligne('pool', enTexte(pool.note))
       + '<div class="mbActions">'
-      + '<button type="button" class="act sec mbOpen">Open</button>'
+      + '<button type="button" class="act sec mbHome">Block home</button>'
+      + '<button type="button" class="act sec mbOpen">Open Lookup</button>'
       + '<button type="button" class="act sec mbShare">Copy share link</button>'
       + '<button type="button" class="act sec mbSend">Send</button>'
       + '<button type="button" class="act sec mbList">List</button>'
@@ -7407,10 +7655,14 @@ async function chargerMesBlocks() {
   liste.innerHTML = cards.join('');
   for (const art of liste.querySelectorAll('.mbItem')) {
     const adr = art.getAttribute('data-adr');
+    const homeBtn = art.querySelector('.mbHome');
     const open = art.querySelector('.mbOpen');
     const share = art.querySelector('.mbShare');
     const send = art.querySelector('.mbSend');
     const list = art.querySelector('.mbList');
+    if (homeBtn) homeBtn.onclick = () => {
+      if (typeof ouvrirBlockHome === 'function') ouvrirBlockHome(adr, { fromCreate: false });
+    };
     if (open) open.onclick = () => {
       prefillBlockChamps(adr);
       const luc = $('#lookupCard'); if (luc) luc.open = true;
