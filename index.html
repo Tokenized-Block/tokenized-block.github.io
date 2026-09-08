@@ -1568,18 +1568,53 @@ async function rpc(m, p, essais = 4, attente = 350) {
  * NOMMER : l exception remontait jusqu au catch d un bouton, qui affichait « Not signed », c est
  * a dire qu il accusait l utilisateur d avoir decline. Une seule definition, au niveau du module,
  * parce qu une copie locale dans une fonction laissait les autres appelants sans rien. */
+/* ⛔ 2026-09-08 Real Sell throttle: Swap eth_call via appelBrut hit ONLY mainnet.base.org while
+ *    rpc() already rotates RESEAUX[].secours. Prefer the next node on HTTP/rate-limit/transport
+ *    before declaring throttled; still return the transport error (→ RPC THROTTLED — RETRY / #35)
+ *    if EVERY node throttles. Chain reverts (code 3) stay on the answering node — not retried.
+ *    B20 destinations stay on the official node (same routing as rpc()). */
 async function appelBrut(tx) {
-  const r = await fetch(RESEAUX[chaine].rpc, { method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: ++n, method: 'eth_call', params: [tx, 'latest'] }) });
-  let j = null;
-  try { j = await r.json(); } catch {
-    return { error: { code: -32016, message: 'HTTP ' + r.status + ' — empty/non-JSON RPC body' } };
+  const viseUnB20 = !!(tx && typeof tx.to === 'string' && tx.to.toLowerCase().startsWith('0xb200'));
+  const noeuds = viseUnB20 ? [RESEAUX[chaine].rpc]
+    : [RESEAUX[chaine].rpc, ...(RESEAUX[chaine].secours || [])];
+  const estTransport = (msg, code, httpStatus) => {
+    if (code === -32016 || code === 429 || httpStatus === 429) return true;
+    return /rate limit|over rate limit|429|timeout|throttl|ECONNRESET|Failed to fetch|HTTP 429|empty\/non-JSON/i.test(String(msg || ''));
+  };
+  let dernierTransport = null;
+  for (let i = 0; i < noeuds.length; i++) {
+    const url = noeuds[i];
+    let r = null, j = null;
+    try {
+      r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: ++n, method: 'eth_call', params: [tx, 'latest'] }) });
+    } catch (e) {
+      dernierTransport = { error: { code: -32016, message: String((e && e.message) || e) } };
+      continue;
+    }
+    try { j = await r.json(); } catch {
+      dernierTransport = { error: { code: -32016, message: 'HTTP ' + r.status + ' — empty/non-JSON RPC body', httpStatus: r.status } };
+      continue;
+    }
+    if (!r.ok) {
+      const msg = (j && j.error && j.error.message) ? j.error.message : ('HTTP ' + r.status);
+      const err = { error: { code: (j && j.error && j.error.code) || -32016, message: msg, httpStatus: r.status } };
+      if (estTransport(msg, err.error.code, r.status) && i < noeuds.length - 1) {
+        dernierTransport = err;
+        continue;
+      }
+      return err;
+    }
+    if (j && j.error) {
+      const msg = j.error.message || '';
+      if (estTransport(msg, j.error.code, r.status) && i < noeuds.length - 1) {
+        dernierTransport = j;
+        continue;
+      }
+    }
+    return j;
   }
-  if (!r.ok) {
-    const msg = (j && j.error && j.error.message) ? j.error.message : ('HTTP ' + r.status);
-    return { error: { code: (j && j.error && j.error.code) || -32016, message: msg, httpStatus: r.status } };
-  }
-  return j;
+  return dernierTransport || { error: { code: -32016, message: 'RPC unreachable on all nodes' } };
 }
 /* ⛔ « J ai refuse » et « ca a plante » sont deux faits opposes. Les wallets rendent le code
  * EIP-1193 4001 pour un refus explicite ; sans lui on ne PRESUME pas, on dit « failed ». */
