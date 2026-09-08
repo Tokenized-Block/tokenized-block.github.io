@@ -819,6 +819,49 @@ main[data-app="market"] > #marketCard { column-span: all; }
 @media (max-width:640px){
   #blockHome .bhHistList li:not(.bhHEmpty){grid-template-columns:1fr 1fr}
 }
+/* Care cosmetic (2026-09-08) — browser-local décor/care state; NOT on-chain vitality / no HP / no TB care ticker */
+#blockHome .bhCare{margin-top:14px;padding-top:12px;border-top:1px solid #1c2740}
+#blockHome .bhCareHead{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 12px;margin-bottom:8px}
+#blockHome .bhCareHead h3{margin:0;font-size:14px;font-weight:800;letter-spacing:.02em}
+#blockHome .bhCareHead h3 .bhCareBadge{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;
+  font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  background:#1a2438;border:1px solid #3a5a9a;color:#9eb6d8;vertical-align:middle}
+#blockHome .bhCareSub{margin:0;font-size:12px;color:var(--dim);line-height:1.4;flex:1 1 200px}
+#blockHome .bhCareRules{margin:0 0 10px;padding:8px 10px;border-radius:10px;border:1px solid #2a3a58;
+  background:#0a101c;font-size:12px;line-height:1.45;color:#c8d4ea}
+#blockHome .bhCareRules b{color:#9eb6d8}
+#blockHome .bhCareGrid{display:grid;grid-template-columns:minmax(180px,1fr) minmax(200px,1.2fr);gap:12px;align-items:start}
+@media (max-width:720px){
+  #blockHome .bhCareGrid{grid-template-columns:1fr}
+}
+#blockHome .bhCareCol{border:1px solid #1c2740;border-radius:10px;background:#070b14;padding:10px}
+#blockHome .bhCareCol h4{margin:0 0 6px;font-size:12.5px;font-weight:800;color:#e8eef8}
+#blockHome .bhCareCol .bhCareHint{margin:0 0 8px;font-size:11.5px;color:var(--dim);line-height:1.4}
+#blockHome .bhCareSkins{display:flex;flex-wrap:wrap;gap:6px}
+#blockHome .bhCareSkins button{flex:1 1 72px;min-height:38px;font-size:12px;padding:6px 8px;
+  border-radius:8px;border:1px solid #2a3a58;background:#121c32;color:#e8eef8;cursor:pointer}
+#blockHome .bhCareSkins button[aria-pressed="true"]{border-color:#7ec8ff;background:#1a2a48;box-shadow:0 0 0 1px #3a5a9a}
+#blockHome .bhCareSkins button:focus-visible{outline:2px solid #7ec8ff;outline-offset:2px}
+#blockHome.bhSkin-soft .bhDecorSvg{filter:saturate(1.08) brightness(1.04);border-color:#4a6a9a}
+#blockHome.bhSkin-warm .bhDecorSvg{filter:sepia(.22) saturate(1.15);border-color:#8a6a3a}
+#blockHome.bhSkin-pulse .bhDecorSvg{border-color:#6a8aba;box-shadow:0 0 0 2px rgba(126,200,255,.25)}
+#blockHome .bhCareLog{margin:0;padding:0;list-style:none;max-height:220px;overflow:auto}
+#blockHome .bhCareLog li{display:grid;grid-template-columns:minmax(88px,1fr) minmax(100px,1.3fr) minmax(90px,1fr);
+  gap:6px 10px;padding:8px 0;border-bottom:1px solid #1c2740;font-size:12px;line-height:1.35}
+#blockHome .bhCareLog li:last-child{border-bottom:none}
+#blockHome .bhCareLog .bhCEmpty{display:block;padding:8px 0;color:#c9b896;font-size:12.5px;line-height:1.45;
+  grid-template-columns:1fr;border-bottom:none}
+#blockHome .bhCareLog .bhCCol{color:#8a9bb8;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em}
+#blockHome .bhCareLog .bhCVal{color:#e8eef8;word-break:break-word}
+#blockHome .bhCareLog a.mono{color:#7ec8ff;text-decoration:underline;text-underline-offset:2px}
+#blockHome .bhCareMark{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;align-items:flex-end}
+#blockHome .bhCareMark label{flex:1 1 120px;display:flex;flex-direction:column;gap:4px;font-size:11px;color:#8a9bb8}
+#blockHome .bhCareMark input{min-height:36px;border-radius:8px;border:1px solid #2a3a58;background:#0a101c;
+  color:#e8eef8;padding:6px 8px;font-size:12.5px}
+#blockHome .bhCareActions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+#blockHome .bhCareActions button{flex:1 1 130px;min-height:40px}
+#blockHome .bhCareFoot{margin:8px 0 0;font-size:11.5px;color:var(--dim);line-height:1.4}
+
 main[data-app="mes"] > #blockHome,
 main[data-app="market"] > #blockHome{display:none !important}
 
@@ -1141,7 +1184,7 @@ main[data-app="market"] > #blockHome{display:none !important}
   <p class="shareWhy">After Create + connect — Share and Send need your block address and wallet.</p>
 </div>
 
-<!-- Block home companion stub: post-Create décor + honesty strip + History shell (no fake HP / no trust score). -->
+<!-- Block home companion stub: décor + honesty strip + History shell + Care cosmetic (no fake HP / no TB care ticker). -->
 <div id="blockHome" aria-label="Block companion home" hidden>
   <div class="bhHead">
     <div class="bhDecor"><div id="blockHomeDecor"></div></div>
@@ -1162,6 +1205,29 @@ main[data-app="market"] > #blockHome{display:none !important}
     <div class="bhHistBoard" id="blockHomeHistBoard" role="status"></div>
     <ul class="bhHistList" id="blockHomeHistList" aria-live="polite"></ul>
     <p class="bhHistFoot" id="blockHomeHistFoot"></p>
+  </section>
+  <!-- Care cosmetic: browser-local décor/care state — NOT on-chain vitality / no HP / no TB care ticker. -->
+  <section class="bhCare" id="blockHomeCare" aria-label="Block care cosmetic">
+    <div class="bhCareHead">
+      <h3>Care <span class="bhCareBadge">cosmetic</span></h3>
+      <p class="bhCareSub">Local décor / care marks for this companion home. Browser-local — not on-chain vitality. Care and History stay separate panels.</p>
+    </div>
+    <div class="bhCareRules" id="blockHomeCareRules" role="note"></div>
+    <div class="bhCareGrid">
+      <div class="bhCareCol" id="blockHomeCareSkinsCol">
+        <h4>Cosmetic skins</h4>
+        <p class="bhCareHint">Reversible look tint on the décor card. Stored in this browser only — never an HP / heal amount.</p>
+        <div class="bhCareSkins" id="blockHomeCareSkins" role="group" aria-label="Cosmetic skin choices"></div>
+      </div>
+      <div class="bhCareCol" id="blockHomeCareLogCol">
+        <h4>Care marks (local log)</h4>
+        <p class="bhCareHint">Optional notes. You may attach a Send tx hash if you chose to send units — we do not invent doctor fees.</p>
+        <ul class="bhCareLog" id="blockHomeCareLog" aria-live="polite"></ul>
+        <div class="bhCareMark" id="blockHomeCareMarkForm"></div>
+      </div>
+    </div>
+    <div class="bhCareActions" id="blockHomeCareActions"></div>
+    <p class="bhCareFoot" id="blockHomeCareFoot"></p>
   </section>
 </div>
 
@@ -2003,16 +2069,22 @@ function appliquerDeepLinkBlock() {
     }
     const lireBtn = $('#lire');
     if (lireBtn) lireBtn.click();
-    let wantHome = false, wantHist = false;
+    let wantHome = false, wantHist = false, wantCare = false;
     try {
       const sp = new URLSearchParams(location.search);
       wantHome = sp.get('home') === '1';
       wantHist = sp.get('history') === '1';
-    } catch { wantHome = false; wantHist = false; }
-    if ((wantHome || wantHist) && typeof ouvrirBlockHome === 'function') {
-      await ouvrirBlockHome(raw, { fromCreate: false, focusHistory: wantHist });
-      dire((wantHist ? 'Opened companion History from link.\n' : 'Opened companion home from link.\n') + raw, 'ok');
-      if (wantHist) {
+      wantCare = sp.get('care') === '1';
+    } catch { wantHome = false; wantHist = false; wantCare = false; }
+    if ((wantHome || wantHist || wantCare) && typeof ouvrirBlockHome === 'function') {
+      await ouvrirBlockHome(raw, { fromCreate: false, focusHistory: wantHist && !wantCare, focusCare: wantCare });
+      dire((wantCare ? 'Opened companion Care (cosmetic) from link.\n'
+        : wantHist ? 'Opened companion History from link.\n'
+        : 'Opened companion home from link.\n') + raw, 'ok');
+      if (wantCare) {
+        const c = $('#blockHomeCare');
+        if (c && c.scrollIntoView) requestAnimationFrame(() => c.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+      } else if (wantHist) {
         const h = $('#blockHomeHistory');
         if (h && h.scrollIntoView) requestAnimationFrame(() => h.scrollIntoView({ behavior: 'smooth', block: 'start' }));
       }
@@ -3758,10 +3830,217 @@ function peindreBlockHomeHistory(adr, opts) {
   }
 }
 
+
+/**
+ * Block home Care — cosmetic first (browser-local décor/care state).
+ * NEVER: HP bar, heal amounts, TB-minted care ticker, fake doctor payment.
+ * Care-token Create = deferred CTA only. Mark care may optionally log a user Send tx hash.
+ */
+const BH_CARE_SKINS = [
+  { id: 'none', label: 'None' },
+  { id: 'soft', label: 'Soft' },
+  { id: 'warm', label: 'Warm' },
+  { id: 'pulse', label: 'Pulse' },
+];
+
+function cleCareLocal(adr) {
+  const a = String(adr || '').toLowerCase();
+  const ch = (typeof chaine !== 'undefined' && chaine) ? String(chaine) : 'unknown';
+  return 'tb-care-v1:' + ch + ':' + a;
+}
+
+function lireCareLocal(adr) {
+  const def = { skin: 'none', marks: [] };
+  if (!/^0x[0-9a-fA-F]{40}$/.test(adr || '')) return def;
+  const st = typeof stockageSur === 'function' ? stockageSur() : null;
+  if (!st) return def;
+  try {
+    const raw = st.getItem(cleCareLocal(adr));
+    if (!raw) return def;
+    const o = JSON.parse(raw);
+    const skin = (o && typeof o.skin === 'string' && BH_CARE_SKINS.some(s => s.id === o.skin))
+      ? o.skin : 'none';
+    const marks = (o && Array.isArray(o.marks)) ? o.marks.slice(0, 40) : [];
+    return { skin, marks };
+  } catch { return def; }
+}
+
+function ecrireCareLocal(adr, data) {
+  if (!/^0x[0-9a-fA-F]{40}$/.test(adr || '')) return { ok: false, pourquoi: 'bad address' };
+  const st = typeof stockageSur === 'function' ? stockageSur() : null;
+  if (!st) return { ok: false, pourquoi: 'localStorage unavailable' };
+  try {
+    const skin = (data && data.skin) || 'none';
+    const marks = Array.isArray(data && data.marks) ? data.marks.slice(0, 40) : [];
+    st.setItem(cleCareLocal(adr), JSON.stringify({ skin, marks, v: 1 }));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, pourquoi: (e && e.message) || 'localStorage write failed' };
+  }
+}
+
+function appliquerCareSkin(skinId) {
+  const home = $('#blockHome');
+  if (!home) return;
+  for (const s of BH_CARE_SKINS) {
+    if (s.id === 'none') continue;
+    home.classList.remove('bhSkin-' + s.id);
+  }
+  if (skinId && skinId !== 'none') home.classList.add('bhSkin-' + skinId);
+}
+
+function htmlCareMarkRow(m) {
+  const when = (m && m.when) || '—';
+  const note = (m && m.note) || 'care mark';
+  const hash = (m && m.txHash) || '';
+  const href = hash ? lienTxExplorer(hash) : null;
+  const evidence = href
+    ? ('<a class="mono" href="' + href + '" target="_blank" rel="noopener noreferrer">'
+      + enTexte(hash.slice(0, 10) + '…' + hash.slice(-6)) + '</a>')
+    : (hash
+      ? '<span class="mono">' + enTexte(hash) + '</span>'
+      : '<span class="k">local only — no tx</span>');
+  return '<li class="bhCRow">'
+    + '<div><div class="bhCCol">When</div><div class="bhCVal">' + enTexte(when) + '</div></div>'
+    + '<div><div class="bhCCol">Note</div><div class="bhCVal">' + enTexte(note) + '</div></div>'
+    + '<div><div class="bhCCol">Tx (optional)</div><div class="bhCVal">' + evidence + '</div></div>'
+    + '</li>';
+}
+
+/**
+ * Paint Care cosmetic panel. State is browser-local via localStorage — labeled not on-chain vitality.
+ * @param {string} adr block address
+ */
+function peindreBlockHomeCare(adr) {
+  const care = $('#blockHomeCare');
+  const rules = $('#blockHomeCareRules');
+  const skinsEl = $('#blockHomeCareSkins');
+  const logEl = $('#blockHomeCareLog');
+  const formEl = $('#blockHomeCareMarkForm');
+  const actions = $('#blockHomeCareActions');
+  const foot = $('#blockHomeCareFoot');
+  if (care) care.setAttribute('data-block', adr || '');
+
+  const state = lireCareLocal(adr);
+  appliquerCareSkin(state.skin);
+
+  if (rules) {
+    rules.innerHTML = '<b>On screen:</b> Cosmetic first · labeled <b>cosmetic</b> · '
+      + 'no HP / heal amount · no TB-minted care coin · '
+      + 'you choose any Send amount/destination · care-token Create deferred. '
+      + 'Every optional spend you make stays a normal wallet Send — we only log a tx hash if you paste one.';
+  }
+
+  if (skinsEl) {
+    skinsEl.innerHTML = BH_CARE_SKINS.map(s => {
+      const pressed = s.id === state.skin ? 'true' : 'false';
+      return '<button type="button" data-skin="' + s.id + '" aria-pressed="' + pressed + '">'
+        + enTexte(s.label) + '</button>';
+    }).join('');
+    skinsEl.querySelectorAll('button[data-skin]').forEach(btn => {
+      btn.onclick = () => {
+        const next = btn.getAttribute('data-skin') || 'none';
+        const cur = lireCareLocal(adr);
+        const w = ecrireCareLocal(adr, { skin: next, marks: cur.marks });
+        if (!w.ok) {
+          dire('Could not save cosmetic skin — ' + (w.pourquoi || 'storage blocked')
+            + '. Browser-local only; nothing was sent on-chain.', 'warn');
+          return;
+        }
+        peindreBlockHomeCare(adr);
+        dire('Care skin « ' + next + ' » saved in this browser (cosmetic · not on-chain vitality).', 'ok');
+      };
+    });
+  }
+
+  if (logEl) {
+    if (!state.marks.length) {
+      logEl.innerHTML = '<li class="bhCEmpty" role="status">'
+        + '<b>No local care marks yet.</b> Marks are browser-local décor/care notes — '
+        + 'not an on-chain vitality score. Optional: open Send, then paste a tx hash below.</li>';
+    } else {
+      logEl.innerHTML = state.marks.map(htmlCareMarkRow).join('');
+    }
+  }
+
+  if (formEl) {
+    formEl.innerHTML = '<label>Note <input type="text" id="bhCareNote" maxlength="120" '
+      + 'placeholder="e.g. marked care (local)" autocomplete="off"></label>'
+      + '<label>Tx hash (optional) <input type="text" id="bhCareTx" maxlength="66" '
+      + 'placeholder="0x… if you sent units" autocomplete="off" spellcheck="false"></label>'
+      + '<button type="button" class="act sec" id="bhCareSaveMark">Mark care (local)</button>';
+    const save = $('#bhCareSaveMark');
+    if (save) save.onclick = () => {
+      const noteEl = $('#bhCareNote');
+      const txEl = $('#bhCareTx');
+      let note = (noteEl && noteEl.value || '').trim() || 'care mark';
+      let tx = (txEl && txEl.value || '').trim();
+      if (tx && !/^0x[0-9a-fA-F]{64}$/.test(tx)) {
+        dire('Tx hash must be 0x + 64 hex chars, or leave blank for a local-only mark.', 'warn');
+        return;
+      }
+      const cur = lireCareLocal(adr);
+      const when = new Date().toISOString().slice(0, 19) + 'Z';
+      const marks = [{ when, note, txHash: tx || '' }].concat(cur.marks).slice(0, 40);
+      const w = ecrireCareLocal(adr, { skin: cur.skin, marks });
+      if (!w.ok) {
+        dire('Could not save care mark — ' + (w.pourquoi || 'storage blocked') + '.', 'warn');
+        return;
+      }
+      peindreBlockHomeCare(adr);
+      dire(tx
+        ? ('Care mark saved locally with tx ' + tx.slice(0, 10) + '… — not a doctor fee; re-verify on explorer.')
+        : 'Care mark saved in this browser (local only · no tx · not on-chain vitality).', 'ok');
+    };
+  }
+
+  if (actions) {
+    actions.innerHTML = '<button type="button" class="act sec" id="bhCareSend">Open Send (optional)</button>'
+      + '<button type="button" class="act sec" id="bhCareTokenLater" title="Deferred — user Create later">'
+      + 'Birth care-token — later</button>'
+      + '<button type="button" class="act sec" id="bhCareClearMarks">Clear local marks</button>';
+    const sd = $('#bhCareSend');
+    if (sd) sd.onclick = () => {
+      if (typeof ouvrirSendForm === 'function') ouvrirSendForm(adr);
+      dire('Send opened — choose amount and destination yourself. '
+        + 'After the wallet confirms, paste the tx hash into Care marks if you want a local log. '
+        + 'No fixed doctor fee · no TB care ticker.', 'ok');
+    };
+    const ct = $('#bhCareTokenLater');
+    if (ct) ct.onclick = () => {
+      if (typeof selectAppSection === 'function') selectAppSection('create');
+      const createZone = $('#createZone') || $('#nom');
+      if (createZone && createZone.scrollIntoView) {
+        requestAnimationFrame(() => createZone.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+      }
+      dire('Care-token Create is deferred — use standard Create when you want a user-owned name/symbol. '
+        + 'This app does not mint a platform care coin.', 'warn');
+    };
+    const clr = $('#bhCareClearMarks');
+    if (clr) clr.onclick = () => {
+      const cur = lireCareLocal(adr);
+      const w = ecrireCareLocal(adr, { skin: cur.skin, marks: [] });
+      if (!w.ok) {
+        dire('Could not clear marks — ' + (w.pourquoi || 'storage blocked') + '.', 'warn');
+        return;
+      }
+      peindreBlockHomeCare(adr);
+      dire('Local care marks cleared (skin kept). Browser-local only.', 'ok');
+    };
+  }
+
+  if (foot) {
+    foot.innerHTML = 'Care = <b>cosmetic</b> · browser-local / not on-chain vitality · no HP · no heal · '
+      + 'no TB-minted care ticker · no fake doctor payment. '
+      + 'Pages Launch ≠ OpenLaunch ownerless locker. Care ≠ PoolKey.';
+  }
+}
+
 /**
  * Block home companion stub — décor skin + honesty strip from EXISTING reads only.
  * Flags metaphors as metaphors. Never paints a fake HP / vitality score.
  * History shell: fail-closed until Transfer indexer (see peindreBlockHomeHistory).
+ * Care: cosmetic panel (browser-local) — see peindreBlockHomeCare.
  */
 async function ouvrirBlockHome(adr, opts) {
   const o = opts || {};
@@ -3781,6 +4060,8 @@ async function ouvrirBlockHome(adr, opts) {
   const decor = $('#blockHomeDecor');
   /* History shell first paint: fail-closed empty — never invent Transfer rows while chain reads run. */
   peindreBlockHomeHistory(adr, { indexReady: false });
+  /* Care cosmetic: browser-local décor/care state — never HP / TB care ticker. */
+  peindreBlockHomeCare(adr);
   if (sub) {
     sub.textContent = o.fromCreate
       ? 'Just created — your block lives here in its décor. Facts below are re-read from the chain.'
@@ -3943,7 +4224,14 @@ async function ouvrirBlockHome(adr, opts) {
     };
   }
 
-  if (o.focusHistory) {
+  if (o.focusCare) {
+    const csec = $('#blockHomeCare');
+    if (csec && csec.scrollIntoView) {
+      requestAnimationFrame(() => csec.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    } else if (home.scrollIntoView) {
+      requestAnimationFrame(() => home.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
+  } else if (o.focusHistory) {
     const hsec = $('#blockHomeHistory');
     if (hsec && hsec.scrollIntoView) {
       requestAnimationFrame(() => hsec.scrollIntoView({ behavior: 'smooth', block: 'start' }));
