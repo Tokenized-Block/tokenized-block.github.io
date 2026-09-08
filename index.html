@@ -227,7 +227,7 @@ padding:14px 15px;margin-bottom:12px}
 #gardeMainnet p{margin:0 0 10px;font-size:13px;color:#f0dcc0;line-height:1.5}
 #gardeMainnet label{display:flex;gap:10px;align-items:flex-start;color:var(--fg);font-size:13.5px;margin:0}
 #gardeMainnet input{width:20px;height:20px;flex:0 0 auto;margin-top:1px;accent-color:var(--or)}
-/* Restored 30d consent — `#gardeCase` may stay pre-checked; Create/Launch/LP/Swap need session money re-ack. */
+/* Restored 30d consent — `#gardeCase` may stay pre-checked; Create/Launch/LP/Swap/Send need session money re-ack. */
 #gardeConsentRestored{display:none;margin-top:12px;padding-top:10px;border-top:1px dashed #7a4a12}
 #gardeConsentRestored.on{display:block}
 #gardeConsentRestored .t{font-weight:800;color:var(--warn);font-size:13px;margin-bottom:6px}
@@ -658,15 +658,15 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
   undo it — not you, not us.</p>
   <label><input type="checkbox" id="gardeCase"> I understand this is mainnet and I accept the cost.</label>
   <!-- ⛔ MAINNET-DEEP-DIG trap #5 + C2 #8 (2026-09-07): 30d restore may pre-check `#gardeCase`, but
-       habit-click Create / Launch / LP / Swap without re-reading cost is refused. After restore
+       habit-click Create / Launch / LP / Swap / Send without re-reading cost is refused. After restore
        THIS session, ALWAYS require `#gardeCaseArgent` — a fresh `#gardeCase` tick alone must NOT
        clear `consentRestaureCetteSession` (habit-click residual). -->
   <div id="gardeConsentRestored" role="region" aria-label="Consent restored — re-confirm money actions">
-    <div class="t">Consent restored — re-confirm before Create / Launch / LP / Swap</div>
+    <div class="t">Consent restored — re-confirm before Create / Launch / LP / Swap / Send</div>
     <p>This account accepted mainnet cost within the last 30 days. A pre-checked box is only a reminder.
-    <b>Create, Launch, Liquidity, and Swap stay closed</b> until you tick the money re-ack below for this visit —
+    <b>Create, Launch, Liquidity, Swap, and Send stay closed</b> until you tick the money re-ack below for this visit —
     restore alone must not authorize irreversible sends (Create fee included). Re-ticking the box above is not enough after restore.</p>
-    <label><input type="checkbox" id="gardeCaseArgent"> I re-confirm mainnet cost for Create / Launch / Liquidity / Swap this session.</label>
+    <label><input type="checkbox" id="gardeCaseArgent"> I re-confirm mainnet cost for Create / Launch / Liquidity / Swap / Send this session.</label>
   </div>
 </div>
 
@@ -1419,7 +1419,8 @@ document.addEventListener('click', (ev) => {
 /* ══ SLICE 1 2026-09-08 — deep link ?block= · My blocks · Send · share ═══════
  * ⛔ Pas de custodie hors-chaine : My blocks = creationsDe(tx.from) + lectures on-chain.
  * ⛔ Share link n invente rien : meme origine, query block= (+ cb= conserve si present).
- * ⛔ Send = ERC-20 transfer via envoyerTx ; Real respecte consentArgentOk. */
+ * ⛔ Send = ERC-20 transfer via envoyerTx ; Real respecte consentArgentOk.
+ * ⛔ Decimals unread → fail closed (never invent 18). My blocks shows UNREAD. */
 
 /** Prefill Lookup + Next-steps token fields with a block address. */
 function prefillBlockChamps(adr) {
@@ -5039,7 +5040,7 @@ $('#lancLancer').onclick = async () => {
   /* ⛔ CONSENT MONEY RE-ACK FAIL-CLOSED: restored 30d pre-check alone must not Launch. */
   if (!consentArgentOk()) {
     return dire('Mainnet consent restored — re-confirm before Launch.\n'
-      + 'Tick « I re-confirm mainnet cost for Create / Launch / Liquidity / Swap this session » above.', 'bad');
+      + 'Tick « I re-confirm mainnet cost for Create / Launch / Liquidity / Swap / Send this session » above.', 'bad');
   }
   /* ⛔ TOO-CHEAP FAIL-CLOSED: disabled button is not enough if something re-enables it. */
   if (valoCheapArmee && !($('#gardeValoCheapCase') && $('#gardeValoCheapCase').checked)) {
@@ -5063,7 +5064,7 @@ $('#lancApprouver').onclick = async () => {
   }
   if (!consentArgentOk()) {
     return dire('Mainnet consent restored — re-confirm before Launch approvals.\n'
-      + 'Tick « I re-confirm mainnet cost for Create / Launch / Liquidity / Swap this session » above.', 'bad');
+      + 'Tick « I re-confirm mainnet cost for Create / Launch / Liquidity / Swap / Send this session » above.', 'bad');
   }
   /* ⛔ PERMIT2 MAX FAIL-CLOSED on Real — disabled is not enough. */
   if (!permit2MaxAckOk('lanc')) {
@@ -5338,14 +5339,16 @@ function gardeMainnet() {
   majBanniereConsentRestaure();
   /* Les autres sont recalcules par leur propre section a chaque lecture : on ne fait que
    * FORCER le refus, jamais l autorisation.
-   * ⛔ Create/Launch/LP/Swap use consentArgentOk — restore alone must not unlock irreversible sends. */
+   * ⛔ Create/Launch/LP/Swap/Send use consentArgentOk — restore alone must not unlock irreversible sends. */
   /* ⛔ Launch (#lancLancer) was missing from this list — comment said three buttons, code had two.
    *    On mainnet without the checkbox, Work out → Launch could still send. Force-refuse only. */
   const argentOk = consentArgentOk();
-  if (!argentOk) for (const id of ['#poolAgir', '#swapAgir', '#lancLancer', '#lancApprouver']) { const b = $(id); if (b) b.disabled = true; }
+  if (!argentOk) for (const id of ['#poolAgir', '#swapAgir', '#lancLancer', '#lancApprouver', '#sendAgir']) { const b = $(id); if (b) b.disabled = true; }
   else {
     /* Mainnet money ack OK (or Practice): re-compose Launch with too-cheap confirm — never blind-enable. */
     syncGardeValoCheap();
+    /* Send has no section re-composer — clear force-disable when money ack is OK. */
+    const sendB = $('#sendAgir'); if (sendB) sendB.disabled = false;
   }
   /* Re-apply Permit2 MAX Real checkboxes (force-refuse only) after mainnet composition. */
   for (const sec of ['lanc', 'pool', 'swap']) {
@@ -5446,7 +5449,7 @@ if ($('#lancValo')) $('#lancValo').addEventListener('input', () => {
  * ⚠️ Lie au COMPTE et borne a 30 jours — voir `consentement.js`. Un consentement qui survivrait a
  *    un changement de wallet vaudrait pour quelqu un qui ne l a jamais donne.
  * ⛔ PRE-COCHE ≠ ACK ARGENT (2026-09-07 / MAINNET-DEEP-DIG #5, étendu Create). Restore may
- *    pre-check `#gardeCase` (banner reminder only). Create / Launch / Liquidity / Swap stay
+ *    pre-check `#gardeCase` (banner reminder only). Create / Launch / Liquidity / Swap / Send stay
  *    force-refused until `#gardeCaseArgent` this session (C2 #8: fresh `#gardeCase` alone no
  *    longer clears `consentRestaureCetteSession`). Habit-click on
  *    irreversible sends must not ride a ≤30d memory alone.
@@ -5527,7 +5530,7 @@ $('#swapAgir').onclick = async () => {
   if (!compte) return dire('Connect your wallet first.', 'bad');
   if (!consentArgentOk()) {
     return dire('Mainnet consent restored — re-confirm before Swap.\n'
-      + 'Tick « I re-confirm mainnet cost for Create / Launch / Liquidity / Swap this session » above.', 'bad');
+      + 'Tick « I re-confirm mainnet cost for Create / Launch / Liquidity / Swap / Send this session » above.', 'bad');
   }
   if (!deviseHorsLaunchOk()) {
     return dire('Quote currency is not the Launch pool.\n'
@@ -5588,7 +5591,7 @@ $('#poolAgir').onclick = async () => {
   if (!compte) return dire('Connect your wallet first.', 'bad');
   if (!consentArgentOk()) {
     return dire('Mainnet consent restored — re-confirm before Liquidity.\n'
-      + 'Tick « I re-confirm mainnet cost for Create / Launch / Liquidity / Swap this session » above.', 'bad');
+      + 'Tick « I re-confirm mainnet cost for Create / Launch / Liquidity / Swap / Send this session » above.', 'bad');
   }
   if (!deviseHorsLaunchOk()) {
     return dire('Quote currency is not the Launch pool.\n'
@@ -5717,7 +5720,7 @@ $('#agir').onclick = async () => {
      * Connect path above returns before this. Practice: consentArgentOk() is true off mainnet. */
     if (!consentArgentOk()) {
       return dire('Mainnet consent restored — re-confirm before Create.\n'
-        + 'Tick « I re-confirm mainnet cost for Create / Launch / Liquidity / Swap this session » above.', 'bad');
+        + 'Tick « I re-confirm mainnet cost for Create / Launch / Liquidity / Swap / Send this session » above.', 'bad');
     }
 
     await rafraichir();
@@ -5956,7 +5959,8 @@ $('#agir').onclick = async () => {
  * ⛔ Index = listerCreations + creationsDe (tx.from). Pas de liste hors-chaine inventee.
  * ⛔ Pool « present » = Launch native ETH PoolKey (fee 0 · spacing 200) slot0 sqrtPrice ≠ 0.
  *    Autre devise / autre PoolKey = autre pool — on ne la pretend pas « launch ».
- * ⛔ Send = transfer(address,uint256) via envoyerTx ; Real → consentArgentOk. */
+ * ⛔ Send = transfer(address,uint256) via envoyerTx ; Real → consentArgentOk.
+ * ⛔ Decimals unread → fail closed (never invent 18). My blocks shows UNREAD. */
 
 function encodeTransfer(destinataire, montant) {
   /* Minimal ERC-20 transfer — same pad/sel4 discipline as approve paths. */
@@ -5995,11 +5999,14 @@ async function soldeBlockPourCompte(jeton) {
   } catch { return null; }
 }
 
-async function decimalesOu18(jeton) {
+/** Token decimals from chain — null if unread. Never invent 18 (Send / balances would lie). */
+async function lireDecimales(jeton) {
   try {
     const raw = await rpc('eth_call', [{ to: jeton, data: '0x' + sel4('decimals()') }, 'latest']);
-    return Number(BigInt(raw));
-  } catch { return 18; }
+    const n = Number(BigInt(raw));
+    if (!Number.isInteger(n) || n < 0 || n > 255) return null;
+    return n;
+  } catch { return null; }
 }
 
 function ouvrirSendForm(adr) {
@@ -6074,9 +6081,9 @@ async function chargerMesBlocks() {
   for (const c of gardees.slice(0, 40)) {
     const adr = c.jeton;
     const solde = await soldeBlockPourCompte(adr);
-    const dec = await decimalesOu18(adr);
+    const dec = await lireDecimales(adr);
     const pool = await poolLaunchPresente(adr);
-    const soldeTxt = solde === null ? 'balance unread'
+    const soldeTxt = (solde === null || dec === null) ? 'UNREAD'
       : (formaterUnites(solde, dec) + ' ' + (c.symbole || ''));
     const poolPill = pool.etat === 'YES' ? pastille('LAUNCH POOL YES', 'ok')
       : pool.etat === 'NO' ? pastille('LAUNCH POOL NO', 'warn')
@@ -6133,11 +6140,17 @@ if (_sendAgir) _sendAgir.onclick = async () => {
   if (to.toLowerCase() === compte.toLowerCase()) {
     return dire('Send refused — recipient is your own connected wallet.', 'warn');
   }
+  if (to.toLowerCase() === '0x0000000000000000000000000000000000000000') {
+    return dire('Send refused — zero/burn address is not a valid recipient.', 'warn');
+  }
   if (!consentArgentOk()) {
     return dire('Mainnet consent required before Send.\n'
       + 'Tick the mainnet cost confirmations above (Practice needs none).', 'bad');
   }
-  const dec = await decimalesOu18(jeton);
+  const dec = await lireDecimales(jeton);
+  if (dec === null) {
+    return dire('⛔ Could not read token decimals — Send aborted (fail closed). Nothing was sent.', 'bad');
+  }
   const m = montantHumain(montantTxt, dec);
   if (m.etat !== 'OK') {
     return dire('Send amount refused — ' + (m.pourquoi || m.etat)

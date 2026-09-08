@@ -20,10 +20,10 @@
 //    decision, bien plus lourde, et personne ne l a prise.
 //
 // ⛔ ET CE N EST PAS UN ACK ARGENT (2026-09-07, étendu Create + C2 #8). Pre-cocher `#gardeCase` n est
-//    qu un souvenir UI ; Create / Launch / LP / Swap exigent un re-ack de session dans `index.html`
+//    qu un souvenir UI ; Create / Launch / LP / Swap / Send exigent un re-ack de session dans `index.html`
 //    (`consentArgentOk` / `#gardeCaseArgent`). Après restore cette session, ALWAYS `#gardeCaseArgent`
 //    — un tick frais de `#gardeCase` seul ne doit plus lever le flag restore. Un souvenir ≤30j
-//    ne doit pas autoriser un habit-click sur Create (frais), mint ou swap.
+//    ne doit pas autoriser un habit-click sur Create (frais), mint, swap ou Send.
 
 const CLE = 'tblock.consentement.mainnet';
 const JOURS = 30;
