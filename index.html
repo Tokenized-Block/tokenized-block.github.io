@@ -1222,7 +1222,12 @@ function majCtaPacket() {
   if (btn && compte) {
     btn.textContent = practice
       ? 'Create the block'
-      : (lireCreateFeeSession() ? 'Create — fee paid · gas only' : 'Create — 0.00005 ETH service fee + gas');
+      : ((() => {
+        const s = typeof lireCreateFeeSession === 'function' ? lireCreateFeeSession() : null;
+        return (chaine === 8453 && s && Number(s.chaine) === 8453)
+          ? 'Create — fee paid · gas only'
+          : 'Create — 0.00005 ETH service fee + gas';
+      })());
   }
 }
 
@@ -1428,8 +1433,7 @@ function ecrireCreateFeeSession(s) {
   } catch { /* private mode / quota */ }
 }
 /** Return session fee if still valid on-chain for this compte+chaine+amount; else null (and clear). */
-/** @returns {{kind:'none'}|{kind:'pending',hash:string}|{kind:'ok',session:object}}
- * pending = session remembered but RPC could not re-read tx yet — MUST NOT re-charge. */
+/** Fee session gate. pending = remembered hash but RPC unread — MUST NOT re-charge. */
 async function createFeeSessionEtat(fraisWei) {
   const s = lireCreateFeeSession();
   if (!s || !compte || fraisWei <= 0n) return { kind: 'none' };
@@ -1459,10 +1463,6 @@ async function createFeeSessionEtat(fraisWei) {
   try { val = BigInt(tx.value || '0x0'); } catch { ecrireCreateFeeSession(null); return { kind: 'none' }; }
   if (val < fraisWei) { ecrireCreateFeeSession(null); return { kind: 'none' }; }
   return { kind: 'ok', session: s };
-}
-async function createFeeDejaConfirmee(fraisWei) {
-  const e = await createFeeSessionEtat(fraisWei);
-  return e.kind === 'ok' ? e.session : null;
 }
 let chaine = 84532, compte = null, dernier = null;
 /* Soft-gate session state — declared early so relireJeton (above) never hits TDZ. */
@@ -2484,11 +2484,9 @@ for (const id of [84532, 8453]) $('#t' + id).onclick = () => {
    *    Switching Practice↔Real without clearing left Launch/Liq/Swap able to Sign octets
    *    simulated on the other network (page chaine updates; plancement.donnee does not). */
   if (typeof invaliderPlansTravail === 'function') invaliderPlansTravail('page Practice/Real tab');
-  /* Keep Real fee session when switching onto Real (8453); clear only on mismatch. */
-  if (typeof lireCreateFeeSession === 'function' && typeof ecrireCreateFeeSession === 'function') {
-    const feeS = lireCreateFeeSession();
-    if (!feeS || Number(feeS.chaine) !== Number(id)) ecrireCreateFeeSession(null);
-  }
+  /* ⛔ Do NOT clear Create fee session on Practice↔Real.
+   * C2 stop-ship #34: Real→Practice cleared (8453≠84532), so Practice→Real re-asked 0.00005 ETH.
+   * Practice createServiceFeeWei() is 0n — fee path never runs. Real skip uses createFeeSessionEtat. */
   peuplerDevises();
   /* ⛔ LA GALERIE SUIT LE RESEAU. Sans ce rappel, elle garderait les blocks de l ancien reseau
    *    sous une note qui nommerait le nouveau — un mensonge pire que l absence de note. */
