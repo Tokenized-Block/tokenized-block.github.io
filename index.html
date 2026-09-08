@@ -6871,9 +6871,20 @@ $('#lancCalculer').onclick = async () => {
             + 'the whole launch is one transaction, so it either happens or it does not.');
         return;
       }
+      /* ⛔ LA BORNE EST MESUREE, PAS SUPPOSEE — `que-vaut-validation-false.mjs`, 2026-09-08.
+       * L appel de simulation passe `validation: false`. Mesure sur mainnet.base.org, avec LA
+       * FORME EXACTE de cette transaction (`{from, to, data}`, sans `value`), depuis un compte a
+       * ZERO wei : la simulation rend ACCEPTE — exactement comme depuis un compte finance. Le
+       * solde du signataire n est donc PAS regarde.
+       * ⇒ La note bornait le resultat dans le TEMPS (« pas une promesse sur plus tard ») mais pas
+       * dans sa PORTEE. Quelqu un pouvait lire « la chaine accepte » et comprendre « j ai de quoi
+       * payer ». On dit desormais les deux. */
       box.innerHTML = vue + ligne('chain check', pastille('THE CHAIN ACCEPTS THIS', 'ok'))
         + ligne('gas', BigInt(appels[0].gasUsed) + '   in ONE transaction')
-        + ligne('note', 'checked against the chain as it is right now — not a promise about later');
+        + ligne('note', 'checked against the chain as it is right now — not a promise about later')
+        + ligne('what this does NOT check', 'whether your account can PAY for it. Measured: the same '
+          + 'simulation returns ACCEPTED from an account holding 0 wei. Your wallet checks the balance, '
+          + 'this page does not.');
     }
     plancement = { donnee, dejaCreee: sqrtExistant !== 0n, jeton };
     /* Approvals present — no Run approve; drop Permit2 MAX gate for Launch.
