@@ -3967,7 +3967,19 @@ function scanBasePourChaine() {
   try {
     const R = (typeof RESEAUX !== 'undefined' && RESEAUX[chaine]) ? RESEAUX[chaine] : null;
     return (R && R.scan) || 'https://basescan.org';
-  } catch { return 'https://basescan.org';
+  /* ⛔⛔ IL MANQUAIT L ACCOLADE FERMANTE DU `catch`, ET CA A TUE LA PAGE ENTIERE PENDANT DES HEURES.
+   * Introduit par la PR #48 (« Block home History shell »). Sans elle, TOUT ce qui suit est parse
+   * A L INTERIEUR de cette fonction — qui n est pas `async` — et le `await rafraichir()` de
+   * l initialisation, tout en bas du module, devient « SyntaxError: Unexpected reserved word ».
+   * ⛔ CE QUE CA DONNAIT : la page S AFFICHAIT normalement (le HTML est servi, le CSS s applique)
+   * et AUCUN gestionnaire n etait cable. Mesure sur le site en ligne : apercu vide, galerie vide,
+   * `typeof bouton.onclick === 'function'` -> false. Une panne totale qui RESSEMBLE a une page qui
+   * marche — la forme la plus couteuse, parce que rien n alerte.
+   * ⚠️ AUCUNE DE NOS GARDES NE POUVAIT LA VOIR : les 256 tests ne chargent pas le HTML, les 13
+   * regles sont syntaxiques sur du texte, et les deux sondes de production mesurent des OCTETS
+   * SERVIS — elles rendaient « tout est servi, aux memes octets » sur une page qui ne demarre pas.
+   * ⇒ Une regle qui EXECUTE le module manquait. Elle existe maintenant (regle 14). */
+  } catch { return 'https://basescan.org'; }
 }
 
 function lienTxExplorer(hash) {
@@ -4020,10 +4032,27 @@ function peindreBlockHomeHistory(adr, opts) {
         + ' <span class="k">Global emptied-creator counts need a durable Transfer index — '
         + 'this-block rows come from eth_getLogs when the scan succeeds. Deferred K; no invented score.</span>';
     } else {
+      /* ⛔⛔ LA TRONCATURE ETAIT SILENCIEUSE, ET ELLE SOUS-COMPTAIT. `evenementsDepuisTransfers`
+       * coupe a BH_HIST_MAX_ROWS (40) AVANT qu on compte : le tableau affichait donc « 40 ROWS »
+       * sous le libelle « scanned window » et « Raw Transfer evidence count » alors que la fenetre
+       * pouvait en contenir 137. Un compte plafonne presente comme LE compte de la fenetre est un
+       * chiffre faux — et il est faux dans le sens RASSURANT, celui qui ne declenche aucune
+       * verification.
+       * ⚠️ Le pied nommait la borne de FENETRE et jamais celle de LISTE. Une liste sans sa borne se
+       * lit comme exhaustive : c est la meme faute que « rien trouve » pour « pas regarde ».
+       * ⇒ On dit les DEUX nombres, et on nomme le plafond. */
       const n = o.events.length;
+      const total = (scan && Number.isFinite(scan.total)) ? scan.total : null;
+      const tronque = total !== null && total > n;
       board.innerHTML = '<span class="bhHistBoardLabel">Indexed events (this block · scanned window)</span>'
-        + pastille(String(n) + ' ROW' + (n === 1 ? '' : 'S'), n ? 'ok' : 'dim')
-        + ' <span class="k">Raw Transfer evidence count — not a trust or scammer score. Re-verify on explorer.</span>';
+        + pastille(String(n) + ' ROW' + (n === 1 ? '' : 'S')
+          + (tronque ? ' of ' + total : ''), n ? 'ok' : 'dim')
+        + ' <span class="k">Raw Transfer evidence count — not a trust or scammer score. Re-verify on explorer.'
+        + (tronque
+          ? ' <b>List capped at ' + BH_HIST_MAX_ROWS + ' rows</b> — ' + (total - n)
+            + ' more Transfer log(s) in the same window are NOT shown here. Use the explorer for the full list.'
+          : '')
+        + '</span>';
     }
   }
 
@@ -4053,6 +4082,12 @@ function peindreBlockHomeHistory(adr, opts) {
       extra += ' Window ' + enTexte(String(scan.fenetre.de)) + '–' + enTexte(String(scan.fenetre.a)) + '.';
       if (scan.fenetresRatees && scan.fenetresRatees.length) {
         extra += ' ' + scan.fenetresRatees.length + ' window(s) failed (named, not treated as empty).';
+      }
+      /* ⛔ LA BORNE DE LISTE, A COTE DE LA BORNE DE FENETRE. Le pied nommait l une et pas l autre :
+       * un lecteur pouvait croire voir tout ce que la fenetre contient. */
+      if (Number.isFinite(scan.total) && scan.total > BH_HIST_MAX_ROWS) {
+        extra += ' Showing ' + BH_HIST_MAX_ROWS + ' of ' + scan.total
+          + ' Transfer logs in that window (list capped, not the whole window).';
       }
       if (scan.createur) {
         extra += ' Creator filter/label from tx.from <span class="mono">'
@@ -4191,6 +4226,9 @@ async function chargerBlockHomeHistory(adr, opts) {
         fenetresRatees,
         createur,
         createurRaison: createur ? null : ((crea && crea.raison) || 'unread'),
+        /* ⛔ LE TOTAL AVANT TRONCATURE. `events` est deja coupe a 40 ; sans ce nombre, l ecran
+         * affichait le compte PLAFONNE comme s il etait celui de la fenetre. */
+        total: (tr.transfers || []).length,
       },
     });
   } catch (e) {
