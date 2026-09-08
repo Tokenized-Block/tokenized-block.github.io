@@ -6607,19 +6607,37 @@ function validerAskChamps(ask) {
 
 let settleAskActif = null;
 
+/** Ask network vs page Practice/Real — refuse money path on mismatch (fail closed). */
+function askChaineMismatch(ask) {
+  if (!ask || ask.chainId == null || ask.chainId === '') return null;
+  const id = Number(ask.chainId);
+  if (id !== 8453 && id !== 84532) {
+    return 'Ask chainId ' + ask.chainId + ' is not Practice (84532) or Real (8453) — refuse.';
+  }
+  if (id === chaine) return null;
+  const askNom = (RESEAUX[id] && RESEAUX[id].nom) || ('chain ' + id);
+  return 'Ask is for ' + askNom + ' (chainId ' + id + '), but this page is on '
+    + RESEAUX[chaine].nom + '.\n'
+    + 'Flip Practice/Real to match the ask (or open a link with ?chain=), then Settle again. Nothing was sent.';
+}
+
 function ouvrirSettle(ask) {
   selectAppSection('market');
   settleAskActif = ask;
   const pan = $('#settlePanel');
   if (pan) pan.hidden = false;
   const det = $('#settleDetail');
-  const netBadge = chaine === 8453
+  const askCid = (ask && ask.chainId != null && ask.chainId !== '') ? Number(ask.chainId) : chaine;
+  const netId = (askCid === 8453 || askCid === 84532) ? askCid : chaine;
+  const netBadge = netId === 8453
     ? pastille('REAL · costs ETH', 'warn')
     : pastille('PRACTICE · free', 'ok');
+  const mismatch = askChaineMismatch(ask);
   if (det) {
     det.innerHTML = ligne('object of sale', enTexte('B-20 units of ' + ask.block)
         + ' — look is contract metadata shared by all holders, not exclusive IP')
-      + ligne('network', netBadge + ' ' + enTexte(RESEAUX[chaine].nom))
+      + ligne('network', netBadge + ' ' + enTexte(RESEAUX[netId].nom)
+        + (mismatch ? (' ' + pastille('PAGE NETWORK MISMATCH', 'bad')) : ''))
       + ligne('seller', '<span class="mono">' + enTexte(ask.seller) + '</span>'
         + ' ' + pastille('UNVERIFIED INTENT', 'warn'))
       + ligne('amount offered', enTexte(ask.amount) + ' whole token units (decimals re-read at Send)')
@@ -6628,7 +6646,12 @@ function ouvrirSettle(ask) {
       + ligne('settlement', enTexte('not atomic · no escrow · page builds txs, wallet signs'));
   }
   const info = $('#settleInfo');
-  if (info) info.textContent = 'Checklist ready. Buyer pays first (step 1), then seller Opens Send (step 2) — or agree reverse order with the same risk.';
+  if (info) {
+    info.textContent = mismatch
+      ? ('⛔ ' + mismatch.replace(/\n/g, ' '))
+      : 'Checklist ready. Buyer pays first (step 1), then seller Opens Send (step 2) — or agree reverse order with the same risk.';
+  }
+  if (mismatch) dire(mismatch, 'bad');
   const s1 = $('#settleStep1'), s2 = $('#settleStep2');
   if (s1) s1.classList.remove('on');
   if (s2) s2.classList.remove('on');
@@ -6862,14 +6885,20 @@ if (_settleFermer) _settleFermer.onclick = () => {
 };
 
 const _settlePay = $('#settlePay');
+let settlePayEnCours = false;
 if (_settlePay) _settlePay.onclick = async () => {
   const ask = settleAskActif;
   if (!ask) return dire('No active ask — open Settle from a Market card or ask link.', 'warn');
+  if (settlePayEnCours) {
+    return dire('Pay already in progress — wait for the wallet / receipt. Nothing extra was sent.', 'warn');
+  }
   if (!compte) return dire('Connect your wallet first (buyer pays ETH).', 'bad');
   if (!/^0x[0-9a-fA-F]{40}$/.test(ask.seller)) return dire('Seller address invalid — refuse pay.', 'bad');
   if (ask.seller.toLowerCase() === compte.toLowerCase()) {
     return dire('You are the seller on this ask — Pay ETH is for the buyer. Use step 2 Send after they pay.', 'warn');
   }
+  const mismatch = askChaineMismatch(ask);
+  if (mismatch) return dire(mismatch, 'bad');
   if (!consentArgentOk()) {
     return dire('Mainnet consent required before Market ETH pay.\n'
       + 'Tick the mainnet cost confirmations above (Practice needs none). Same gate as Send.', 'bad');
@@ -6879,24 +6908,42 @@ if (_settlePay) _settlePay.onclick = async () => {
     return dire('Ask price unreadable — pay aborted (fail closed).', 'bad');
   }
   const info = $('#settleInfo');
-  if (info) info.textContent = 'Preparing ETH value transfer ' + ask.priceEth
+  const btn = _settlePay;
+  settlePayEnCours = true;
+  if (btn) btn.disabled = true;
+  if (info) info.textContent = 'Paying… ETH value transfer ' + ask.priceEth
     + ' → seller ' + ask.seller + ' on ' + RESEAUX[chaine].nom
-    + '… NOT atomic with token Send.';
+    + '… NOT atomic with token Send. Do not click Pay again.';
   dire('⚠ Counterparty risk: paying ETH does NOT move block tokens.\n'
     + 'Seller must still Send ' + ask.amount + ' units of ' + ask.block + ' to you.\n'
     + 'No escrow. Wallet will open for a plain ETH transfer.', 'warn');
-  const r = await envoyerTx({
-    to: ask.seller,
-    data: '0x',
-    value: '0x' + prix.valeur.toString(16),
-    nom: 'Market ask pay ' + ask.priceEth + ' ETH to seller (not atomic · not escrow)',
-  });
+  let r = null;
+  try {
+    r = await envoyerTx({
+      to: ask.seller,
+      data: '0x',
+      value: '0x' + prix.valeur.toString(16),
+      nom: 'Market ask pay ' + ask.priceEth + ' ETH to seller (not atomic · not escrow)',
+    });
+  } finally {
+    settlePayEnCours = false;
+    /* Re-enable only when money ack still allows (gardeMainnet may force-disable). */
+    if (btn && typeof consentArgentOk === 'function' && consentArgentOk()) btn.disabled = false;
+    else if (btn && typeof consentArgentOk === 'function' && !consentArgentOk()) btn.disabled = true;
+    else if (btn) btn.disabled = false;
+  }
   if (r && r.ok) {
     const s1 = $('#settleStep1'); if (s1) s1.classList.add('on');
     if (info) info.textContent = 'ETH pay confirmed: ' + r.hash
       + ' — next: seller must Send tokens to ' + compte + ' (step 2).';
     dire('ETH pay confirmed.\n' + r.hash
       + '\nTokens are NOT yours yet — seller must Send. Not atomic.', 'ok');
+  } else if (info && !r) {
+    info.textContent = 'Pay aborted or refused — tokens NOT moved. You can retry Pay once ready.';
+  } else if (info && r && !r.ok) {
+    info.textContent = 'Pay not confirmed'
+      + (r.hash ? (': ' + r.hash) : '')
+      + ' — do NOT assume seller was paid. Retry only after checking the explorer.';
   }
 };
 
@@ -6904,6 +6951,8 @@ const _settleSend = $('#settleSend');
 if (_settleSend) _settleSend.onclick = () => {
   const ask = settleAskActif;
   if (!ask) return dire('No active ask.', 'warn');
+  const mismatch = askChaineMismatch(ask);
+  if (mismatch) return dire(mismatch, 'bad');
   /* Prefill Send: token = block, amount = ask amount, recipient = buyer if connected seller. */
   ouvrirSendForm(ask.block);
   const amt = $('#sendMontant'); if (amt) amt.value = ask.amount;
@@ -6937,7 +6986,12 @@ if (_settleSend) _settleSend.onclick = () => {
         + 'If you are the buyer, do not Send your own tokens here. Warning also shown on the Send form.', 'warn');
     }
   }
-  const s2 = $('#settleStep2'); if (s2) s2.classList.add('on');
+  /* Honesty: Open Send ≠ tokens moved. Step 2 lights only after Send confirms (sendAgir). */
+  const infoSettle = $('#settleInfo');
+  if (infoSettle) {
+    infoSettle.textContent = 'Send form opened on My blocks — tokens NOT moved until the seller confirms in wallet. '
+      + 'Return to Market settle after a confirmed Send.';
+  }
 };
 
 
@@ -7119,8 +7173,12 @@ const _sendFermer = $('#sendFermer');
 if (_sendFermer) _sendFermer.onclick = () => {
   const pan = $('#sendPanel'); if (pan) pan.hidden = true;
 };
+let sendAgirEnCours = false;
 const _sendAgir = $('#sendAgir');
 if (_sendAgir) _sendAgir.onclick = async () => {
+  if (sendAgirEnCours) {
+    return dire('Send already in progress — wait for the wallet / receipt. Nothing extra was sent.', 'warn');
+  }
   const jeton = ($('#sendToken') && $('#sendToken').value.trim()) || '';
   const to = ($('#sendTo') && $('#sendTo').value.trim()) || '';
   const montantTxt = ($('#sendMontant') && $('#sendMontant').value) || '';
@@ -7157,15 +7215,42 @@ if (_sendAgir) _sendAgir.onclick = async () => {
   }
   const data = encodeTransfer(to, m.valeur);
   const info = $('#sendInfo');
-  if (info) info.textContent = 'Preparing transfer of ' + formaterUnites(m.valeur, dec)
-    + ' → ' + to + ' on ' + RESEAUX[chaine].nom + '…';
-  const r = await envoyerTx({
-    to: jeton, data, value: '0x0',
-    nom: 'ERC-20 transfer of block tokens to ' + to,
-  });
+  const btnS = _sendAgir;
+  if (info) info.textContent = 'Sending… transfer of ' + formaterUnites(m.valeur, dec)
+    + ' → ' + to + ' on ' + RESEAUX[chaine].nom + '… Do not click Send again.';
+  sendAgirEnCours = true;
+  if (btnS) btnS.disabled = true;
+  let r = null;
+  try {
+    r = await envoyerTx({
+      to: jeton, data, value: '0x0',
+      nom: 'ERC-20 transfer of block tokens to ' + to,
+    });
+  } finally {
+    sendAgirEnCours = false;
+    if (btnS && typeof consentArgentOk === 'function' && consentArgentOk()) btnS.disabled = false;
+    else if (btnS && typeof consentArgentOk === 'function' && !consentArgentOk()) btnS.disabled = true;
+    else if (btnS) btnS.disabled = false;
+  }
   if (r && r.ok) {
     dire('Send confirmed.\n' + r.hash, 'ok');
     if (info) info.textContent = 'Confirmed: ' + r.hash;
+    /* Settle step 2 = tokens moved (not merely Open Send). Match active ask when present. */
+    const ask = settleAskActif;
+    if (ask && ask.block && String(ask.block).toLowerCase() === jeton.toLowerCase()) {
+      const s2 = $('#settleStep2'); if (s2) s2.classList.add('on');
+      const infoSettle = $('#settleInfo');
+      if (infoSettle) {
+        infoSettle.textContent = 'Send confirmed: ' + r.hash
+          + ' — settle step 2 complete for this ask (still not atomic with ETH pay).';
+      }
+    }
+  } else if (info && !r) {
+    info.textContent = 'Send aborted or refused — nothing confirmed.';
+  } else if (info && r && !r.ok) {
+    info.textContent = 'Send not confirmed'
+      + (r.hash ? (': ' + r.hash) : '')
+      + ' — check the explorer before retrying.';
   }
 };
 
