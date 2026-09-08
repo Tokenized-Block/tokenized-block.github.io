@@ -1858,6 +1858,21 @@ function brancherRecupBlockIntrouvable(root) {
       }
       const box = $('#rendu'); if (box) box.innerHTML = '';
       const sv = $('#swapVue'); if (sv) sv.innerHTML = '';
+      /* C2 soft #44: Clear is real recovery — not URL-only. Drop stale settle + list UI. */
+      settleAskActif = null;
+      const listPan = $('#listPanel'); if (listPan) listPan.hidden = true;
+      const lt = $('#listToken'); if (lt) lt.value = '';
+      const la = $('#listAmount'); if (la) la.value = '1';
+      const lp = $('#listPrice'); if (lp) lp.value = '0.01';
+      const ln = $('#listNote'); if (ln) ln.value = '';
+      const li = $('#listInfo'); if (li) li.textContent = '';
+      const settle = $('#settlePanel'); if (settle) settle.hidden = true;
+      const s1 = $('#settleStep1'), s2 = $('#settleStep2');
+      if (s1) s1.classList.remove('on');
+      if (s2) s2.classList.remove('on');
+      const sd = $('#settleDetail'); if (sd) sd.innerHTML = '';
+      const si = $('#settleInfo'); if (si) si.textContent = '';
+      if (typeof rafraichirMarche === 'function') rafraichirMarche();
       dire('Deep-link cleared — paste a block address or open Lookup.', 'ok');
     };
   }
