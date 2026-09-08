@@ -4038,11 +4038,10 @@ async function etatSwap() {
       : pastille('TO DO', 'warn'));
   }
 
-  let forme = null, causes = null;
+  let forme = null, causes = null, transportForme = false;
   if (autorise && compte && sortie !== null) {
     const bloc0 = await rpc('eth_getBlockByNumber', ['latest', false]);
     const deadline = BigInt(bloc0.timestamp) + 600n;
-    let transportForme = false;
     ({ forme, causes, transport: transportForme } = await formeAcceptee({
       appelBrut, ur, de: compte, cle, zeroForOne, montant, deadline,
       value: valeurHex || undefined,
@@ -4100,6 +4099,8 @@ async function etatSwap() {
     vue += ligne('⛔ Real · thin/unread',
       'Thin or unread pool — this page will not send. Re-Quote or reduce size. '
       + '<b>1% minOut does not protect you here.</b>');
+  } else if (autorise && forme === null && transportForme) {
+    empeche = 'RPC throttled — Quote again in a few seconds';
   } else if (autorise && forme === null) empeche = 'The router rejected both encodings';
   b.disabled = empeche !== null;
   b.textContent = empeche ? empeche
@@ -4123,7 +4124,7 @@ async function etatSwap() {
   /* Re-force Real thin fail-closed after gardeMainnet (force-refuse only elsewhere). */
   if (minceBloqueReal && b) b.disabled = true;
   return {
-    b20, cle, zeroForOne, montant, ur, autorise, forme, sortie,
+    b20, cle, zeroForOne, montant, ur, autorise, forme, transport: !!transportForme, sortie,
     sortieMin: sortieMinPlan, perte, minceVsMid, midNonMesure, minceBloqueReal,
     acheter, entreeEstNatif, jetonEntree, valeur: valeurHex || '0x0',
   };
@@ -5330,6 +5331,10 @@ $('#swapAgir').onclick = async () => {
       /* ⛔ Jeton D ENTREE : block en Sell, devise (WETH/USDC) en Buy ERC20 — jamais le block en Buy. */
       data = encodePermit2Approve(p.jetonEntree || p.b20, p.ur, MAX_UINT160, MAX_UINT48);
     } else {
+      if (p.forme === null && p.transport) {
+        return dire('RPC throttled both encodings — not a router reject.\n'
+          + 'Quote again in a few seconds. Nothing was sent.', 'warn');
+      }
       if (p.forme === null) return dire('The router rejected both encodings — nothing to sign.', 'bad');
       if (p.sortie === null) return dire('No quote — nothing to send.', 'bad');
       const bloc0 = await rpc('eth_getBlockByNumber', ['latest', false]);
