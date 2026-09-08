@@ -175,3 +175,149 @@ export async function creationsDe({ rpc, creations, adresse, concurrence = 12, s
 }
 
 export { selecteur };
+
+/** ERC-20 Transfer(address,address,uint256) — topic0 measured via keccak.js (same path as TOPIC_CREATED). */
+export const TOPIC_TRANSFER = '0x' + hexDe(keccak256(enc.encode(
+  'Transfer(address,address,uint256)')));
+
+/** Pad a 20-byte address into a 32-byte indexed topic (left-zero). */
+export function topicAdresse(addr) {
+  const a = String(addr || '').toLowerCase().replace(/^0x/, '');
+  if (!/^[0-9a-f]{40}$/.test(a)) return null;
+  return '0x' + '0'.repeat(24) + a;
+}
+
+/**
+ * Decode one ERC-20 Transfer log. Returns null if topic0 is wrong — never invent from/to/value.
+ */
+export function decoderTransfer(log) {
+  if (!log || !log.topics || log.topics[0] !== TOPIC_TRANSFER) return null;
+  if (!log.topics[1] || !log.topics[2]) return null;
+  const from = '0x' + log.topics[1].slice(26);
+  const to = '0x' + log.topics[2].slice(26);
+  const d = String(log.data || '').replace(/^0x/, '');
+  let value = null;
+  if (d.length >= 64) {
+    try { value = BigInt('0x' + d.slice(0, 64)); } catch { value = null; }
+  }
+  return {
+    from, to, value,
+    token: log.address ? String(log.address).toLowerCase() : null,
+    bloc: log.blockNumber ? parseInt(log.blockNumber, 16) : null,
+    tx: log.transactionHash || null,
+    logIndex: log.logIndex != null ? parseInt(log.logIndex, 16) : null,
+  };
+}
+
+/**
+ * Windowed eth_getLogs for Transfer on one token. Same Base 10k-block ceiling as listerCreations.
+ * Optional fromAddr / toAddr become indexed topic filters (null = any).
+ * ⛔ A failed window is named in fenetresRatees — never conflated with « zero transfers ».
+ */
+export async function listerTransfers({
+  rpc, token, blocs = FENETRE_MAX, fin = null, fromAddr = null, toAddr = null, surProgres = null,
+}) {
+  const adr = String(token || '').toLowerCase();
+  if (!/^0x[0-9a-f]{40}$/.test(adr)) {
+    return { transfers: [], fenetre: null, fenetresRatees: [{ de: null, a: null, cause: 'invalid token address' }] };
+  }
+  const tFrom = fromAddr ? topicAdresse(fromAddr) : null;
+  const tTo = toAddr ? topicAdresse(toAddr) : null;
+  if (fromAddr && !tFrom) {
+    return { transfers: [], fenetre: null, fenetresRatees: [{ de: null, a: null, cause: 'invalid fromAddr' }] };
+  }
+  if (toAddr && !tTo) {
+    return { transfers: [], fenetre: null, fenetresRatees: [{ de: null, a: null, cause: 'invalid toAddr' }] };
+  }
+  const topics = [TOPIC_TRANSFER];
+  if (tFrom || tTo) {
+    topics.push(tFrom); /* may be null = any from when only to is set */
+    if (tTo) topics.push(tTo);
+  }
+  const dernier = fin ?? parseInt(await rpc('eth_blockNumber', []), 16);
+  const debut = Math.max(0, dernier - blocs);
+  const trouvees = [];
+  const fenetresRatees = [];
+  let bas = dernier;
+  while (bas > debut) {
+    const haut = bas;
+    bas = Math.max(debut, haut - FENETRE_MAX);
+    try {
+      const logs = await rpc('eth_getLogs', [{
+        fromBlock: '0x' + bas.toString(16),
+        toBlock: '0x' + haut.toString(16),
+        address: adr,
+        topics,
+      }]);
+      for (const l of logs) {
+        const t = decoderTransfer(l);
+        if (t) trouvees.push(t);
+      }
+    } catch (e) {
+      fenetresRatees.push({ de: bas, a: haut, cause: e.message });
+    }
+    if (surProgres) {
+      surProgres({ parcouru: dernier - bas, total: dernier - debut, trouvees: trouvees.length });
+    }
+  }
+  trouvees.sort((a, b) => {
+    const db = (b.bloc ?? 0) - (a.bloc ?? 0);
+    if (db) return db;
+    return (b.logIndex ?? 0) - (a.logIndex ?? 0);
+  });
+  return { transfers: trouvees, fenetre: { de: debut, a: dernier }, fenetresRatees };
+}
+
+/**
+ * Resolve creator of a known B-20 token: factory B20Created with topics[1]=token, then tx.from.
+ * Windowed; if create is older than `blocs`, returns createur null + raison (fail-closed, not invented).
+ */
+export async function createurDuJeton({ rpc, token, blocs = FENETRE_MAX * 3, fin = null, surProgres = null }) {
+  const adr = String(token || '').toLowerCase();
+  const topicTok = topicAdresse(adr);
+  if (!topicTok) return { createur: null, tx: null, bloc: null, raison: 'invalid token address' };
+  const dernier = fin ?? parseInt(await rpc('eth_blockNumber', []), 16);
+  const debut = Math.max(0, dernier - blocs);
+  const fenetresRatees = [];
+  let bas = dernier;
+  let hit = null;
+  while (bas > debut && !hit) {
+    const haut = bas;
+    bas = Math.max(debut, haut - FENETRE_MAX);
+    try {
+      const logs = await rpc('eth_getLogs', [{
+        fromBlock: '0x' + bas.toString(16),
+        toBlock: '0x' + haut.toString(16),
+        address: FACTORY,
+        topics: [TOPIC_CREATED, topicTok],
+      }]);
+      if (logs && logs.length) {
+        const c = decoderCreation(logs[0]);
+        if (c && c.tx) hit = c;
+      }
+    } catch (e) {
+      fenetresRatees.push({ de: bas, a: haut, cause: e.message });
+    }
+    if (surProgres) {
+      surProgres({ parcouru: dernier - bas, total: dernier - debut, trouvees: hit ? 1 : 0 });
+    }
+  }
+  if (!hit) {
+    return {
+      createur: null, tx: null, bloc: null,
+      raison: fenetresRatees.length && fenetresRatees.length >= Math.ceil((dernier - debut) / FENETRE_MAX)
+        ? 'create log windows failed'
+        : 'B20Created not in scanned window',
+      fenetre: { de: debut, a: dernier }, fenetresRatees,
+    };
+  }
+  const { createur, raison } = await createurDe({ rpc, tx: hit.tx });
+  return {
+    createur: createur || null,
+    tx: hit.tx,
+    bloc: hit.bloc,
+    raison: createur ? null : (raison || 'tx.from unread'),
+    fenetre: { de: debut, a: dernier },
+    fenetresRatees,
+  };
+}

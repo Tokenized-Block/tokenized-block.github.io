@@ -1230,11 +1230,11 @@ main[data-app="market"] > #blockHome{display:none !important}
       <div class="bhActions" id="blockHomeActions"></div>
     </div>
   </div>
-  <!-- History shell: append-only Transfer evidence UI — fail-closed until Transfer indexer exists. -->
+  <!-- History: append-only Transfer evidence via browser eth_getLogs (limited window); fail-closed on RPC fail. -->
   <section class="bhHistory" id="blockHomeHistory" aria-label="Block transfer history">
     <div class="bhHistHead">
       <h3>History</h3>
-      <p class="bhHistSub">This block — creator empties / large sells as dated Transfer evidence + explorer links. Not a trust or scammer score.</p>
+      <p class="bhHistSub">This block — recent Transfer logs (eth_getLogs window) as dated evidence + explorer links. Creator out/in labeled only when create tx.from is measured. Not a trust or scammer score.</p>
     </div>
     <div class="bhHistBoard" id="blockHomeHistBoard" role="status"></div>
     <ul class="bhHistList" id="blockHomeHistList" aria-live="polite"></ul>
@@ -1740,7 +1740,7 @@ import { formaterEth, estArrondi, formaterGas, entierStrict, decimalesStrictes, 
 import { classerUri, sourceImage, metadonnees, enAttribut, PASSERELLE_PAR_DEFAUT,
   /* ⛔ La ligne qui dit si une apparence survit a un serveur — pour n importe quel block. */
   ouVitLApparence } from './lecteur.js';
-import { listerCreations, creationsDe } from './index-blocks.js';
+import { listerCreations, creationsDe, listerTransfers, createurDuJeton, FENETRE_MAX } from './index-blocks.js';
 import { cleDePool, etatPool, encodeInitialize, encodeApprove, encodePermit2Approve, encodeMintPosition,
   /* ⛔ `PRIX_1_POUR_1` N EST PLUS IMPORTE. Le garder disponible, meme inutilise, c est laisser a
    * portee de main la constante qui prixe une pool a 1e12 — un import mort se relit comme une
@@ -3858,10 +3858,10 @@ function htmlHistRowPlaceholder(ev) {
 }
 
 /**
- * Paint History shell. Without a Transfer indexer there are no EXISTS eth_call counts for
- * « emptied creator stake » across wallets — defer murder-board counts honestly.
+ * Paint History shell. Browser eth_getLogs (limited window) fills rows when ready;
+ * murder-board *global* aggregates stay deferred — raw this-block row count only, never a score.
  * @param {string} adr block address
- * @param {{ events?: Array, indexReady?: boolean }|undefined} opts
+ * @param {{ events?: Array, indexReady?: boolean, scan?: object, error?: string }|undefined} opts
  */
 function peindreBlockHomeHistory(adr, opts) {
   const o = opts || {};
@@ -3872,37 +3872,191 @@ function peindreBlockHomeHistory(adr, opts) {
   if (hist) hist.setAttribute('data-block', adr || '');
 
   const indexReady = !!o.indexReady && Array.isArray(o.events);
-  /* Murder-board aggregates need Transfer logs — not computable from balanceOf alone. */
+  const scan = o.scan || null;
+  /* Murder-board aggregates across wallets/blocks need a persistent index — not one window. */
   if (board) {
     if (!indexReady) {
       board.innerHTML = '<span class="bhHistBoardLabel">Murder board counts</span>'
-        + pastille('NEEDS TRANSFER INDEXER', 'warn')
-        + ' <span class="k">Emptied-creator / large-sell counts need indexed Transfer logs — '
-        + 'not available from EXISTS eth_call reads alone. Deferred; no invented K.</span>';
+        + pastille(o.error ? 'LOGS UNREAD' : 'NEEDS TRANSFER INDEXER', 'warn')
+        + ' <span class="k">Global emptied-creator counts need a durable Transfer index — '
+        + 'this-block rows come from eth_getLogs when the scan succeeds. Deferred K; no invented score.</span>';
     } else {
       const n = o.events.length;
-      board.innerHTML = '<span class="bhHistBoardLabel">Indexed events (this block)</span>'
+      board.innerHTML = '<span class="bhHistBoardLabel">Indexed events (this block · scanned window)</span>'
         + pastille(String(n) + ' ROW' + (n === 1 ? '' : 'S'), n ? 'ok' : 'dim')
         + ' <span class="k">Raw Transfer evidence count — not a trust or scammer score. Re-verify on explorer.</span>';
     }
   }
 
   if (list) {
-    if (!indexReady || !o.events.length) {
+    if (!indexReady) {
+      const why = o.error
+        ? ('Scan failed — history unavailable (' + enTexte(o.error) + '). Fail-closed; no invented dumps.')
+        : ('No transfer index yet — history unavailable. '
+          + 'Waiting for eth_getLogs scan (or a durable indexer). We do <b>not</b> invent creator dumps.');
+      list.innerHTML = '<li class="bhHEmpty" role="status"><b>' + why + '</b> '
+        + 'Local zero-balance for the connected wallet stays on the honesty strip above — wallet-only.</li>';
+    } else if (!o.events.length) {
+      const win = scan && scan.fenetre
+        ? (' blocks ' + scan.fenetre.de + '–' + scan.fenetre.a)
+        : '';
       list.innerHTML = '<li class="bhHEmpty" role="status">'
-        + '<b>No transfer index yet — history unavailable.</b> '
-        + 'This shell is ready for dated rows (when · what · tx hash → explorer · still holds?). '
-        + 'Until an indexer lands, we do <b>not</b> invent creator dumps or murders. '
-        + 'Local zero-balance for the connected wallet stays on the honesty strip above — wallet-only, not a global history.</li>';
+        + '<b>Scanned' + enTexte(win) + ' — 0 Transfer logs in range.</b> '
+        + 'Not a claim that none exist outside this window. No invented murders.</li>';
     } else {
       list.innerHTML = o.events.map(htmlHistRowPlaceholder).join('');
     }
   }
 
   if (foot) {
+    let extra = '';
+    if (scan && scan.fenetre) {
+      extra += ' Window ' + enTexte(String(scan.fenetre.de)) + '–' + enTexte(String(scan.fenetre.a)) + '.';
+      if (scan.fenetresRatees && scan.fenetresRatees.length) {
+        extra += ' ' + scan.fenetresRatees.length + ' window(s) failed (named, not treated as empty).';
+      }
+      if (scan.createur) {
+        extra += ' Creator filter/label from tx.from <span class="mono">'
+          + enTexte(scan.createur.slice(0, 10) + '…') + '</span>.';
+      } else if (scan.createurRaison) {
+        extra += ' Creator unread (' + enTexte(scan.createurRaison) + ') — rows still raw Transfers.';
+      }
+    }
     foot.innerHTML = 'Append-only evidence · no HP · no trust/reputation badge · no scammer score. '
-      + 'Pages Launch ≠ OpenLaunch ownerless locker. Explorer pattern: '
-      + '<span class="mono">' + enTexte(scanBasePourChaine()) + '/tx/&lt;hash&gt;</span>.';
+      + 'Pages Launch ≠ OpenLaunch ownerless locker.' + extra
+      + ' Explorer: <span class="mono">' + enTexte(scanBasePourChaine()) + '/tx/&lt;hash&gt;</span>.';
+  }
+}
+
+/** Default History scan depth: 2× Base max window (~19k blocks). Named constant — not silent infinity. */
+const BH_HIST_BLOCS = FENETRE_MAX * 2;
+const BH_HIST_MAX_ROWS = 40;
+
+function raccourciAdr(a) {
+  const s = String(a || '');
+  if (!/^0x[0-9a-fA-F]{40}$/.test(s)) return s || '—';
+  return s.slice(0, 6) + '…' + s.slice(-4);
+}
+
+/**
+ * Map decoded Transfer logs → History row objects (when · what · txHash · aftermath).
+ * Labels creator out/in only when createur is a measured tx.from — never a guessed « murder ».
+ */
+function evenementsDepuisTransfers(transfers, opts) {
+  const o = opts || {};
+  const createur = (o.createur || '').toLowerCase();
+  const dec = o.decimals;
+  const sym = o.symbol || '';
+  const aftermath = o.aftermath || 'Re-verify on explorer';
+  const rows = [];
+  for (const t of (transfers || []).slice(0, BH_HIST_MAX_ROWS)) {
+    const from = (t.from || '').toLowerCase();
+    const to = (t.to || '').toLowerCase();
+    let what;
+    if (createur && from === createur) {
+      what = 'Creator Transfer out → ' + raccourciAdr(to);
+    } else if (createur && to === createur) {
+      what = 'Creator Transfer in ← ' + raccourciAdr(from);
+    } else {
+      what = 'Transfer ' + raccourciAdr(from) + ' → ' + raccourciAdr(to);
+    }
+    let amt = '';
+    if (t.value != null && dec != null && Number.isFinite(dec)) {
+      try { amt = ' · ' + formaterUnites(t.value, dec) + (sym ? (' ' + sym) : ''); }
+      catch { amt = ' · raw ' + t.value.toString(); }
+    } else if (t.value != null) {
+      amt = ' · raw ' + t.value.toString();
+    }
+    rows.push({
+      when: t.bloc != null ? ('block #' + t.bloc) : '—',
+      what: what + amt,
+      txHash: t.tx || '',
+      aftermath,
+    });
+  }
+  return rows;
+}
+
+/**
+ * Browser-side Transfer evidence for Block home History.
+ * Fail-closed: any total RPC failure → indexReady false (empty honesty).
+ * Partial window failures still paint whatever logs succeeded + foot note.
+ */
+async function chargerBlockHomeHistory(adr, opts) {
+  const o = opts || {};
+  if (!/^0x[0-9a-fA-F]{40}$/.test(adr || '')) return;
+  const hist = $('#blockHomeHistory');
+  if (hist && hist.getAttribute('data-block') && hist.getAttribute('data-block').toLowerCase() !== adr.toLowerCase()) {
+    return; /* stale async — user opened another block */
+  }
+  try {
+    const [crea, tr] = await Promise.all([
+      createurDuJeton({ rpc, token: adr, blocs: BH_HIST_BLOCS }).catch((e) => ({
+        createur: null, raison: e && e.message ? e.message : String(e), fenetre: null, fenetresRatees: [],
+      })),
+      listerTransfers({ rpc, token: adr, blocs: BH_HIST_BLOCS }),
+    ]);
+    if (hist && hist.getAttribute('data-block')
+      && hist.getAttribute('data-block').toLowerCase() !== adr.toLowerCase()) return;
+
+    const fenetresRatees = [
+      ...((tr && tr.fenetresRatees) || []),
+      ...((crea && crea.fenetresRatees) || []),
+    ];
+    const allFailed = tr && tr.fenetre
+      && (tr.fenetresRatees || []).length > 0
+      && (tr.transfers || []).length === 0
+      && (tr.fenetresRatees.length >= Math.ceil((tr.fenetre.a - tr.fenetre.de) / FENETRE_MAX));
+    if (!tr || !tr.fenetre || allFailed) {
+      const cause = allFailed
+        ? ((tr.fenetresRatees[0] && tr.fenetresRatees[0].cause) || 'eth_getLogs windows failed')
+        : 'eth_getLogs returned no window';
+      peindreBlockHomeHistory(adr, { indexReady: false, error: cause });
+      return;
+    }
+
+    let aftermath = 'Re-verify on explorer';
+    const createur = crea && crea.createur ? String(crea.createur).toLowerCase() : null;
+    if (createur && o.decimals != null) {
+      try {
+        const S = abi.selecteurs;
+        const raw = await rpc('eth_call', [{
+          to: adr,
+          data: S['balanceOf(address)'] + pad(createur),
+        }, 'latest']);
+        const bal = BigInt(raw);
+        aftermath = 'Creator balanceOf now '
+          + formaterUnites(bal, o.decimals)
+          + (o.symbol ? (' ' + o.symbol) : '')
+          + ' (EXISTS · not a score)';
+      } catch {
+        aftermath = 'Creator balanceOf unread — re-verify on explorer';
+      }
+    } else if (!createur) {
+      aftermath = 'Creator unread in window — raw Transfer only';
+    }
+
+    const events = evenementsDepuisTransfers(tr.transfers, {
+      createur,
+      decimals: o.decimals,
+      symbol: o.symbol,
+      aftermath,
+    });
+    peindreBlockHomeHistory(adr, {
+      indexReady: true,
+      events,
+      scan: {
+        fenetre: tr.fenetre,
+        fenetresRatees,
+        createur,
+        createurRaison: createur ? null : ((crea && crea.raison) || 'unread'),
+      },
+    });
+  } catch (e) {
+    peindreBlockHomeHistory(adr, {
+      indexReady: false,
+      error: e && e.message ? e.message : String(e),
+    });
   }
 }
 
@@ -4432,11 +4586,15 @@ async function ouvrirBlockHome(adr, opts) {
           + (String(uri).length > 64 ? '…' : ''))
           : ligne('appearance', 'address-derived SVG décor (apparence.js) — URI unread'));
     }
+    /* History: re-scan with decimals/symbol for amount labels + creator balanceOf aftermath. */
+    void chargerBlockHomeHistory(adr, { decimals: dec, symbol: sym });
   } catch (e) {
     if (strip) {
       strip.innerHTML = ligne('state', pastille('READ FAILED', 'bad'))
         + ligne('cause', enTexte(e && e.message ? e.message : String(e)));
     }
+    /* Still attempt Transfer logs — amounts may stay raw. */
+    void chargerBlockHomeHistory(adr, {});
   }
 
   if (actions) {
