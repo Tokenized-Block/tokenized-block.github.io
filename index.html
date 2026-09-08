@@ -81,6 +81,7 @@ main{max-width:560px;margin:0 auto}
   main > #relire,
   main > #ouvrirLancement,
   main > #etat,
+  main > #blockHome,
   main > .bascule,
   main > #warningsStrip { column-span: all; }
   /* Soften Create fields only: focused band inside the full-width span (≈640). Look grid can
@@ -2031,11 +2032,19 @@ function brancherRecupBlockIntrouvable(root) {
           if (box) { box.innerHTML = htmlBlockIntrouvable(adr, cause || 'still empty after switch'); brancherRecupBlockIntrouvable(box); }
           const sv = $('#swapVue');
           if (sv) { sv.innerHTML = htmlBlockIntrouvable(adr, 'Cannot quote — no contract on this network'); brancherRecupBlockIntrouvable(sv); }
+          const fl = flagsCompanionDepuisUrl();
+          if (companionDeepLinkDemande(fl) && typeof ouvrirBlockHomeIntrouvable === 'function') {
+            ouvrirBlockHomeIntrouvable(adr, cause || 'still empty after switch', optsCompanionFocus(fl));
+          }
           return;
         }
         const lireBtn = $('#lire'); if (lireBtn) lireBtn.click();
         dire('Block found on ' + nomChaineCourte() + ' after switch.\n' + adr, 'ok');
         const sv = $('#swapVue'); if (sv) sv.innerHTML = '';
+        const flOk = flagsCompanionDepuisUrl();
+        if (companionDeepLinkDemande(flOk) && typeof ouvrirBlockHome === 'function') {
+          await ouvrirBlockHome(adr, optsCompanionFocus(flOk));
+        }
       }, 80);
     };
   }
@@ -2085,12 +2094,148 @@ function brancherRecupBlockIntrouvable(root) {
   }
 }
 
+/** Companion deep-link flags — UX routing only (never vitality / HP from query). */
+function flagsCompanionDepuisUrl(params) {
+  try {
+    const sp = params || new URLSearchParams(location.search);
+    return {
+      wantHome: sp.get('home') === '1',
+      wantHist: sp.get('history') === '1',
+      wantCare: sp.get('care') === '1',
+      wantX: sp.get('x') === '1',
+    };
+  } catch {
+    return { wantHome: false, wantHist: false, wantCare: false, wantX: false };
+  }
+}
+function companionDeepLinkDemande(f) {
+  return !!(f && (f.wantHome || f.wantHist || f.wantCare || f.wantX));
+}
+function optsCompanionFocus(f) {
+  const x = f || {};
+  return {
+    fromCreate: false,
+    focusHistory: !!(x.wantHist && !x.wantCare && !x.wantX),
+    focusCare: !!(x.wantCare && !x.wantX),
+    focusX: !!x.wantX,
+  };
+}
+
+/**
+ * Honest Block home not-found / invalid deep-link panel.
+ * ⛔ Dig P0: ?block=&home=1 (fake or empty code) must NOT leave the user on Create-only —
+ *    open #blockHome with recovery, never invent a live companion.
+ */
+function ouvrirBlockHomeIntrouvable(adr, cause, opts) {
+  const o = opts || {};
+  const home = $('#blockHome');
+  if (!home) return;
+  const raw = String(adr || '').trim();
+  const valid = /^0x[0-9a-fA-F]{40}$/.test(raw);
+  home.hidden = false;
+  home.classList.add('on');
+  if (valid) home.setAttribute('data-block', raw);
+  else home.removeAttribute('data-block');
+  if (typeof selectAppSection === 'function') selectAppSection('create');
+
+  const title = $('#blockHomeTitle');
+  const sub = $('#blockHomeSub');
+  const strip = $('#blockHomeStrip');
+  const note = $('#blockHomeNote');
+  const actions = $('#blockHomeActions');
+  const decor = $('#blockHomeDecor');
+  if (title) title.textContent = 'Block not found';
+  if (sub) {
+    sub.textContent = valid
+      ? ('Companion deep-link — no contract code on ' + nomChaineCourte()
+        + '. Wrong network and a never-created address look the same here.')
+      : 'Companion deep-link — block address missing or not a valid 0x + 40 hex address. Nothing opened as live.';
+  }
+  if (decor) {
+    decor.innerHTML = '';
+    if (valid && typeof logoSvg === 'function' && typeof apparenceDepuisAdresse === 'function') {
+      try {
+        const svg = logoSvg(paramsLogoDepuisApparence(apparenceDepuisAdresse(raw), '·'));
+        decor.innerHTML = svg.replace('<svg ', '<svg class="bhDecorSvg" ');
+      } catch { /* leave empty */ }
+    }
+  }
+  /* Fail-closed shells — never invent Transfer / Care / X from a missing block. */
+  if (valid) {
+    if (typeof peindreBlockHomeHistory === 'function') peindreBlockHomeHistory(raw, { indexReady: false });
+    if (typeof peindreBlockHomeCare === 'function') peindreBlockHomeCare(raw);
+    if (typeof peindreBlockHomeX === 'function') peindreBlockHomeX(raw);
+  } else {
+    const hl = $('#blockHomeHistList');
+    if (hl) hl.innerHTML = '<li class="bhHEmpty">No History — deep-link address is invalid or empty. Not a trust score.</li>';
+    const hb = $('#blockHomeHistBoard');
+    if (hb) hb.innerHTML = '<span class="bhHistBoardLabel">state</span> ' + pastille('NO ADDRESS', 'bad');
+    const cl = $('#blockHomeCareLog');
+    if (cl) cl.innerHTML = '<li class="bhCEmpty">Care stays closed until a valid block home opens.</li>';
+    const xp = $('#blockHomeXPreview');
+    if (xp) xp.innerHTML = '<p class="bhXEmpty">X identity stays closed until a valid block home opens — not a verification badge.</p>';
+  }
+  if (strip) {
+    const label = valid ? raw : (raw || '(empty ?block=)');
+    strip.innerHTML = htmlBlockIntrouvable(label, cause || (valid
+      ? 'eth_getCode empty — companion home not opened as live'
+      : 'Invalid or empty ?block= with companion flag (home/history/care/x)'));
+    if (typeof brancherRecupBlockIntrouvable === 'function') brancherRecupBlockIntrouvable(strip);
+  }
+  if (note) {
+    note.innerHTML = '<b>Honest not-found:</b> This panel opened because the link asked for companion home '
+      + '(<span class="mono">home</span> / <span class="mono">history</span> / <span class="mono">care</span> / <span class="mono">x</span>). '
+      + 'We do <b>not</b> invent a live block, HP bar, or verified identity from the query string.';
+  }
+  if (actions) {
+    actions.innerHTML = '<button type="button" class="act sec" id="bhClose">Hide home</button>';
+    const cl = $('#bhClose');
+    if (cl) cl.onclick = () => {
+      home.classList.remove('on');
+      home.hidden = true;
+    };
+  }
+  if (o.focusX) {
+    const xsec = $('#blockHomeX');
+    if (xsec && xsec.scrollIntoView) requestAnimationFrame(() => xsec.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    else if (home.scrollIntoView) requestAnimationFrame(() => home.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  } else if (o.focusCare) {
+    const csec = $('#blockHomeCare');
+    if (csec && csec.scrollIntoView) requestAnimationFrame(() => csec.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    else if (home.scrollIntoView) requestAnimationFrame(() => home.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  } else if (o.focusHistory) {
+    const hsec = $('#blockHomeHistory');
+    if (hsec && hsec.scrollIntoView) requestAnimationFrame(() => hsec.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    else if (home.scrollIntoView) requestAnimationFrame(() => home.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  } else if (home.scrollIntoView) {
+    requestAnimationFrame(() => home.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
+}
+
 function appliquerDeepLinkBlock() {
   let params;
   try { params = new URLSearchParams(location.search); } catch { return; }
   const raw = (params.get('block') || '').trim();
-  if (!raw) return;
+  const flags = flagsCompanionDepuisUrl(params);
+  const wantCompanion = companionDeepLinkDemande(flags);
+  const focusOpts = optsCompanionFocus(flags);
+
+  /* Empty ?block= with companion flag → honest home not-found (dig P0), not silent Create. */
+  if (!raw) {
+    if (!wantCompanion) return;
+    if (typeof ouvrirBlockHomeIntrouvable === 'function') {
+      ouvrirBlockHomeIntrouvable('', 'Empty ?block= with companion deep-link flag', focusOpts);
+    }
+    dire('Companion deep-link has no block address — opened honest not-found home.', 'warn');
+    return;
+  }
   if (!/^0x[0-9a-fA-F]{40}$/.test(raw)) {
+    /* Invalid address + companion flag → home not-found; bare ?block= junk still warns only. */
+    if (wantCompanion && typeof ouvrirBlockHomeIntrouvable === 'function') {
+      ouvrirBlockHomeIntrouvable(raw, 'Deep link ?block= is not a valid address', focusOpts);
+      dire('Companion deep-link address invalid — opened honest not-found home.\n' + raw, 'warn');
+      return;
+    }
     dire('Deep link ?block= is not a valid address — ignored.\n' + raw, 'warn');
     return;
   }
@@ -2106,8 +2251,11 @@ function appliquerDeepLinkBlock() {
   const rendu = $('#rendu'); if (rendu) rendu.classList.add('deepLinkOn');
   /* Verify on-chain code before claiming the share opened — missing/wrong-chain ≠ silent Swap fail. */
   setTimeout(async () => {
-    const cible = $('#lookupCard') || $('#lecture');
-    if (cible && cible.scrollIntoView) cible.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    /* Companion open/not-found scrolls itself — avoid scrolling a still-hidden #blockHome. */
+    if (!wantCompanion) {
+      const cible = $('#lookupCard') || $('#lecture');
+      if (cible && cible.scrollIntoView) cible.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
     let code = null, cause = null;
     try { code = await rpc('eth_getCode', [raw, 'latest']); }
     catch (e) { cause = e && e.message ? e.message : String(e); }
@@ -2126,6 +2274,10 @@ function appliquerDeepLinkBlock() {
         sv.innerHTML = htmlBlockIntrouvable(raw, 'Cannot quote — no contract on this network');
         brancherRecupBlockIntrouvable(sv);
       }
+      /* Dig P0: companion flags must open Block home (honest not-found), not Create-only. */
+      if (wantCompanion && typeof ouvrirBlockHomeIntrouvable === 'function') {
+        ouvrirBlockHomeIntrouvable(raw, cause || (code === '0x' ? 'eth_getCode returned empty' : 'eth_getCode unread'), focusOpts);
+      }
       setTimeout(() => {
         for (const el of [luc, ns, rendu]) {
           if (el) el.classList.remove('deepLinkOn');
@@ -2135,32 +2287,19 @@ function appliquerDeepLinkBlock() {
     }
     const lireBtn = $('#lire');
     if (lireBtn) lireBtn.click();
-    let wantHome = false, wantHist = false, wantCare = false, wantX = false;
-    try {
-      const sp = new URLSearchParams(location.search);
-      wantHome = sp.get('home') === '1';
-      wantHist = sp.get('history') === '1';
-      wantCare = sp.get('care') === '1';
-      wantX = sp.get('x') === '1';
-    } catch { wantHome = false; wantHist = false; wantCare = false; wantX = false; }
-    if ((wantHome || wantHist || wantCare || wantX) && typeof ouvrirBlockHome === 'function') {
-      await ouvrirBlockHome(raw, {
-        fromCreate: false,
-        focusHistory: wantHist && !wantCare && !wantX,
-        focusCare: wantCare && !wantX,
-        focusX: wantX,
-      });
-      dire((wantX ? 'Opened companion X identity (opt-in) from link.\n'
-        : wantCare ? 'Opened companion Care (cosmetic) from link.\n'
-        : wantHist ? 'Opened companion History from link.\n'
+    if (wantCompanion && typeof ouvrirBlockHome === 'function') {
+      await ouvrirBlockHome(raw, focusOpts);
+      dire((flags.wantX ? 'Opened companion X identity (opt-in) from link.\n'
+        : flags.wantCare ? 'Opened companion Care (cosmetic) from link.\n'
+        : flags.wantHist ? 'Opened companion History from link.\n'
         : 'Opened companion home from link.\n') + raw, 'ok');
-      if (wantX) {
+      if (flags.wantX) {
         const x = $('#blockHomeX');
         if (x && x.scrollIntoView) requestAnimationFrame(() => x.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-      } else if (wantCare) {
+      } else if (flags.wantCare) {
         const c = $('#blockHomeCare');
         if (c && c.scrollIntoView) requestAnimationFrame(() => c.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-      } else if (wantHist) {
+      } else if (flags.wantHist) {
         const h = $('#blockHomeHistory');
         if (h && h.scrollIntoView) requestAnimationFrame(() => h.scrollIntoView({ behavior: 'smooth', block: 'start' }));
       }
@@ -8646,6 +8785,18 @@ await rafraichir();
 if (typeof appliquerDeepLinkChaine === 'function') appliquerDeepLinkChaine();
 if (typeof appliquerDeepLinkBlock === 'function') appliquerDeepLinkBlock();
 if (typeof appliquerDeepLinkAsk === 'function') appliquerDeepLinkAsk();
+/* Soft P1: companion deep-link must not fail closed silently if hydration/RPC never opens home. */
+(function watchdogCompanionDeepLink() {
+  let flags;
+  try { flags = flagsCompanionDepuisUrl(); } catch { return; }
+  if (!companionDeepLinkDemande(flags)) return;
+  setTimeout(() => {
+    const home = $('#blockHome');
+    if (home && home.classList.contains('on') && !home.hidden) return;
+    dire('Companion deep-link (?home / ?history / ?care / ?x) did not open Block home.\n'
+      + 'Check the address, Practice/Real network, or reload — fail-closed, not a silent Create page.', 'warn');
+  }, 3200);
+})();
 
 /* ══ WALLET accountsChanged / chainChanged — INVALIDATE STALE PLANS ═══════════════════════════
  * ⛔ Mesure de trou 2026-09-07 : aucun listener. Work out Launch → switch MetaMask account →
