@@ -68,6 +68,8 @@ main{max-width:560px;margin:0 auto}
    *    Palette/funnel stay on this path (visual-2 kept). Other cards masonry into dig columns. */
   main > header,
   main > .tabs,
+  main > #appNav,
+  main > #storyStrip,
   main > #funnel,
   main > #gardeMainnet,
   main > #createZone,
@@ -320,7 +322,7 @@ padding:26px 22px 20px;max-width:420px;width:100%;text-align:center}
 #ov[data-phase="ok"] .ovTitre{color:var(--ok)}
 #ov[data-phase="ok"] .ovMarque{stroke:var(--ok);stroke-dasharray:44;stroke-dashoffset:44;
 animation:trace .42s .3s ease-out forwards}
-@keyframes atterrit{0%{transform:scale(.72)}70%{transform:scale(1.07)}100%{transform:scale(1)}}
+@keyframes atterrit{0%{transform:scale(.88)}60%{transform:scale(1.03)}100%{transform:scale(1)}}
 @keyframes recolle{from{transform:translate(18px,-16px) scale(1.3);opacity:.2}to{transform:none;opacity:1}}
 @keyframes trace{to{stroke-dashoffset:0}}
 
@@ -330,8 +332,8 @@ animation:trace .42s .3s ease-out forwards}
 #ov[data-phase="fail"] .ovTitre{color:var(--bad)}
 #ov[data-phase="fail"] .ovMarque{stroke:var(--bad);stroke-dasharray:34;stroke-dashoffset:34;
 animation:trace .3s .18s ease-out forwards}
-@keyframes secousse{0%,100%{transform:translateX(0)}20%{transform:translateX(-9px)}
-40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(3px)}}
+@keyframes secousse{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}
+50%{transform:translateX(4px)}75%{transform:translateX(-2px)}}
 @keyframes eclate{to{transform:translate(26px,-22px) rotate(18deg);opacity:0}}
 
 /* ══ LECTURE EN VERTICAL ═══════════════════════════════════════════════════════════════════════
@@ -614,6 +616,97 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
   #carteASigner .kv,#etatToken.kv,#fiche.kv{grid-template-columns:1fr}
 }
 
+/* ══ PUBLIC POLISH (feat/tblock-ui-public-polish) — story · share · motion · overflow ══
+ * Honest Create → Share → My blocks strip. Dig multi-col KEPT (no compact-only collapse).
+ * No fee / RPC / Permit2 / decimals / Farcaster changes. */
+#storyStrip{margin:0 0 12px;padding:12px 14px;border-radius:13px;border:1px solid #3a5a9a;
+  background:linear-gradient(180deg,#101c34 0%,var(--bg2) 100%);box-shadow:0 0 0 1px rgba(77,140,255,.10)}
+#storyStrip .ssLab{margin:0 0 8px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+  font-weight:700;color:#9eb6e0}
+#storyStrip ol{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px;align-items:stretch}
+#storyStrip li{flex:1 1 140px;display:flex;flex-direction:column;gap:2px;padding:10px 12px;
+  border-radius:12px;border:1px solid var(--line);background:rgba(5,13,36,.35);min-width:0}
+#storyStrip .ssTop{display:flex;align-items:center;gap:8px}
+#storyStrip .ssN{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;
+  border-radius:50%;font-size:11px;font-weight:800;background:var(--blue);color:#fff;flex:0 0 auto}
+#storyStrip .ssT{font-weight:800;font-size:13.5px;color:var(--fg)}
+#storyStrip .ssD{font-size:12px;color:var(--dim);line-height:1.35;word-break:break-word}
+
+/* Create | My blocks nav — clearer labels + hints */
+#appNav{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 12px;padding:4px;background:var(--bg2);
+  border:1px solid var(--line);border-radius:14px}
+#appNav .appTab{flex:1 1 140px;min-height:52px;padding:10px 14px;border-radius:11px;
+  border:1px solid transparent;background:transparent;color:var(--dim);font:inherit;
+  font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;gap:2px;
+  transition:background .18s ease,color .18s ease,border-color .18s ease,box-shadow .18s ease}
+#appNav .appTab .tabLab{font-size:15px;font-weight:800;line-height:1.2}
+#appNav .appTab .tabHint{font-size:11.5px;font-weight:500;opacity:.8;letter-spacing:0}
+#appNav .appTab[aria-selected="true"]{color:var(--fg);border-color:#4d8cff;background:#132038;
+  box-shadow:0 0 0 1px rgba(77,140,255,.18)}
+#appNav .appTab:hover{color:var(--fg)}
+#appNav .appTab:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+
+/* Share salience — Copy share link readable after Lookup / create */
+.shareBar{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;padding:10px;border-radius:12px;
+  border:1px solid #3a5a9a;background:rgba(19,32,56,.55)}
+.shareBar button{flex:1 1 140px;min-height:44px}
+.shareBar .btnCopyShare,
+button.btnCopyShare,
+.mbActions .mbShare{
+  opacity:1 !important;font-weight:800 !important;color:var(--fg) !important;
+  border-color:#4d8cff !important;background:#1a3358 !important}
+.shareBar .btnCopyShare:hover,
+button.btnCopyShare:hover,
+.mbActions .mbShare:hover{background:#243f6a !important;color:#fff !important}
+
+/* Soft deep-link landing highlight (?block=) */
+#lookupCard.deepLinkOn,#rendu.deepLinkOn,#nextSteps.deepLinkOn{
+  border-color:#4d8cff;box-shadow:0 0 0 1px rgba(77,140,255,.22);
+  animation:deepLinkSoft 1.4s ease}
+@keyframes deepLinkSoft{
+  0%{box-shadow:0 0 0 0 rgba(77,140,255,.45)}
+  40%{box-shadow:0 0 0 4px rgba(77,140,255,.22)}
+  100%{box-shadow:0 0 0 1px rgba(77,140,255,.18)}
+}
+
+/* Motion — smoother section / tab / panel transitions; less janky show/hide */
+.tabs button,.nsTab,.swapDirBtn,.appTab{
+  transition:background .2s ease,color .2s ease,border-color .2s ease,box-shadow .2s ease,opacity .2s ease}
+#mesBlocksCard,#createZone,#lookupCard,#nextSteps,#ctaPacket,#funnel{
+  transition:opacity .22s ease, transform .22s ease, border-color .22s ease, box-shadow .22s ease}
+.nsPanel{animation:nsFade .2s ease}
+@keyframes nsFade{from{opacity:.4;transform:translateY(6px)}to{opacity:1;transform:none}}
+#ov{animation:ovIn .22s ease-out}
+@media (prefers-reduced-motion: reduce){
+  #storyStrip,#appNav .appTab,#lookupCard.deepLinkOn,#rendu.deepLinkOn,#nextSteps.deepLinkOn,
+  .nsPanel,#mesBlocksCard,#createZone{animation:none !important;transition:none !important}
+}
+
+/* Images / text — overflow clamp on gallery, Create preview, Read panel */
+.createPrimary{max-width:100%;overflow:hidden}
+#apercu{display:block;width:min(136px,100%);height:auto;max-height:160px;margin:0 auto;
+  border-radius:12px;object-fit:contain}
+.galerie{align-items:start}
+.galerie .vignette{max-width:100%;overflow:hidden}
+.galerie .vignette svg,.galerie .vignette img{
+  width:100%;max-width:100%;max-height:96px;height:auto;object-fit:contain;
+  border-radius:8px;display:block;margin:0 auto}
+.galerie figcaption{font-size:11px;color:var(--dim);margin-top:4px;max-width:100%;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;word-break:break-all}
+#rendu{overflow:hidden;max-width:100%}
+#rendu .v,#rendu .row .v{word-break:break-word;overflow-wrap:anywhere;max-width:100%}
+#rendu img,.renduImg{max-width:min(160px,100%);max-height:160px;width:auto;height:auto;
+  object-fit:contain;border-radius:10px;display:block}
+.mbItem .mbNom{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;
+  word-break:break-all}
+#fiche .v,#etatToken .v{word-break:break-word;overflow-wrap:anywhere}
+@media (max-width:640px){
+  #storyStrip ol{flex-direction:column}
+  #storyStrip li{flex:1 1 auto}
+  #apercu{width:min(112px,100%);max-height:140px}
+}
+
+
 </style>
 <body class="simple">
 <main>
@@ -631,11 +724,36 @@ font-family:ui-monospace,Consolas,monospace;max-height:160px;overflow:auto}
   <button id="t8453" aria-selected="false">Real · costs ETH<span class="k"> · Base mainnet</span></button>
 </div>
 
-<!-- Slice 1: primary product nav — Create vs wallet My blocks (on-chain index only). -->
+<!-- Slice 1 + public polish: Create vs My blocks nav + honest above-fold story. -->
 <nav id="appNav" aria-label="App sections">
-  <button type="button" class="appTab" id="tabCreate" aria-selected="true" data-app="create">Create</button>
-  <button type="button" class="appTab" id="tabMesBlocks" aria-selected="false" data-app="mes">My blocks</button>
+  <button type="button" class="appTab" id="tabCreate" aria-selected="true" data-app="create">
+    <span class="tabLab">Create</span>
+    <span class="tabHint">Make your block</span>
+  </button>
+  <button type="button" class="appTab" id="tabMesBlocks" aria-selected="false" data-app="mes">
+    <span class="tabLab">My blocks</span>
+    <span class="tabHint">What you created on-chain</span>
+  </button>
 </nav>
+
+<!-- Honest product story — Create → Share → My blocks (no revenue claims). -->
+<aside id="storyStrip" aria-label="Create, share, find your blocks">
+  <p class="ssLab">How it works</p>
+  <ol>
+    <li>
+      <div class="ssTop"><span class="ssN">1</span><span class="ssT">Create</span></div>
+      <span class="ssD">Name your block — engraved on Base, no admin.</span>
+    </li>
+    <li>
+      <div class="ssTop"><span class="ssN">2</span><span class="ssT">Share</span></div>
+      <span class="ssD">Copy a link so anyone can open that block.</span>
+    </li>
+    <li>
+      <div class="ssTop"><span class="ssN">3</span><span class="ssT">My blocks</span></div>
+      <span class="ssD">Find creations paid by your wallet on-chain.</span>
+    </li>
+  </ol>
+</aside>
 
 <!-- ⛔ P11 dig-adapt (X-DIG 2026-09-07): status funnel for Instant Create.
      Labels map to real wallet/chain states. Never invent a green « Instant » success. -->
@@ -1477,9 +1595,11 @@ function appliquerDeepLinkBlock() {
   if (document.body.classList.contains('simple')) {
     const b = $('#bascule'); if (b) b.click();
   }
-  const luc = $('#lookupCard'); if (luc) luc.open = true;
-  const ns = $('#nextSteps'); if (ns) ns.open = true;
+  const luc = $('#lookupCard'); if (luc) { luc.open = true; luc.classList.add('deepLinkOn'); }
+  const ns = $('#nextSteps'); if (ns) { ns.open = true; ns.classList.add('deepLinkOn'); }
   if (typeof selectNextStep === 'function') selectNextStep('swap');
+  /* Soft highlight when ?block= lands — honest deep-link cue, not a fake success. */
+  const rendu = $('#rendu'); if (rendu) rendu.classList.add('deepLinkOn');
   /* Read after a tick so #lire handler and modules are fully wired. */
   setTimeout(() => {
     const lireBtn = $('#lire');
@@ -1487,6 +1607,11 @@ function appliquerDeepLinkBlock() {
     const cible = $('#lookupCard') || $('#lecture');
     if (cible && cible.scrollIntoView) cible.scrollIntoView({ behavior: 'smooth', block: 'start' });
     dire('Opened shared block from link.\n' + raw, 'ok');
+    setTimeout(() => {
+      for (const el of [luc, ns, rendu]) {
+        if (el) el.classList.remove('deepLinkOn');
+      }
+    }, 2200);
   }, 50);
 }
 
@@ -3097,7 +3222,7 @@ async function lireBlock(adr) {
       const src = sourceImage(m.doc.image);
       if (m.doc.description) vue += ligne('about', enTexte(m.doc.description));
       if (src) vue += '<div class="row"><span class="k">image</span><span class="v">'
-        + '<img src="' + enAttribut(src) + '" alt="" style="width:120px;height:auto;border-radius:10px;display:block"></span></div>';
+        + '<img class="renduImg" src="' + enAttribut(src) + '" alt=""></span></div>';
       else if (m.doc.image) vue += ligne('image', pastille('SCHEME REFUSED', 'warn'));
     }
     /* Slice 1: share link + Send on Lookup success surface. */
