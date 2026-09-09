@@ -936,6 +936,11 @@ main[data-app="market"] > #blockHome{display:none !important}
 .galerie .vignette svg,.galerie .vignette img{
   width:100%;max-width:100%;max-height:96px;height:auto;object-fit:contain;
   border-radius:8px;display:block;margin:0 auto}
+/* ⛔ LA CAPITALISATION SUR LA VIGNETTE — c est ce qui transforme une galerie en lieu ou l on se
+ * compare. Et « reading… » a sa PROPRE couleur : un chiffre absent et un chiffre en cours de
+ * lecture ne doivent pas se ressembler, sinon l attente se lit comme un vide. */
+.galerie .vigMc{display:block;font-size:10.5px;color:#7ec8ff;font-weight:700;margin-top:2px}
+.galerie .vigAge{display:block;font-size:9.5px;color:#6f83a6;margin-top:1px}
 .galerie figcaption{font-size:11px;color:var(--dim);margin-top:4px;max-width:100%;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;word-break:break-all}
 #rendu{overflow:hidden;max-width:100%}
@@ -1802,6 +1807,7 @@ import { parametresLancement, tickMinAligne, VALO_PLANCHER_ETH, classementValoLa
 import { apparenceDepuisAdresse } from './apparence.js';
 import { vitalite, commentPrendreSoin, SIGNES as SIGNES_VITAUX } from './vitalite.js';
 import { pointsDeVie, capitalisation, etatPaliers } from './pointsdevie.js';
+import { classer, rangDe } from './classement.js';
 import { consentementValide, marquerConsentement } from './consentement.js';
 import { verdictPhoto, chercherQualite, octetsUri, PHOTO_MAX } from './photo.js';
 
@@ -3595,34 +3601,137 @@ function selectionnerGalerie(adr, btn) {
   }
 }
 
+/* ⛔ L AGE SE DIT EN GRANDEURS, PAS EN PRECISION INVENTEE. Le temps de bloc de Base est de 2 s :
+ * c est une constante du reseau, pas une estimation de notre part. On arrondit vers le bas et on
+ * ne descend jamais sous « <1 min » — pretendre « il y a 37 s » sur un ecart de blocs donnerait
+ * une precision que le numero de bloc ne porte pas. */
+function ageDepuisBlocs(ecart) {
+  if (!Number.isFinite(ecart) || ecart < 0) return null;
+  const s = ecart * 2;
+  if (s < 60) return '<1 min';
+  if (s < 3600) return Math.floor(s / 60) + ' min';
+  if (s < 86400) return Math.floor(s / 3600) + ' h';
+  return Math.floor(s / 86400) + ' j';
+}
+
+/* ⛔ UNE SEULE FABRIQUE DE VIGNETTE, PARCE QUE LA GALERIE EST DESSINEE DEUX FOIS : une fois par
+ * date (immediatement, pour que l ecran ne reste pas vide) et une fois par capitalisation (quand
+ * les prix sont lus). Deux copies du meme HTML divergeraient — c est « le correctif rate le
+ * jumeau », et ce depot en porte deja plusieurs cicatrices. */
+function vignetteHtml(c, fenetre) {
+  const sym = String(c.symbole || '?').slice(0, 11);
+  const adr = /^0x[0-9a-fA-F]{40}$/.test(c.jeton || '') ? c.jeton : null;
+  if (!adr) return '';
+  const svg = logoSvg(paramsLogoDepuisApparence(apparenceDepuisAdresse(adr), sym));
+  const age = (fenetre && c.bloc) ? ageDepuisBlocs(fenetre.a - c.bloc) : null;
+  return '<button type="button" class="vignette" data-block="' + enAttribut(adr) + '"'
+    + ' title="' + enAttribut(adr) + '">' + svg
+    + '<figcaption>' + enTexte(sym)
+    + '<span class="vigMc" data-mc-pour="' + enAttribut(adr) + '">reading…</span>'
+    + (age ? '<span class="vigAge">' + enTexte(age) + '</span>' : '')
+    + '</figcaption></button>';
+}
+
+/* ⛔ LA CAPITALISATION DE CHAQUE VIGNETTE, ET LE CLASSEMENT QUI EN DECOULE. C est ce qui transforme
+ * une galerie en LIEU PUBLIC : on ne possede pas un solde, on possede une chose qui a une tete,
+ * que d autres voient, et qu on peut perdre.
+ * ⚠️ AUCUN POURCENTAGE DE VARIATION. feel.cash en affiche un ; nous n avons AUCUN historique de
+ * prix, et l afficher serait l inventer. On montre ce qu on lit : la capitalisation d aujourd hui.
+ * ⛔ Et un block dont le prix n a pas ete lu n est PAS classe dernier — il n est pas classe. */
+async function remplirCapitalisationsGalerie(vues, fenetre) {
+  const blocks = [];
+  for (const c of vues) {
+    if (!/^0x[0-9a-fA-F]{40}$/.test(c.jeton || '')) continue;
+    let cap = null, dev = null, pourquoi = 'not read';
+    try {
+      const p = await poolLaunchPresente(c.jeton);
+      if (p && p.etat === 'YES' && p.sqrt) {
+        const dec = await lireDecimales(c.jeton);
+        const tot = await rpc('eth_call', [{ to: c.jeton, data: '0x' + sel4('totalSupply()') }, 'latest'])
+          .then((h) => BigInt(h)).catch(() => null);
+        if (dec !== null && tot !== null) {
+          const prix = prixDepuisSqrt({ sqrtPriceX96: p.sqrt, decDevise: 18, decBlock: dec, deviseEst0: true });
+          const k = capitalisation({ supply: tot, decimales: dec, prix, devise: 'ETH' });
+          cap = k.valeur; dev = k.devise; pourquoi = k.pourquoi || 'read';
+        } else pourquoi = 'decimals or supply unread';
+      } else pourquoi = (p && p.note) || 'no pool found among the keys read';
+    } catch (e) { pourquoi = (e && e.message) || 'read failed'; }
+    blocks.push({ adr: c.jeton, symbole: c.symbole, capitalisation: cap, devise: dev, pourquoi });
+    const el = document.querySelector('[data-mc-pour="' + CSS.escape(c.jeton) + '"]');
+    if (el) el.textContent = cap === null ? 'no price' : (Math.round(cap * 100) / 100) + ' ' + (dev || '');
+  }
+  /* ⛔ LE CLASSEMENT PORTE SA POPULATION ET SA BORNE — sinon un echantillon se lit comme un
+   * palmares de tout ce qui existe. */
+  const cl = classer(blocks);
+
+  /* ⛔⛔ ON REDESSINE LA GALERIE DANS L ORDRE DU CLASSEMENT. Sans ca, le « plus gros block » reste
+   * introuvable a l ecran : les creations recentes n ont pas encore de pool, et une galerie triee
+   * par date n en montre jamais un seul avec un prix.
+   * ⚠️ LES NON CLASSES SUIVENT, PAR DATE — ils ne sont pas relegues « derniers » au sens d une
+   * valeur : ils n ont pas de rang, et l ordre entre eux reste celui de la chaine. */
+  const boiteG = $('#galerie');
+  if (boiteG && (cl.classes.length || cl.nonMesures.length)) {
+    const parAdr = new Map(vues.map((c) => [String(c.jeton).toLowerCase(), c]));
+    const ordre = [...cl.classes, ...cl.nonMesures]
+      .map((b) => parAdr.get(String(b.adr).toLowerCase()))
+      .filter(Boolean).slice(0, 12);
+    if (ordre.length) {
+      boiteG.innerHTML = ordre.map((c) => vignetteHtml(c, fenetre)).join('');
+      /* les capitalisations deja lues sont reinjectees : on ne relit pas la chaine pour un tri */
+      for (const b of blocks) {
+        const el = document.querySelector('[data-mc-pour="' + CSS.escape(b.adr) + '"]');
+        if (el) el.textContent = b.capitalisation === null
+          ? 'no price' : (Math.round(b.capitalisation * 100) / 100) + ' ' + (b.devise || '');
+      }
+    }
+  }
+
+  const note = $('#galerieNote');
+  if (note && cl.classes.length) {
+    const top = cl.classes[0];
+    note.innerHTML += '<br><b>Biggest block read here:</b> ' + enTexte(String(top.symbole || '?'))
+      + ' — ' + enTexte(String(Math.round(top.capitalisation * 100) / 100)) + ' ' + enTexte(top.devise || '')
+      + ' <span class="dim">(' + cl.classes.length + ' ranked of ' + cl.population + ' read'
+      + (cl.nonMesures.length ? ', ' + cl.nonMesures.length + ' with no price — <b>not</b> ranked last, just not ranked' : '')
+      + '). ' + enTexte(cl.borne) + '</span>';
+  }
+}
+
 async function remplirGalerie() {
   const boite = $('#galerie'), note = $('#galerieNote');
   const R = RESEAUX[chaine];
   try {
     const r = await listerCreations({ rpc, blocs: 9000 });
-    const vues = (r.creations || []).slice(0, 12);
+    /* ⛔⛔ ON REGARDE PLUS LARGE QUE CE QU ON MONTRE, ET C EST CE QUI REND LE CLASSEMENT VISIBLE.
+     * Mesure du 2026-09-09 : les 12 creations les plus RECENTES ont toutes « no price » — elles ont
+     * quelques minutes et personne n a encore ouvert de pool. Les blocks qui ont un marche sont plus
+     * VIEUX. Une galerie triee par date affiche donc systematiquement douze blocks sans prix, et le
+     * « plus gros block » n apparait JAMAIS — la fonctionnalite existait sans pouvoir se voir.
+     * ⇒ On lit un echantillon plus large, on classe par capitalisation, et on montre les douze
+     *   premiers. Les non mesures restent affiches APRES, par date : ils ne sont pas derniers, ils
+     *   sont non classes.
+     * ⚠️ 40 et pas 118 : chaque block coute jusqu a quatre lectures de pool. Le chiffre est un
+     *   compromis ECRIT, pas un hasard — et la note dit sur combien on a regarde. */
+    const ECHANTILLON = 40;
+    const vues = (r.creations || []).slice(0, ECHANTILLON);
     if (!vues.length) {
       /* ⛔ ZERO N EST PAS UN RESULTAT A MONTRER. On cache la carte plutot que d afficher un vide
        *    qui dirait « personne ne s en sert » — et qui pourrait n etre qu une fenetre ratee. */
       return;
     }
-    boite.innerHTML = vues.map((c) => {
-      const sym = String(c.symbole || '?').slice(0, 11);
-      const svg = logoSvg(paramsLogoDepuisApparence(apparenceDepuisAdresse(c.jeton), sym));
-      /* ⛔ CLIQUABLE, PARCE QU UN MUR INERTE NE SERT A RIEN. Un visiteur voyait douze blocks et ne
-       *    pouvait rien en faire. Chaque vignette ouvre maintenant CE block dans le lecteur.
-       * ⛔ UN VRAI <button>, PAS UN <div> CLIQUABLE : il est atteignable au clavier, annonce comme
-       *    un bouton, et activable par Entree — un div avec un `onclick` ne l est pour personne
-       *    qui n utilise pas de souris.
-       * ⛔ L ADRESSE EST VALIDEE AVANT D ENTRER DANS L ATTRIBUT : elle vient d un log, donc d un
-       *    inconnu. Et `enAttribut` echappe le GUILLEMET, ce qu un echappeur de TEXTE ne fait pas —
-       *    c est exactement la faille mesuree sur le site le 2026-09-04. */
-      const adr = /^0x[0-9a-fA-F]{40}$/.test(c.jeton || '') ? c.jeton : null;
-      if (!adr) return '';
-      return '<button type="button" class="vignette" data-block="' + enAttribut(adr) + '"'
-        + ' title="' + enAttribut(adr) + '">' + svg
-        + '<figcaption>' + enTexte(sym) + '</figcaption></button>';
-    }).join('');
+    /* ⛔ CLIQUABLE, PARCE QU UN MUR INERTE NE SERT A RIEN. Chaque vignette ouvre CE block dans le
+     *    lecteur, par un VRAI <button> — atteignable au clavier, annonce comme un bouton, activable
+     *    par Entree. Un div avec un `onclick` ne l est pour personne qui n utilise pas de souris.
+     * ⛔ L ADRESSE EST VALIDEE AVANT D ENTRER DANS L ATTRIBUT, et passe par `enAttribut` qui echappe
+     *    le GUILLEMET — c est exactement la faille mesuree sur le site le 2026-09-04.
+     * ⇒ Tout cela vit dans `vignetteHtml`, UNE SEULE FOIS : la galerie est dessinee deux fois (par
+     *   date, puis par capitalisation quand les prix arrivent) et deux copies divergeraient. */
+    boite.innerHTML = vues.slice(0, 12).map((c) => vignetteHtml(c, r.fenetre)).join('');
+    /* ⛔ LES CAPITALISATIONS ARRIVENT APRES, ET LA GALERIE NE LES ATTEND PAS. Douze blocks x quatre
+     * cles de pool = jusqu a 48 lectures : les attendre laisserait la carte vide plusieurs secondes
+     * sur ce que l utilisateur est venu voir. Chaque vignette affiche « reading… » puis se remplit.
+     * ⚠️ Et « reading… » n est PAS « pas de prix » : deux etats distincts, deux textes distincts. */
+    void remplirCapitalisationsGalerie(vues, r.fenetre);
     /* ⛔ UN SEUL GESTIONNAIRE SUR LE CONTENEUR, PAS DOUZE. La galerie se reconstruit a chaque
      *    changement de reseau : douze gestionnaires reattaches a chaque fois finiraient par
      *    s accumuler sans que rien ne le montre. */
