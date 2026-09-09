@@ -842,6 +842,11 @@ main[data-app="market"] > #marketCard { column-span: all; }
 #blockHome .bhVieGrad{display:flex;justify-content:space-between;margin-top:4px;font-size:10px;
   color:#6f83a6;letter-spacing:.03em}
 #blockHome .bhVieNote{margin:6px 0 0;font-size:11.5px;color:var(--dim);line-height:1.45}
+/* ⛔ LA PHRASE SIMPLE EST PLUS GROSSE QUE LE TECHNIQUE, ET C EST LE FOND DU CHOIX : une traduction
+ * en petit sous du jargon en gros ne sert que ceux qui n avaient pas besoin de traduction.
+ * `.dim` est le terme technique qui reste dessous — jamais retire, seulement descendu. */
+#blockHome .bhVieSimple{margin:8px 0 0;font-size:14px;color:var(--fg);line-height:1.5}
+.dim{color:var(--dim);font-size:11.5px}
 #blockHome .bhCare{margin-top:14px;padding-top:12px;border-top:1px solid #1c2740}
 #blockHome .bhCareHead{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 12px;margin-bottom:8px}
 #blockHome .bhCareHead h3{margin:0;font-size:14px;font-weight:800;letter-spacing:.02em}
@@ -1808,6 +1813,7 @@ import { apparenceDepuisAdresse } from './apparence.js';
 import { vitalite, commentPrendreSoin, SIGNES as SIGNES_VITAUX } from './vitalite.js';
 import { pointsDeVie, capitalisation, etatPaliers } from './pointsdevie.js';
 import { classer, rangDe } from './classement.js';
+import { phraseSigne, phrasePV, phraseSoin } from './motssimples.js';
 import { consentementValide, marquerConsentement } from './consentement.js';
 import { verdictPhoto, chercherQualite, octetsUri, PHOTO_MAX } from './photo.js';
 
@@ -4177,6 +4183,12 @@ function peindreVitalite(adr, ajout) {
       + (capOk ? '<div class="bhVieRemp" style="width:' + part.toFixed(1) + '%"></div>' : '')
       + '</div>'
       + '<div class="bhVieGrad"><span>0</span><span>1k · 10 HP</span><span>1M · 100 HP</span><span>1B · 1000 HP</span></div>'
+      /* ⛔⛔ LA PREMIERE LIGNE SOUS LA BARRE EST LA PHRASE SIMPLE, ET C EST LE POINT DE TOUT CE
+       * MODULE : quelqu un qui ne connait pas la crypto lit une phrase, pas « HP = cube root of
+       * market cap ». Le technique reste JUSTE DESSOUS, entier, pour qui verifie.
+       * ⛔ ET « pas de prix » y reste « personne n en a fixe un LA OU ON REGARDE » — jamais
+       * « ca ne vaut rien ». Un test de `test-motssimples.mjs` interdit cette traduction. */
+      + '<p class="bhVieSimple">' + enTexte(phrasePV(pvB, vitFaits.faits.deviseCap, vitFaits.faits.viaPool).texte) + '</p>'
       + '<p class="bhVieNote">' + (capOk
         ? 'HP = cube root of market cap (price × supply, both re-readable). <b>It goes down too</b> — a tier is a state, not a reward you keep.'
           /* ⛔ LA PHRASE QUI EMPECHE DE PRENDRE CE CHIFFRE POUR DE LA VALEUR. Une capitalisation
@@ -4230,10 +4242,19 @@ function peindreVitalite(adr, ajout) {
       const s = v.signes[d.cle];
       const p = s.etat === 'VIF' ? pastille('ALIVE', 'ok')
         : s.etat === 'FAIBLE' ? pastille('QUIET', 'warn') : pastille('NOT MEASURED', 'dim');
+      /* ⛔⛔ LA PHRASE SIMPLE EST LE TEXTE PRINCIPAL, LE TERME TECHNIQUE PASSE DESSOUS. L inverse —
+       * jargon en gros, traduction en petit — ne sert que ceux qui n en avaient pas besoin.
+       * ⛔ ET ELLE GARDE SA RESERVE : « personne n en a recu DANS CE QU ON A SU LIRE ». Simplifier
+       * en enlevant les bornes ferait perdre a cette app exactement ce qui la distingue, et une
+       * phrase simple qui affirme trop est pire que du jargon : le jargon previent qu on ne
+       * comprend pas, la phrase simple donne l illusion qu on a compris. Un test l interdit. */
+      const ps = phraseSigne(d.cle, s.etat);
       return '<li class="bhHRow">'
         + '<div><div class="bhHCol">Sign</div><div class="bhHVal">' + enTexte(d.titre) + '</div></div>'
         + '<div><div class="bhHCol">State</div><div class="bhHVal">' + p + '</div></div>'
-        + '<div><div class="bhHCol">Measured</div><div class="bhHVal">' + enTexte(s.detail) + '</div></div>'
+        + '<div><div class="bhHCol">What it means</div><div class="bhHVal">'
+          + (ps ? '<b>' + enTexte(ps.texte) + '</b><br><span class="dim">' + enTexte(s.detail) + '</span>'
+                : enTexte(s.detail)) + '</div></div>'
         /* ⛔ LA BORNE VOYAGE AVEC LE SIGNE, a l ecran et pas seulement dans le code. Un signe dont
          * la borne vit ailleurs se lit comme universel. */
         + '<div><div class="bhHCol">Bound</div><div class="bhHVal">' + enTexte(d.borne) + '</div></div>'
@@ -4246,8 +4267,16 @@ function peindreVitalite(adr, ajout) {
     const soins = commentPrendreSoin(v).filter((s) => s.etat === 'FAIBLE');
     foot.innerHTML = '<b>Caring for a block is a real gesture, never a purchase.</b> '
       + 'There is no potion, no revive, no care token — a number invented and sold would be worth nothing. '
+      /* ⛔ MEME ORDRE QUE LES SIGNES : le geste en mots de tous les jours d abord, la formulation
+       * technique dessous. Les deux DISENT LA MEME CHOSE — `phraseSoin` ne remplace pas
+       * `commentPrendreSoin`, elle l ouvre a quelqu un qui ne connait pas la crypto. */
       + (soins.length
-        ? soins.map((s) => '<br>· ' + enTexte(s.texte)).join('')
+        ? soins.map((s) => {
+            const simple = phraseSoin(s.cle);
+            return '<br>· ' + (simple
+              ? '<b>' + enTexte(simple) + '</b><br>&nbsp;&nbsp;<span class="dim">' + enTexte(s.texte) + '</span>'
+              : enTexte(s.texte));
+          }).join('')
         : '<br>· Nothing to raise from the signs measured right now.');
   }
 }
