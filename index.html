@@ -846,6 +846,16 @@ main[data-app="market"] > #marketCard { column-span: all; }
  * en petit sous du jargon en gros ne sert que ceux qui n avaient pas besoin de traduction.
  * `.dim` est le terme technique qui reste dessous — jamais retire, seulement descendu. */
 #blockHome .bhVieSimple{margin:8px 0 0;font-size:14px;color:var(--fg);line-height:1.5}
+/* ⛔ LE PANNEAU « CE QU UN ACHAT FERAIT ». Il n a AUCUN accent de bouton d achat : pas de vert, pas
+ * de pastille, pas de fleche montante. Un panneau qui mesure un gain souvent NUL et qui se peindrait
+ * comme une promotion mentirait par le style, meme avec un texte exact. */
+#blockHome .bhDocHaut{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:baseline;margin-bottom:8px}
+#blockHome .bhDocForm{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#blockHome .bhDocForm input{width:110px;min-height:40px;padding:8px 10px;border-radius:9px;
+  border:1px solid var(--line);background:var(--bg2);color:var(--fg);font:inherit}
+#blockHome .bhDocRes{margin:10px 0 0;font-size:14px;color:var(--fg);line-height:1.5}
+#blockHome .bhDocAvert{margin:8px 0 0;padding-left:18px;font-size:11.5px;color:var(--dim);line-height:1.45}
+#blockHome .bhDocAvert li{margin:3px 0}
 .dim{color:var(--dim);font-size:11.5px}
 #blockHome .bhCare{margin-top:14px;padding-top:12px;border-top:1px solid #1c2740}
 #blockHome .bhCareHead{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 12px;margin-bottom:8px}
@@ -1264,6 +1274,14 @@ main[data-app="market"] > #blockHome{display:none !important}
            aucune. Laisser cette phrase au-dessus d une vraie barre aurait ete un mensonge par
            residu — le genre de contradiction qu on ne voit plus a force de la relire. -->
       <div class="bhVieWrap" id="blockHomeVie" aria-label="Block HP from market cap"></div>
+      <!-- ⛔⛔ « CE QU UN ACHAT FERAIT » — le « docteur » de Phil, dit pour ce qu il est.
+           Ce n est PAS un deuxieme swap : l app en a deja un (#ns-swap), et en refaire un serait
+           le motif le plus cher de ce depot — le helper correct existe, l appelant s en fabrique
+           une copie plus faible. Ce panneau MESURE l effet sur les PV, puis PASSE LA MAIN au swap.
+           ⛔ ET IL MONTRE LE ZERO. Mesure du 2026-09-09 : 0,01 ETH sur un block a 109,8 PV rend
+           EXACTEMENT 0 PV — la racine cubique ecrase les petites mises. Un ecran qui encaisserait
+           sans le dire vendrait un gain qu il sait nul. Le zero se lit AVANT de payer. -->
+      <div class="bhVieWrap" id="blockHomeDoc" aria-label="What a buy would do to the HP"></div>
       <div class="bhStrip kv" id="blockHomeStrip"></div>
       <p class="bhMetaNote" id="blockHomeNote" role="note"></p>
       <div class="bhActions" id="blockHomeActions"></div>
@@ -1807,11 +1825,17 @@ import { cleDePool, etatPool, encodeInitialize, encodeApprove, encodePermit2Appr
   montantsPosition, liquiditeUnilaterale,
   /* ⛔ LES DEUX QUI PERMETTENT LA TRANSACTION UNIQUE. Sans elles, creer la pool et y placer la
    *    supply restent deux signatures — donc un etat intermediaire ou une pool vide survit. */
-  encodeInitializePool, encodeMulticall, prixDepuisSqrt } from './pool.js';
+  encodeInitializePool, encodeMulticall, prixDepuisSqrt,
+  /* ⛔ LES DEUX BORNES DU CARNET. Sans elles, « le prix a percute le bord » ne serait pas
+   * distinguable de « la lecture a echoue » — et c est le meilleur avertissement du panneau. */
+  SQRT_MIN, SQRT_MAX } from './pool.js';
 import { parametresLancement, tickMinAligne, VALO_PLANCHER_ETH, classementValoLancement } from './lancement.js';
 import { apparenceDepuisAdresse } from './apparence.js';
 import { vitalite, commentPrendreSoin, SIGNES as SIGNES_VITAUX } from './vitalite.js';
-import { pointsDeVie, capitalisation, etatPaliers } from './pointsdevie.js';
+/* ⛔ `effetAchat` ETAIT ECRITE, TESTEE, ET IMPORTEE PAR PERSONNE — 0 usage dans cette page pendant
+ * toute la duree du travail sur les paliers. C est le motif le plus cher du depot : le helper juste
+ * existe, et l ecran ne l appelle pas. La regle 15 nomme les etats, pas les fonctions mortes. */
+import { pointsDeVie, capitalisation, etatPaliers, effetAchat } from './pointsdevie.js';
 import { classer, rangDe } from './classement.js';
 import { phraseSigne, phrasePV, phraseSoin } from './motssimples.js';
 import { consentementValide, marquerConsentement } from './consentement.js';
@@ -4236,6 +4260,11 @@ function peindreVitalite(adr, ajout) {
       + '</div>';
   }
 
+  /* ⛔ LE DOCTEUR SE REPEINT AVEC LA VITALITE, parce qu il DEPEND de la capitalisation : peint une
+   * seule fois a l ouverture, il resterait bloque sur « pas de pool » alors que le prix arrive
+   * quelques secondes plus tard. Un panneau qui ne suit pas sa donnee ment par retard. */
+  peindreDocteur(adr);
+
   const list = $('#blockHomeVitalsList');
   if (list) {
     list.innerHTML = SIGNES_VITAUX.map((d) => {
@@ -4279,6 +4308,202 @@ function peindreVitalite(adr, ajout) {
           }).join('')
         : '<br>· Nothing to raise from the signs measured right now.');
   }
+}
+
+/* ══ « CE QU UN ACHAT FERAIT » — le docteur, dit pour ce qu il est ═══════════════════════════════
+ * ⛔⛔ CE N EST PAS UN DEUXIEME SWAP. L app en a un (#ns-swap), teste, avec ses gardes de
+ *    glissement et son preflight. En refaire un ici serait le motif le plus cher de ce depot : le
+ *    chemin correct existe et l ecran s en fabrique une copie plus faible. Ce panneau MESURE, puis
+ *    PASSE LA MAIN au swap avec les champs remplis. Il ne fait signer RIEN.
+ *
+ * ⛔⛔ LES DEUX PRIX SONT MESURES, JAMAIS MODELISES. `eth_simulateV1` execute l achat reel sur le
+ *    routeur PUIS relit `slot0` dans la MEME simulation. Le Quoter v4 ne pouvait pas servir : il
+ *    rend `amountOut`, c est-a-dire le SURCOUT MOYEN paye sur la taille echangee — pas le
+ *    deplacement du prix spot. J ai deja publie cette confusion et je l ai retractee.
+ *
+ * ⛔⛔ ET ON MONTRE LE ZERO. Mesure 2026-09-09 sur un block a 109,8 PV : 0,01 ETH rend 0,0 PV,
+ *    0,1 ETH rend 0,6 PV, 1 ETH rend 6,4 PV. La racine cubique ecrase les petites mises. Un ecran
+ *    qui prendrait l argent sans afficher le zero vendrait un gain qu il sait nul.
+ *
+ * ⚠️ BORNE, ET ELLE EST A L ECRAN : le chiffre est une PHOTO, pas une promesse. N importe qui peut
+ *    echanger sur la meme pool entre cette simulation et une signature. */
+let docFaits = { adr: null, ligne: null, etat: 'VIERGE' };
+
+async function simulerAchatPV(jeton, cle, mise, capAvant, supply, dec, deviseEst0) {
+  const V = V4[chaine];
+  const ur = ROUTEUR[chaine];
+  if (!V || !V.stateView || !ur) return { etat: 'NON_MESURE', pourquoi: 'no router or StateView on this network' };
+  let bloc;
+  try { bloc = await rpc('eth_getBlockByNumber', ['latest', false]); } catch { bloc = null; }
+  if (!bloc || !bloc.timestamp) return { etat: 'NON_MESURE', pourquoi: 'no block timestamp — deadline unknown' };
+  const deadline = BigInt(bloc.timestamp) + 600n;
+  const dataSlot0 = '0x' + sel4('getSlot0(bytes32)') + poolId(cle).slice(2);
+  /* ⛔ ACHETEUR QUI N EST A PERSONNE, solde force. Simuler depuis l adresse connectee ferait
+   * dependre le resultat d un solde reel : un utilisateur pauvre lirait « refus » la ou la pool
+   * repond tres bien, et croirait que son block ne vaut rien. */
+  const acheteur = '0x00000000000000000000000000000000000d0c70';
+  let dernier = null;
+  for (const forme of [false, AVEC_MINHOP]) {
+    /* ⛔ sortieMin = 0 EN SIMULATION SEULEMENT — jamais dans ce que l utilisateur signera. Le swap
+     * de l app pose sa propre borne (99 % du quote) ; ici on cherche si le chemin s execute. */
+    const data = encodeSwapExactInSingle({ cle, zeroForOne: deviseEst0, montant: mise,
+      sortieMin: 0n, deadline, forme });
+    try {
+      const r = await rpc('eth_simulateV1', [{
+        blockStateCalls: [{
+          stateOverrides: { [acheteur]: { balance: '0x8ac7230489e80000' } },
+          calls: [
+            { from: acheteur, to: ur, data, value: '0x' + mise.toString(16) },
+            { from: acheteur, to: V.stateView, data: dataSlot0 },
+          ],
+        }],
+        validation: false, traceTransfers: false,
+      }, 'latest']);
+      const a = (r && r[0] && r[0].calls) || [];
+      if (!a[0] || a[0].status !== '0x1') { dernier = 'the chain refuses this buy'; continue; }
+      if (!a[1] || a[1].status !== '0x1' || !a[1].returnData) { dernier = 'buy ran, price after unreadable'; continue; }
+      const sqrtApres = BigInt(String(a[1].returnData).slice(0, 66)) & ((1n << 160n) - 1n);
+      /* ⛔ TEMOIN NEGATIF : un prix INCHANGE ne veut pas dire « un achat ne bouge rien », il veut
+       * dire que la simulation n a probablement rien echange. On ne conclut pas dessus. */
+      if (sqrtApres === 0n) { dernier = 'price after read as zero'; continue; }
+      const px = prixDepuisSqrt({ sqrtPriceX96: sqrtApres, decDevise: 18, decBlock: dec, deviseEst0 });
+      const cp = capitalisation({ supply, decimales: dec, prix: px, devise: 'ETH' });
+      /* ⛔⛔ LE CARNET TROP MINCE EST UN ETAT A PART, ET C EST LE PLUS UTILE DU PANNEAU. Mesure du
+       * 2026-09-09 sur une pool de 6,1 ETH de capitalisation : les trois mises essayees (0,01 · 0,1
+       * · 1 ETH) ont pousse `sqrtPrice` a 4295128740, c est-a-dire SQRT_MIN + 1 — la borne absolue.
+       * Le carnet entier est consomme. Traiter ca comme « pas mesurable » serait exact et INUTILE :
+       * l utilisateur a besoin de savoir que SON argent percute le bord, pas que notre lecture a
+       * echoue. C est l avertissement le plus precieux que cet ecran puisse donner. */
+      if (sqrtApres <= (SQRT_MIN + 8n) || sqrtApres >= (SQRT_MAX - 8n)) {
+        return { etat: 'CARNET_MINCE', pourquoi: 'this pool is too thin to absorb that amount' };
+      }
+      if (cp.valeur === null || cp.valeur === undefined) { dernier = cp.pourquoi || 'market cap after not computable'; continue; }
+      return { etat: 'MESURE', eff: effetAchat(capAvant, cp.valeur), capApres: cp.valeur };
+    } catch (e) { dernier = (e && e.message) || String(e); }
+  }
+  return { etat: 'NON_MESURE', pourquoi: dernier || 'no simulation answered' };
+}
+
+function peindreDocteur(adr) {
+  const el = $('#blockHomeDoc');
+  if (!el) return;
+  /* ⛔ ON RECUPERE LA SAISIE EN COURS AVANT DE REDESSINER. `peindreVitalite` rappelle ce panneau
+   * quand la capitalisation arrive, quelques secondes apres l ouverture — soit exactement pendant
+   * que quelqu un tape son montant. Sans cette ligne, le champ se vide tout seul sous les doigts,
+   * et le defaut serait mis sur le compte du telephone. */
+  const saisie = ($('#bhDocMise') || {}).value;
+  if (typeof saisie === 'string' && saisie.trim() !== '') docFaits.mise = saisie;
+  if (docFaits.adr !== adr) docFaits = { adr, ligne: null, etat: 'VIERGE' };
+  const capB = vitFaits.faits.capitalisation;
+  const capOk = typeof capB === 'number' && Number.isFinite(capB) && capB > 0;
+  /* ⛔ SANS PRIX MESURE, PAS DE DOCTEUR — ET ON DIT POURQUOI. Proposer « fais monter tes PV » sur
+   * un block dont on n a trouve aucune pool inviterait a payer dans le vide. */
+  if (!capOk) {
+    el.innerHTML = '<p class="bhVieNote"><b>No buy preview here.</b> We found no pool for this block '
+      + 'among the keys we read, so there is nothing to measure a price against — and we will not '
+      + 'invite you to pay for a number we cannot check.</p>';
+    return;
+  }
+  const l = docFaits.ligne;
+  el.innerHTML =
+    '<div class="bhDocHaut"><b>What would a buy actually do?</b>'
+    + '<span class="k">Measured, not estimated — we run the buy on a node and re-read the price.</span></div>'
+    + '<div class="bhDocForm">'
+    + '<label for="bhDocMise">ETH to spend</label>'
+    + '<input id="bhDocMise" inputmode="decimal" value="' + enAttribut(docFaits.mise || '0.1') + '">'
+    + '<button type="button" class="act sec" id="bhDocVoir">See what it would do</button>'
+    + '</div>'
+    + (docFaits.etat === 'ENCOURS' ? '<p class="bhVieNote">Running it on a node…</p>' : '')
+    + (docFaits.etat === 'REFUS'
+      ? '<p class="bhVieNote"><b>Not measured — so we promise nothing.</b> ' + enTexte(docFaits.pourquoi || '') + '</p>' : '')
+    /* ⛔ ETAT PROPRE, PAS UN SOUS-CAS DU REFUS. Un carnet trop mince n est pas « on n a pas pu
+     * lire » : c est une mesure REUSSIE qui dit quelque chose de precis et d actionnable. Les
+     * confondre ferait passer le meilleur avertissement du panneau pour une panne. */
+    + (docFaits.etat === 'CARNET_MINCE'
+      ? '<p class="bhDocRes"><b>That amount would hit the edge of the book.</b> We ran it: your buy '
+        + 'consumes all the liquidity there is and pushes the price to its limit. You would pay far '
+        + 'more per unit than the price shown, and there may be nobody to sell back to. '
+        + 'This is about the pool being thin — not about the block being bad.</p>' : '')
+    + (l ? (
+        '<p class="bhDocRes">'
+        + (l.eff.gain === null
+          ? '<b>No HP gain is promised.</b> ' + enTexte(l.eff.pourquoi || '')
+          /* ⛔⛔ LE ZERO EST DIT EN GROS, PAS EN NOTE. C est le cas le plus frequent pour une
+           * petite mise, et c est celui ou l ecran a le plus a gagner a mentir. */
+          : (l.eff.gain === 0
+              ? '<b>This would give you 0 HP.</b> ' + enTexte(String(l.eff.pvAvant))
+                + ' HP before, ' + enTexte(String(l.eff.pvApres)) + ' HP after — the scale is a cube '
+                + 'root, so small amounts round to nothing. Spending more is the only way this moves, '
+                + 'and that is a bigger position, not a bigger cure.'
+              : '<b>' + enTexte(String(l.eff.pvAvant)) + ' HP → ' + enTexte(String(l.eff.pvApres))
+                + ' HP</b> (+' + enTexte(String(l.eff.gain)) + ' HP)'))
+        + '</p>'
+        /* ⛔⛔ LE LEVIER SUR LA MARKET CAP EST AFFICHE A COTE DU GAIN, ET C EST DELIBERE. C est la
+         * demonstration la plus nette que « market cap » n est pas de la richesse : la mesure du
+         * 2026-09-09 donne 0,01 ETH -> +2 346 ETH de capitalisation, un levier de x234 645. */
+        + '<p class="bhVieNote">Market cap ' + enTexte(String(Math.round(l.capAvant)))
+        + ' → ' + enTexte(String(Math.round(l.capApres))) + ' ETH. '
+        + '<b>Look at that ratio.</b> Your ' + enTexte(String(l.mise)) + ' ETH moves the displayed '
+        + 'market cap by ' + enTexte(String(Math.round(l.capApres - l.capAvant))) + ' ETH, because '
+        + 'market cap is price × supply and the supply is enormous. That is exactly why a big market '
+        + 'cap is not a big pile of money.</p>'
+        + '<ul class="bhDocAvert">'
+        + l.eff.avertissements.map((a) => '<li>' + enTexte(a) + '</li>').join('')
+        + '</ul>'
+        + '<button type="button" class="act sec" id="bhDocSwap">Open Swap with this filled in</button>'
+        + '<p class="bhVieNote">⚠️ This is a photo, not a promise: anyone can trade the same pool '
+        + 'between now and your signature. Nothing here signs anything — you sign in your wallet.</p>'
+      ) : '');
+
+  const btn = $('#bhDocVoir');
+  if (btn) btn.onclick = async () => {
+    const brut = String(($('#bhDocMise') || {}).value || '').trim().replace(',', '.');
+    const n = Number(brut);
+    docFaits.mise = brut;
+    if (!Number.isFinite(n) || n <= 0) {
+      docFaits.etat = 'REFUS'; docFaits.pourquoi = 'that amount is not a number we can use';
+      docFaits.ligne = null; peindreDocteur(adr); return;
+    }
+    docFaits.etat = 'ENCOURS'; docFaits.ligne = null; peindreDocteur(adr);
+    const p = await poolLaunchPresente(adr);
+    if (p.etat !== 'YES' || !p.viaCle) {
+      docFaits.etat = 'REFUS';
+      docFaits.pourquoi = p.note || 'no pool answered'; peindreDocteur(adr); return;
+    }
+    let dec = null, supply = null;
+    try {
+      dec = Number(BigInt(String(await rpc('eth_call', [{ to: adr, data: '0x' + sel4('decimals()') }, 'latest'])).slice(0, 66)));
+      supply = BigInt(String(await rpc('eth_call', [{ to: adr, data: '0x' + sel4('totalSupply()') }, 'latest'])).slice(0, 66));
+    } catch { /* ⛔ non lu ≠ 18 : on refuse plutot que d inventer les decimales */ }
+    if (!Number.isFinite(dec) || supply === null) {
+      docFaits.etat = 'REFUS';
+      docFaits.pourquoi = 'decimals or supply unread — we never assume 18 decimals'; peindreDocteur(adr); return;
+    }
+    const deviseEst0 = String(p.viaCle.currency0).toLowerCase() === ETH_NATIF.toLowerCase();
+    const mise = BigInt(Math.round(n * 1e18));
+    const r = await simulerAchatPV(adr, p.viaCle, mise, vitFaits.faits.capitalisation, supply, dec, deviseEst0);
+    if (r.etat === 'CARNET_MINCE') {
+      docFaits.etat = 'CARNET_MINCE'; docFaits.pourquoi = r.pourquoi; docFaits.ligne = null; peindreDocteur(adr); return;
+    }
+    if (r.etat !== 'MESURE') {
+      docFaits.etat = 'REFUS'; docFaits.pourquoi = r.pourquoi; docFaits.ligne = null; peindreDocteur(adr); return;
+    }
+    docFaits.etat = 'MESURE';
+    docFaits.ligne = { mise: brut, eff: r.eff, capAvant: vitFaits.faits.capitalisation, capApres: r.capApres };
+    peindreDocteur(adr);
+  };
+
+  const sw = $('#bhDocSwap');
+  /* ⛔ ON PASSE LA MAIN, ON N EXECUTE PAS. Remplir le swap existant garde toutes ses gardes ;
+   * declencher l achat d ici les contournerait toutes. */
+  if (sw) sw.onclick = () => {
+    const t = $('#swapToken'); if (t) t.value = adr;
+    const m = $('#swapMontant'); if (m) m.value = docFaits.mise || '';
+    const b = $('#swapBuy'); if (b) b.click();
+    const ns = $('#nextSteps'); if (ns) ns.open = true;
+    if (typeof selectNextStep === 'function') selectNextStep('swap');
+    const p = $('#ns-swap'); if (p && p.scrollIntoView) p.scrollIntoView({ block: 'start' });
+  };
 }
 
 /**
@@ -9034,7 +9259,11 @@ async function poolLaunchPresente(jeton) {
         data: '0x' + sel4('getLiquidity(bytes32)') + poolId(viaCle).slice(2) }, 'latest']);
       if (l && l !== '0x' && l.length >= 66) liquidite = BigInt(l.slice(0, 66));
     } catch { /* ⛔ non lue ≠ nulle : `null` reste `null`, et l ecran le dira */ }
-    return { etat: 'YES', sqrt, via, liquidite, essayees: CONFIGS_POOL.length, note: 'pool initialized — ' + via };
+    /* ⛔ `viaCle` VOYAGE MAINTENANT. Elle etait calculee ici puis JETEE — et sans elle, tout
+     * appelant voulant simuler quoi que ce soit sur CETTE pool devait re-deviner la configuration
+     * qui a repondu. Re-deviner, c est se tromper de pool en silence. C est le defaut « une valeur
+     * lue puis jetee » : l information etait la, la perdre suffisait a rendre la suite impossible. */
+    return { etat: 'YES', sqrt, via, viaCle, liquidite, essayees: CONFIGS_POOL.length, note: 'pool initialized — ' + via };
   } catch (e) {
     return { etat: 'UNREAD', note: (e && e.message) || String(e) };
   }
