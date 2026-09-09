@@ -1513,7 +1513,14 @@ main[data-app="market"] > #blockHome{display:none !important}
     <!-- STOCK-QUOTE HONESTY 2026-09-08: GH Pages Launch is native ETH only (fee 0 / spacing 200).
          Tokenized-stock quotes (Coinbase B20 on Base) are OpenLaunch LaunchForm + issuer registry —
          not this create track. Do not imply "any quote asset" here. -->
-    <p class="expl" style="margin:6px 0 0;color:#f0c674" id="lancQuoteHonesty">Launch quote on this page is <b>native ETH only</b> (Uniswap v4 PoolKey fee <b>0</b> · tickSpacing <b>200</b>). This selector does <b>not</b> price the Launch pool in WETH, USDC, or a tokenized stock. Enterprise self-stock valuation (buyers pay in NVDAc / AAPLc / …) ships on <b>OpenLaunch</b> Launch — registry addresses only, never invented tickers.</p>
+    <p class="expl" style="margin:6px 0 0;color:#f0c674" id="lancQuoteHonesty">Launch quote on this page is <b>native ETH only</b> (Uniswap v4 PoolKey fee <b>5000 = 0.5 %</b> · tickSpacing <b>200</b>). This selector does <b>not</b> price the Launch pool in WETH, USDC, or a tokenized stock. Enterprise self-stock valuation (buyers pay in NVDAc / AAPLc / …) ships on <b>OpenLaunch</b> Launch — registry addresses only, never invented tickers.</p>
+    <!-- ⛔⛔ CE QUE POSSEDER LA POSITION VEUT DIRE, DIT AVANT LA SIGNATURE ET PAS APRES. Le frais
+         va au proprietaire de la position — donc a vous — et il n existe AUCUN champ beneficiaire
+         dans une pool v4 sans hook. Mais collecter passe par `onlyIfApproved` sur `_decrease`, et
+         collecter EST `DECREASE_LIQUIDITY(0)` : la meme cle qui encaisse peut RETIRER la
+         liquidite. Taire la seconde moitie pour ne garder que « vous gagnez 0,5 % » serait vendre
+         un pouvoir en n en montrant que le cote agreable. -->
+    <p class="expl" style="margin:6px 0 0" id="lancFraisQui"><b>The 0.5 % goes to you</b>, because you own the liquidity position — nothing is routed to us, and there is no platform cut. <b>Know the other half of that:</b> the key that collects the fee is the same key that can <b>withdraw the liquidity</b>. Uniswap v4 governs both with one check, and they cannot be separated without a purpose-built contract. So this pool is <b>not</b> "locked forever" — you keep control, and anyone buying can see that on chain.</p>
     <label for="lancBlock">Block to launch</label>
     <input id="lancBlock" placeholder="0xb200…" spellcheck="false" autocapitalize="off">
     <label for="lancValo">What the whole supply is worth at the start — in ETH</label>
@@ -5805,11 +5812,33 @@ function etiquetteStockRefusee(adr) {
 function estEthNatif(adr) {
   return String(adr || '').toLowerCase() === ETH_NATIF;
 }
+/* ══ LE FRAIS DU LAUNCH — UNE SEULE SOURCE, ET C EST VITAL ═══════════════════════════════════════
+ * ⛔⛔ IL Y AVAIT TROIS ENDROITS QUI ECRIVAIENT `fee: 0` A LA MAIN : la cle du Launch, celle des
+ *    cotations, et la liste de lecture. Les faire diverger ne casse RIEN visiblement — ca cree
+ *    simplement une pool sur une cle que l app ne lit pas. Le Launch reussirait, la barre de vie
+ *    dirait « aucune pool trouvee » sur notre propre block, et rien ne planterait. C est le motif
+ *    du jumeau qui diverge, applique a la valeur la plus irreversible du projet : une PoolKey est
+ *    IMMUABLE, un frais choisi ne se rattrape jamais.
+ *
+ * ⛔ 0,5 % — DECISION DE PHIL, 2026-09-09. Mesure (`frais-05.mjs`) : `fee 5000` avec
+ *    `tickSpacing 200` est ACCEPTE par le PositionManager deploye — evenement `Initialize` emis,
+ *    55 631 gas — et le temoin negatif (`tickSpacing 0`) est bien refuse, donc le test sait dire
+ *    non. C est la moitie du palier non nul le moins cher d OpenLaunch (1 %).
+ *
+ * ⛔⛔ ET CE FRAIS VA AU PROPRIETAIRE DE LA POSITION, PAS A « LA PLATEFORME ». Une pool v4 avec
+ *    `hooks 0x0` n a AUCUN champ beneficiaire : collecter passe par `onlyIfApproved` sur
+ *    `_decrease`, et collecter EST `DECREASE_LIQUIDITY(0)`. Donc qui touche les 0,5 % peut aussi
+ *    RETIRER la liquidite — meme cle, meme garde, inseparables sans ecrire un contrat.
+ *    ⇒ Le proprietaire par defaut est le CREATEUR lui-meme (decision de Phil, 2026-09-09 :
+ *      « tes blocks a toi seulement »). Aucune cle ne surplombe les utilisateurs : chacun encaisse
+ *      les frais de son propre block et ne depend de personne. */
+const FRAIS_LAUNCH = 5000;
+const ESPACEMENT_LAUNCH = 200;
 /** ⛔ LA POOLKEY SUIT LA DEVISE, PAS UN DEFAUT MUET. Launch grave fee=0 / spacing=200 sur ETH
  *    natif ; les defauts de cleDePool (3000/60) designent une AUTRE pool. WETH/USDC gardent
  *    3000/60 — pools manuelles, distinctes du Launch. */
 function paramsClePourQuote(adr) {
-  return estEthNatif(adr) ? { fee: 0, tickSpacing: 200 } : { fee: 3000, tickSpacing: 60 };
+  return estEthNatif(adr) ? { fee: FRAIS_LAUNCH, tickSpacing: ESPACEMENT_LAUNCH } : { fee: 3000, tickSpacing: 60 };
 }
 const V4 = {
   84532: { poolm: '0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408', posm: '0x4B2C77d209D3405F41a037Ec6c77F7F5b8e2ca80',
@@ -7291,18 +7320,26 @@ $('#lancCalculer').onclick = async () => {
     /* ⚠️ `pad` existe deja plus haut : j avais redefini le meme helper sous un autre nom. Deux
      *    copies d une meme conversion finissent par diverger, et c est le motif « helper canonique
      *    contre copie plus faible » qu on a deja paye huit fois dans ce depot. */
-    /* ⛔⛔ FRAIS A ZERO — CHOIX DE PHIL, ET IL EST DEFINITIF. Le frais est grave dans la PoolKey :
-     *    le changer creerait une AUTRE pool, pas la meme avec un autre reglage. Personne, nous
-     *    compris, ne pourra jamais le relever.
-     * ⚠️ CE QUE CA COUTE, MESURE : le frais revient au proprietaire de la position, donc au
-     *    createur. A 0 %, un lancement ne rapporte RIEN sur les echanges — c est un choix de
-     *    cout d entree contre revenu, pas un oubli.
-     * ⚠️ CE QUE CA DONNE, MESURE (simulation des achats, 2026-09-06) : sur un achat de 2,49 $ le
-     *    cout total tombe de 3,16 % a 0,17 %. Le reste etait le frais, pas la profondeur.
-     * ⛔ ET 0 AVEC UN ESPACEMENT DE 200 A ETE EXERCE, pas suppose : `initialize` et le mint
-     *    passent, et le Quoter rend des prix coherents. Une combinaison fee/tickSpacing non
-     *    verifiee se refuse APRES la signature. */
-    const cle = cleDePool(d0.adr, jeton, { fee: 0, tickSpacing: 200 });
+    /* ⛔⛔ FRAIS A 0,5 % — CHOIX DE PHIL DU 2026-09-09, ET IL EST DEFINITIF PAR POOL. Le frais est
+     *    grave dans la PoolKey : le changer creerait une AUTRE pool, pas la meme avec un autre
+     *    reglage. Personne, nous compris, ne pourra jamais le relever sur une pool deja creee.
+     * ⚠️ CE QUI A CHANGE, ET POURQUOI CE N EST PAS UNE PAROLE RENIEE : le reglage precedent etait
+     *    0 %, mesure comme faisant tomber le cout d un achat de 2,49 $ de 3,16 % a 0,17 %
+     *    (simulation du 2026-09-06). Ce gain reste vrai — il devient simplement 0,5 % au lieu de
+     *    0 %, soit la moitie du palier non nul le moins cher d OpenLaunch. Les blocks deja lances
+     *    a 0 % gardent 0 % pour toujours : un changement de reglage ne reecrit pas le passe, et
+     *    l app continue de lire leur cle.
+     * ⛔⛔ ET LE FRAIS VA AU PROPRIETAIRE DE LA POSITION — donc au CREATEUR, par defaut lui-meme.
+     *    Il n existe aucun champ « beneficiaire » dans une pool v4 sans hook : collecter passe par
+     *    `onlyIfApproved` sur `_decrease`, et collecter EST `DECREASE_LIQUIDITY(0)`. Qui encaisse
+     *    peut donc aussi RETIRER la liquidite : les deux pouvoirs sont la MEME cle et ne se
+     *    separent pas sans ecrire un contrat. C est pourquoi le proprietaire reste le createur et
+     *    n est jamais nous — aucune cle de la plateforme ne surplombe les blocks des autres.
+     * ⛔ ET 5000 AVEC UN ESPACEMENT DE 200 A ETE EXERCE, pas suppose (`frais-05.mjs`, 2026-09-09) :
+     *    `initializePool` emet bien `Initialize`, 55 631 gas, et le temoin negatif `tickSpacing 0`
+     *    est refuse — le test sait dire non. Une combinaison fee/tickSpacing non verifiee se
+     *    refuse APRES la signature. */
+    const cle = cleDePool(d0.adr, jeton, { fee: FRAIS_LAUNCH, tickSpacing: ESPACEMENT_LAUNCH });
     const blockEst1 = cle.currency1.toLowerCase() === jeton.toLowerCase();
     const supply = BigInt(await lire4(jeton, sel4('totalSupply()')));
     const dec = Number(BigInt(await lire4(jeton, sel4('decimals()'))));
@@ -9223,7 +9260,14 @@ function encodeTransfer(destinataire, montant) {
  * « ce jeton n a pas de prix » — seulement « aucune parmi celles-la ». Les v2/v3 et les hooks non
  * nuls restent hors de portee, et l ecran doit le dire. */
 const CONFIGS_POOL = [
-  { nom: 'ETH · 0 %', fee: 0, tickSpacing: 200 },
+  /* ⛔ NOTRE LAUNCH EN TETE, et il vaut maintenant 0,5 % (decision Phil 2026-09-09). La cle est
+   * derivee de `FRAIS_LAUNCH` et jamais reecrite a la main : trois `fee: 0` codes en dur ont deja
+   * failli laisser le Launch creer une pool sur une cle que l app ne lisait pas. */
+  { nom: 'ETH · 0,5 % (notre Launch)', fee: FRAIS_LAUNCH, tickSpacing: ESPACEMENT_LAUNCH },
+  /* ⛔ ET ON GARDE `fee 0`. Tous les blocks lances AVANT ce jour vivent sur cette cle : la retirer
+   * rendrait l app aveugle a sa propre histoire, et afficherait « aucune pool » sur des pools que
+   * nous avons nous-memes creees. Un changement de reglage ne reecrit pas le passe. */
+  { nom: 'ETH · 0 % (nos lancements d avant 2026-09-09)', fee: 0, tickSpacing: 200 },
   /* ⛔⛔ LE FRAIS EST UN CHOIX AU LANCEMENT, PAS UNE CONSTANTE — ET J AI DU ME CORRIGER DEUX FOIS
    * ICI. J ai d abord lu UN jeton OpenLaunch a `fee 30000` et ecrit que « l acheteur paie 3 % ».
    * Phil a repris : 3 % est un MAXIMUM. Mesure du 2026-09-09, trois jetons, trois `Initialize`
