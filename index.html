@@ -9213,6 +9213,16 @@ function encodeTransfer(destinataire, montant) {
  * nuls restent hors de portee, et l ecran doit le dire. */
 const CONFIGS_POOL = [
   { nom: 'ETH · 0 %', fee: 0, tickSpacing: 200 },
+  /* `fee 30000` — la cle d OpenLaunch, LUE et non supposee. Mesure du 2026-09-09
+   * (`reglage-openlaunch.mjs`) : leur evenement `Initialize`, dont la signature est PROUVEE par
+   * keccak avant tout decodage, porte `fee 30000 · tickSpacing 200 · hooks 0x0`.
+   * ⚠️⚠️ ET CE QUE CETTE CLE A RAPPORTE, MESURE : ZERO. Sur les 8 blocks `0xb200…` les plus actifs
+   *    de la fenetre du 2026-09-09, aucun n a gagne un prix grace a elle. J avais ecrit ici qu elle
+   *    debloquait « chaque jeton lance chez eux » : c est FAUX, et la mesure le dit. Le jeton
+   *    OpenLaunch mesure n est pas un B20 — c est un ERC-20 ordinaire de leur plateforme.
+   *    ⇒ On garde la lecture (une cle de plus ne peut que reduire les faux « pas de prix »), on
+   *      retire l affirmation. Le frais de NOTRE lancement reste une decision de Phil. */
+  { nom: 'ETH · 3 % (OpenLaunch)', fee: 30000, tickSpacing: 200 },
   { nom: 'ETH · 1 %', fee: 10000, tickSpacing: 200 },
   { nom: 'ETH · 0,3 %', fee: 3000, tickSpacing: 60 },
   { nom: 'ETH · 0,05 %', fee: 500, tickSpacing: 10 },
