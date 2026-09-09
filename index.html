@@ -4057,9 +4057,12 @@ function peindreVitalite(adr, ajout) {
       '<div class="bhVieHaut">'
       + '<span class="bhViePV">' + (pvB === null ? '— HP' : enTexte(String(pvB)) + ' HP') + '</span>'
       + (palB.palier ? '<span class="bhVieTier">' + enTexte(palB.palier.titre) + '</span>' : '')
+      /* ⛔ « never quoted » A ETE RETIRE : c etait faux, et mesure faux. On nomme la pool qui a
+       * repondu, ou on dit qu on n en a pas trouve PARMI CELLES LUES. */
       + '<span class="bhVieMc">' + (capOk
         ? 'market cap ' + enTexte(String(Math.round(capB * 1e6) / 1e6)) + ' ' + enTexte(vitFaits.faits.deviseCap || '?')
-        : 'no price — never quoted') + '</span>'
+          + (vitFaits.faits.viaPool ? ' · via ' + enTexte(vitFaits.faits.viaPool) : '')
+        : 'no price found in the pools read') + '</span>'
       + '</div>'
       + '<div class="bhVieBarre' + (capOk ? '' : ' sansPrix') + '">'
       + (capOk ? '<div class="bhVieRemp" style="width:' + part.toFixed(1) + '%"></div>' : '')
@@ -4067,8 +4070,18 @@ function peindreVitalite(adr, ajout) {
       + '<div class="bhVieGrad"><span>0</span><span>1k · 10 HP</span><span>1M · 100 HP</span><span>1B · 1000 HP</span></div>'
       + '<p class="bhVieNote">' + (capOk
         ? 'HP = cube root of market cap (price × supply, both re-readable). <b>It goes down too</b> — a tier is a state, not a reward you keep.'
-        : '<b>This is not 0 HP.</b> ' + enTexte(vitFaits.faits.pourquoiCap || 'no market cap measurable')
-          + ' — a block that was never quoted is not a dead block, and nothing is locked because of it.')
+          /* ⛔ LA PHRASE QUI EMPECHE DE PRENDRE CE CHIFFRE POUR DE LA VALEUR. Une capitalisation
+           * est un PRIX multiplie par une SUPPLY : elle ne dit rien de ce qu on pourrait en
+           * retirer. Sans cette ligne, la barre vendrait un nombre achetable pour une transaction. */
+          + '<br>⚠️ <b>Market cap is price × supply — it is not money in the pool.</b> Anyone can '
+          + 'initialize a pool at any price with almost no liquidity and show a huge market cap. '
+          + 'Pool depth (Uniswap L, comparable between pools, not an ETH amount): '
+          + (vitFaits.faits.liquiditePool === null || vitFaits.faits.liquiditePool === undefined
+            ? '<b>not read</b> — judge accordingly'
+            : '<b>' + enTexte(String(vitFaits.faits.liquiditePool)) + '</b>')
+        : '<b>This is not 0 HP, and it is not « no price ».</b> ' + enTexte(vitFaits.faits.pourquoiCap || 'no market cap measurable')
+          + ' This app reads a fixed set of Uniswap v4 pool keys — a token quoted on v2, v3, another '
+          + 'protocol or a key we do not read would look exactly like this. Absence here is not proof of absence.')
       + '</p>';
   }
 
@@ -4931,10 +4944,19 @@ async function ouvrirBlockHome(adr, opts) {
     if (pool && pool.sqrt && dec !== null && tot !== null) {
       const prixEth = prixDepuisSqrt({ sqrtPriceX96: pool.sqrt, decDevise: 18, decBlock: dec, deviseEst0: true });
       const c = capitalisation({ supply: tot, decimales: dec, prix: prixEth, devise: 'ETH' });
-      peindreVitalite(adr, { capitalisation: c.valeur, deviseCap: c.devise, pourquoiCap: c.pourquoi });
+      /* ⛔ LA POOL QUI A REPONDU EST NOMMEE. Deux blocks se cotaient sur ETH · 1 % pendant qu on
+       * affichait « never quoted » : un prix sans sa source laisse croire qu il n y en a qu une. */
+      peindreVitalite(adr, { capitalisation: c.valeur, deviseCap: c.devise, pourquoiCap: c.pourquoi,
+        viaPool: pool.via || null, liquiditePool: pool.liquidite ?? null });
     } else {
-      peindreVitalite(adr, { capitalisation: null, deviseCap: null,
-        pourquoiCap: !pool || !pool.sqrt ? 'no initialized pool — this block has never been quoted'
+      /* ⛔⛔ PLUS JAMAIS « never been quoted ». C ETAIT FAUX, ET MESURE FAUX : le 2026-09-09, deux
+       * des huit blocks les plus actifs avaient une pool ETH · 1 % avec plus de 2 000 transferts,
+       * et cette page leur affichait « jamais cote ». Une affirmation fausse sur le jeton de
+       * quelqu un d autre, sur la page qui se vend comme un lecteur fiable.
+       * ⇒ On dit COMBIEN de cles ont ete lues, et que l absence n est pas une preuve d absence. */
+      peindreVitalite(adr, { capitalisation: null, deviseCap: null, viaPool: null,
+        pourquoiCap: !pool || !pool.sqrt
+          ? (pool && pool.note ? pool.note : 'no pool found among the keys read')
           : 'decimals or supply unread' });
     }
 
@@ -8816,28 +8838,75 @@ function encodeTransfer(destinataire, montant) {
 }
 
 /** Launch-pool presence for a block: yes / no / unread (never invent). */
+/* ⛔⛔ PLUSIEURS CONFIGURATIONS, ET C EST UNE CORRECTION MESUREE. Ce lecteur n interrogeait QUE la
+ * cle de notre Launch (ETH natif, fee 0, spacing 200). Mesure du 2026-09-09
+ * (`pool-ailleurs.mjs`) : sur les 8 blocks les plus actifs de la fenetre, DEUX ont une pool —
+ * « WOTF » et « GOAF », plus de 2 000 transferts chacun — sur ETH natif **fee 10000**. Notre barre
+ * de vie leur affichait « never quoted ».
+ * ⛔ C EST UNE AFFIRMATION FAUSSE SUR LE JETON DE QUELQU UN D AUTRE, sur la page qui se vend comme
+ * un lecteur fiable. La categorie la plus chere de ce depot, et la deuxieme fois aujourd hui.
+ * ⚠️ ET LA BORNE RESTE : on essaie N configurations NOMMEES. « Aucune pool » ne voudra jamais dire
+ * « ce jeton n a pas de prix » — seulement « aucune parmi celles-la ». Les v2/v3 et les hooks non
+ * nuls restent hors de portee, et l ecran doit le dire. */
+const CONFIGS_POOL = [
+  { nom: 'ETH · 0 %', fee: 0, tickSpacing: 200 },
+  { nom: 'ETH · 1 %', fee: 10000, tickSpacing: 200 },
+  { nom: 'ETH · 0,3 %', fee: 3000, tickSpacing: 60 },
+  { nom: 'ETH · 0,05 %', fee: 500, tickSpacing: 10 },
+];
+
 async function poolLaunchPresente(jeton) {
   try {
     const V = V4[chaine];
     if (!V || !V.stateView) return { etat: 'UNREAD', note: 'no StateView on this network config' };
-    const cle = cleDePool(ETH_NATIF, jeton, { fee: 0, tickSpacing: 200 });
-    const s0 = await rpc('eth_call', [{
-      to: V.stateView,
-      data: '0x' + sel4('getSlot0(bytes32)') + poolId(cle).slice(2),
-    }, 'latest']);
-    if (!s0 || s0 === '0x' || s0.length < 66) return { etat: 'UNREAD', note: 'empty slot0 answer' };
-    const sqrt = BigInt('0x' + String(s0).slice(2, 66));
-    /* ⛔ LE `sqrt` EST RENDU, IL N EST PLUS JETE. Il etait lu puis abandonne — « une valeur LUE
-     * puis JETEE est un defaut », et celle-ci est le PRIX de la pool : sans elle il n y a pas de
-     * capitalisation, donc pas de points de vie. Le rappeler a la chaine une seconde fois pour la
-     * meme donnee serait deux fois le meme trajet reseau pour un chiffre deja en main. */
-    return sqrt === 0n
-      ? { etat: 'NO', sqrt: null, note: 'Launch ETH pool not initialized (sqrtPrice 0)' }
-      : { etat: 'YES', sqrt, note: 'Launch ETH pool initialized' };
+    let sqrt = 0n, via = null, lues = 0, viaCle = null;
+    for (const cfg of CONFIGS_POOL) {
+      const cle = cleDePool(ETH_NATIF, jeton, { fee: cfg.fee, tickSpacing: cfg.tickSpacing });
+      let s0;
+      try {
+        s0 = await rpc('eth_call', [{ to: V.stateView,
+          data: '0x' + sel4('getSlot0(bytes32)') + poolId(cle).slice(2) }, 'latest']);
+      } catch { continue; }   /* ⛔ une lecture ratee n est pas une pool absente : on ne la compte pas */
+      if (!s0 || s0 === '0x' || s0.length < 66) continue;
+      lues++;
+      const v = BigInt(String(s0).slice(0, 66));
+      /* ⛔ LA PREMIERE TROUVEE GAGNE, ET L ORDRE EST DELIBERE : notre Launch d abord, pour qu un
+       * block lance ici soit lu sur SA pool plutot que sur une pool tierce au meme jeton. */
+      if (v !== 0n) { sqrt = v; via = cfg.nom; viaCle = cle; break; }
+    }
+    if (!lues) return { etat: 'UNREAD', note: 'no readable slot0 on any of the ' + CONFIGS_POOL.length + ' pool keys' };
+    if (sqrt === 0n) {
+      return { etat: 'NO', sqrt: null, via: null, essayees: CONFIGS_POOL.length,
+        note: 'no initialized pool among the ' + CONFIGS_POOL.length + ' keys read ('
+          + CONFIGS_POOL.map((c) => c.nom).join(', ') + ') — NOT a claim that this token has no price' };
+    }
+    /* ⛔⛔ LA PROFONDEUR EST LUE AVEC LE PRIX, ET C EST LE VRAI CORRECTIF. `prix x supply` est
+     * mathematiquement juste ET ACHETABLE : n importe qui peut initialiser une pool au prix qu il
+     * veut avec une liquidite derisoire, et afficher une capitalisation de plusieurs centaines de
+     * millions. Notre barre lui donnerait « 1000 HP · Monument » pour le prix d une transaction.
+     * ⚠️ ON N INVENTE PAS DE SEUIL. Choisir « en dessous de X, ce n est pas un vrai marche » serait
+     * un chiffre sorti de nulle part, et il finirait cite comme une mesure. On MONTRE la profondeur
+     * a cote du prix et on dit ce que la capitalisation seule ne prouve pas — le lecteur juge.
+     * ⚠️ `L` n est pas un montant en ETH : c est la liquidite Uniswap, comparable entre pools mais
+     * pas convertible sans la plage de la position. On l affiche donc comme un ORDRE DE GRANDEUR,
+     * et on ne la traduit pas en argent qu on n a pas mesure. */
+    let liquidite = null;
+    try {
+      const l = await rpc('eth_call', [{ to: V.stateView,
+        data: '0x' + sel4('getLiquidity(bytes32)') + poolId(viaCle).slice(2) }, 'latest']);
+      if (l && l !== '0x' && l.length >= 66) liquidite = BigInt(l.slice(0, 66));
+    } catch { /* ⛔ non lue ≠ nulle : `null` reste `null`, et l ecran le dira */ }
+    return { etat: 'YES', sqrt, via, liquidite, essayees: CONFIGS_POOL.length, note: 'pool initialized — ' + via };
   } catch (e) {
     return { etat: 'UNREAD', note: (e && e.message) || String(e) };
   }
 }
+
+/* ⛔ LA VERSION A UNE SEULE CLE A ETE RETIREE, PAS GARDEE « AU CAS OU ». Un doublon mort qui a
+ * l air vivant finit par etre rappele par un futur appelant, et il rendrait « never quoted » sur
+ * des jetons qui ONT un prix — exactement le defaut qu on vient de corriger. Il n en reste donc
+ * rien : `poolLaunchPresente` lit desormais plusieurs cles et NOMME celle qui a repondu.
+ * (retiree le 2026-09-09) */
 
 async function soldeBlockPourCompte(jeton) {
   if (!compte) return null;
