@@ -4201,6 +4201,14 @@ function peindreVitalite(adr, ajout) {
       + '<span class="bhVieMc">' + (capOk
         ? 'market cap ' + enTexte(String(Math.round(capB * 1e6) / 1e6)) + ' ' + enTexte(vitFaits.faits.deviseCap || '?')
           + (vitFaits.faits.viaPool ? ' · via ' + enTexte(vitFaits.faits.viaPool) : '')
+          /* ⛔⛔ CE QUE LA POOL PRELEVE, A COTE DU PRIX. Mesure du 2026-09-09 : la chaine accepte
+           * un frais jusqu a 100 % — rien n empeche une pool de tout reprendre a l achat. Montrer
+           * un prix sans son prelevement, c est montrer la moitie du cout.
+           * ⚠️ `null` reste « non lu », jamais « 0 % ». */
+          + (vitFaits.faits.fraisPool === null || vitFaits.faits.fraisPool === undefined
+            ? ' · fee not read'
+            : ' · fee ' + enTexte(String(Number(vitFaits.faits.fraisPool) / 10000)) + ' %'
+              + (Number(vitFaits.faits.fraisPool) >= 100000 ? ' ⚠️ VERY HIGH' : ''))
         : 'no price found in the pools read') + '</span>'
       + '</div>'
       + '<div class="bhVieBarre' + (capOk ? '' : ' sansPrix') + '">'
@@ -5310,7 +5318,10 @@ async function ouvrirBlockHome(adr, opts) {
       /* ⛔ LA POOL QUI A REPONDU EST NOMMEE. Deux blocks se cotaient sur ETH · 1 % pendant qu on
        * affichait « never quoted » : un prix sans sa source laisse croire qu il n y en a qu une. */
       peindreVitalite(adr, { capitalisation: c.valeur, deviseCap: c.devise, pourquoiCap: c.pourquoi,
-        viaPool: pool.via || null, liquiditePool: pool.liquidite ?? null });
+        viaPool: pool.via || null, liquiditePool: pool.liquidite ?? null,
+        /* ⛔ LE PRELEVEMENT VOYAGE AVEC LE PRIX. Il arrivait dans la meme reponse `getSlot0` et
+         * n allait nulle part — or c est lui qui dit ce que coute le geste, pas le prix. */
+        fraisPool: pool.lpFee ?? null });
     } else {
       /* ⛔⛔ PLUS JAMAIS « never been quoted ». C ETAIT FAUX, ET MESURE FAUX : le 2026-09-09, deux
        * des huit blocks les plus actifs avaient une pool ETH · 1 % avec plus de 2 000 transferts,
@@ -9236,7 +9247,7 @@ async function poolLaunchPresente(jeton) {
   try {
     const V = V4[chaine];
     if (!V || !V.stateView) return { etat: 'UNREAD', note: 'no StateView on this network config' };
-    let sqrt = 0n, via = null, lues = 0, viaCle = null;
+    let sqrt = 0n, via = null, lues = 0, viaCle = null, lpFee = null;
     for (const cfg of CONFIGS_POOL) {
       const cle = cleDePool(ETH_NATIF, jeton, { fee: cfg.fee, tickSpacing: cfg.tickSpacing });
       let s0;
@@ -9247,9 +9258,19 @@ async function poolLaunchPresente(jeton) {
       if (!s0 || s0 === '0x' || s0.length < 66) continue;
       lues++;
       const v = BigInt(String(s0).slice(0, 66));
+      /* ⛔⛔ LE FRAIS ARRIVAIT DANS LA MEME REPONSE ET ON LE JETAIT. `getSlot0` rend
+       * (sqrtPriceX96, tick, protocolFee, lpFee) : on ne lisait que le premier mot. Le quatrieme
+       * dit ce que l acheteur paie A CHAQUE ECHANGE — et mesure du 2026-09-09 (`frais-05.mjs`),
+       * la chaine ACCEPTE un frais jusqu a 1 000 000, c est-a-dire 100 % : rien n empeche
+       * quelqu un de lancer une pool qui reprend TOUT a l achat. Afficher un prix sans afficher
+       * ce prelevement, c est montrer la moitie de ce que coute le geste.
+       * ⚠️ `null` = non lu, jamais 0. Un frais inconnu et un frais nul appellent deux phrases
+       *    opposees, et les confondre annoncerait « 0 % » sur une pool qui prend tout. */
+      const motLpFee = String(s0).length >= 2 + 4 * 64
+        ? BigInt('0x' + String(s0).slice(2 + 3 * 64, 2 + 4 * 64)) : null;
       /* ⛔ LA PREMIERE TROUVEE GAGNE, ET L ORDRE EST DELIBERE : notre Launch d abord, pour qu un
        * block lance ici soit lu sur SA pool plutot que sur une pool tierce au meme jeton. */
-      if (v !== 0n) { sqrt = v; via = cfg.nom; viaCle = cle; break; }
+      if (v !== 0n) { sqrt = v; via = cfg.nom; viaCle = cle; lpFee = motLpFee; break; }
     }
     if (!lues) return { etat: 'UNREAD', note: 'no readable slot0 on any of the ' + CONFIGS_POOL.length + ' pool keys' };
     if (sqrt === 0n) {
@@ -9277,7 +9298,7 @@ async function poolLaunchPresente(jeton) {
      * appelant voulant simuler quoi que ce soit sur CETTE pool devait re-deviner la configuration
      * qui a repondu. Re-deviner, c est se tromper de pool en silence. C est le defaut « une valeur
      * lue puis jetee » : l information etait la, la perdre suffisait a rendre la suite impossible. */
-    return { etat: 'YES', sqrt, via, viaCle, liquidite, essayees: CONFIGS_POOL.length, note: 'pool initialized — ' + via };
+    return { etat: 'YES', sqrt, via, viaCle, lpFee, liquidite, essayees: CONFIGS_POOL.length, note: 'pool initialized — ' + via };
   } catch (e) {
     return { etat: 'UNREAD', note: (e && e.message) || String(e) };
   }
