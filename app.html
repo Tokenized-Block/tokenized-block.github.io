@@ -60,8 +60,32 @@ body{background:radial-gradient(130% 90% at 50% -10%,#2a1b5e 0%,var(--fond) 55%)
  *    ADRESSE et ne change JAMAIS : c est son identite. Si la couleur ou la forme bougeaient avec
  *    le marche, un block riche et un block pauvre ne seraient plus le meme objet, et on ne pourrait
  *    plus le reconnaitre d un jour a l autre. Ce qui respire, c est la PLACE qu il occupe. */
+/* ══ LA MAP PREND L ECRAN ═══════════════════════════════════════════════════════════════════════
+ * ⛔ MESURE PAR PHIL, CAPTURE A L APPUI : la map flottait au centre d une colonne de 560 px, avec
+ *    des centaines de pixels vides de chaque cote sur un ecran large. Un territoire qui n occupe
+ *    pas l ecran ne se lit pas comme un territoire — il se lit comme une vignette.
+ * ⇒ La map occupe toute la largeur et toute la hauteur restante ; le texte passe SUR LE COTE, et
+ *   le panneau se masque quand on veut voir grand. Sur telephone, le panneau passe DESSOUS : deux
+ *   colonnes de 200 px ne valent mieux qu une seule pour personne. */
 .mapEnv{position:relative;border:1px solid var(--ligne);border-radius:var(--r);overflow:hidden;
-  background:radial-gradient(90% 70% at 50% 0%,#221743 0%,#0a0a14 70%);height:min(58vh,420px)}
+  background:radial-gradient(90% 70% at 50% 0%,#221743 0%,#0a0a14 70%);
+  height:calc(100dvh - 210px);min-height:320px}
+.scene{display:grid;grid-template-columns:1fr;gap:12px}
+@media (min-width:900px){
+  .enveloppe{max-width:none;padding:0 18px}
+  .scene{grid-template-columns:1fr 320px;align-items:start}
+  .scene.replie{grid-template-columns:1fr 0}
+  .scene.replie .cote{display:none}
+  .mapEnv{height:calc(100dvh - 168px)}
+}
+.mapCadre{position:relative}
+.cote{display:flex;flex-direction:column;gap:12px}
+.cote .carte{margin:0}
+.bMasquer{position:absolute;top:10px;right:10px;z-index:5;appearance:none;border:1px solid var(--ligne);
+  background:rgba(10,10,20,.72);backdrop-filter:blur(6px);color:var(--doux);font:inherit;font-size:11.5px;
+  font-weight:700;padding:7px 11px;border-radius:99px;cursor:pointer;min-height:36px}
+.bMasquer:hover{color:var(--texte);border-color:var(--accent)}
+@media (max-width:899px){.bMasquer{display:none}}
 .mapEnv::before{content:"";position:absolute;inset:0;opacity:.35;pointer-events:none;
   background-image:linear-gradient(#2a2247 1px,transparent 1px),linear-gradient(90deg,#2a2247 1px,transparent 1px);
   background-size:34px 34px}
@@ -132,41 +156,52 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
   <!-- ══ MAP ═════════════════════════════════════════════════════════════════════════════════ -->
   <section class="volet on" id="v-map" aria-label="Blocks map">
-    <div class="carte">
-      <p class="titre">Blocks map</p>
-      <p class="sous">Every square is a real block on Base. <b>The bigger it is, the more life it
-        has</b> — and life can shrink. The drawing never changes: that is the block's identity.</p>
-
-      <div class="mapBarre">
-        <input id="trouver" placeholder="Find a block — name or address" autocomplete="off" spellcheck="false">
-        <button class="bouton sec" id="bTrouver" style="width:auto;padding:11px 14px">Find</button>
-      </div>
-
-      <div class="mapEnv" id="map" role="application" aria-label="Living blocks map"></div>
-
-      <div class="mapLeg">
-        <span><i style="width:10px;height:10px"></i>quiet</span>
-        <span><i style="width:16px;height:16px"></i>growing</span>
-        <span><i style="width:24px;height:24px"></i>big</span>
-        <span style="opacity:.6">dashed = no market yet</span>
-      </div>
-
-      <div class="fiche" id="fiche" hidden>
-        <p class="fNom" id="fNom">—</p>
-        <p class="fVie" id="fVie">—</p>
-        <p class="note" id="fAdr"></p>
-        <div class="fActions">
-          <button class="bouton sec" id="fMessage">Start message</button>
-          <button class="bouton sec" id="fOuvrir">Open block</button>
-        </div>
-        <p class="note" id="fNote"></p>
-      </div>
-
-      <p class="chargement" id="mapEtat">reading the chain…</p>
-      <p class="note" id="mapNote"></p>
+    <!-- ⛔ LA RECHERCHE EST EN HAUT, HORS DE LA MAP. Elle sert a arriver quelque part ; l enterrer
+         sous le territoire obligerait a defiler pour chercher, ce qui est l inverse de chercher. -->
+    <div class="mapBarre">
+      <input id="trouver" placeholder="Find a block — name or address" autocomplete="off" spellcheck="false">
+      <button class="bouton sec" id="bTrouver" style="width:auto;padding:11px 16px">Find</button>
     </div>
 
-    <!-- ⛔⛔ LA CARTE QUI RRACHETE LE MOT « LIFE ». Renommer une capitalisation en « vie » est
+    <div class="scene" id="scene">
+      <div>
+        <!-- ⛔ LE BOUTON EST DEHORS, ET C EST UN CORRECTIF. Place DANS `#map`, il disparaissait au
+             premier rendu : `poserBlocks` fait `map.innerHTML = ''` pour redessiner les blocks, ce
+             qui emportait le bouton avec eux. Un controle qui s efface tout seul au chargement est
+             pire qu absent — on le cherche. -->
+        <div class="mapCadre">
+          <div class="mapEnv" id="map" role="application" aria-label="Living blocks map"></div>
+          <button class="bMasquer" id="bMasquer" aria-pressed="false">Hide panel</button>
+        </div>
+        <div class="mapLeg">
+          <span><i style="width:10px;height:10px"></i>quiet</span>
+          <span><i style="width:16px;height:16px"></i>growing</span>
+          <span><i style="width:24px;height:24px"></i>big</span>
+          <span style="opacity:.6">dashed = no market yet</span>
+          <span id="mapEtat" style="margin-left:auto"></span>
+        </div>
+      </div>
+
+      <aside class="cote">
+        <div class="carte">
+          <p class="titre">Blocks map</p>
+          <p class="sous" style="margin:0">Every square is a real block on Base. <b>The bigger it is,
+            the more life it has</b> — and life can shrink. The drawing never changes: it is the one
+            engraved when the block was made.</p>
+          <div class="fiche" id="fiche" hidden>
+            <p class="fNom" id="fNom">—</p>
+            <p class="fVie" id="fVie">—</p>
+            <p class="note" id="fAdr"></p>
+            <div class="fActions">
+              <button class="bouton sec" id="fMessage">Start message</button>
+              <button class="bouton sec" id="fOuvrir">Open block</button>
+            </div>
+            <p class="note" id="fNote"></p>
+          </div>
+          <p class="note" id="mapNote"></p>
+        </div>
+
+    <!-- ⛔⛔ LA CARTE QUI RACHETE LE MOT « LIFE ». Renommer une capitalisation en « vie » est
          acceptable tant que l app dit ce que c est. Sans cette carte, « life » serait un joli mot
          pose sur une grandeur que personne ne comprend — et un mot qui rassure sur une chose qu on
          n explique pas est exactement le tour que ce depot refuse partout ailleurs. -->
@@ -184,6 +219,8 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <tr><td>No market yet</td><td>A pale, dashed block has never been traded. That is
           <b>not</b> the same as being worthless.</td></tr>
       </table>
+    </div>
+      </aside>
     </div>
   </section>
 
@@ -273,10 +310,15 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 <script type="module">
 /* ⛔ LES MEMES MODULES QUE L AUTRE ECRAN. Aucune reimplementation. */
 import { listerCreations } from './index-blocks.js';
-/* ⛔ LE VISAGE EST UN MODULE, ET IL EST TESTE. Sept tests, dont celui qui porte tout : le meme
- * block rend TOUJOURS le meme visage. Un compagnon qu on ne reconnait pas d un jour a l autre
- * n est pas un compagnon. */
-import { visageDeBlock } from './visage.js';
+/* ⛔⛔ LE VRAI DESSIN DE CREATION, celui que l app grave depuis le premier jour. Phil : « refais les
+ * carres, et prends tes exemples de creation qui existaient deja ». Ma tete de chat est abandonnee :
+ * elle etait une SECONDE identite pour un objet qui en avait deja une, et celle qui compte est celle
+ * qui part dans le `contractURI`.
+ * ⛔ `logoSvg` vivait dans une balise <script> d `index.html`, donc importable par personne — c est
+ *    pour ca que cette map dessinait ses propres cubes. Il est maintenant dans `logo.js`, deplace
+ *    et PROUVE identique au caractere pres sur 300 combinaisons de reglages (`test-logo.mjs`). */
+import { logoSvg, paramsLogoDepuisApparence } from './logo.js';
+import { apparenceDepuisAdresse } from './apparence.js';
 /* ⛔ LA LECTURE DE MARCHE VIT DANS UN MODULE, PAS ICI. La recopier depuis l autre ecran aurait
  * donne deux capitalisations differentes pour le meme block sur deux pages. */
 import { vieDuBlock } from './marche.js';
@@ -334,10 +376,11 @@ function tailleDe(vie) {
   return Math.round(TAILLE_MIN + Math.max(0, Math.min(1, p)) * (TAILLE_MAX - TAILLE_MIN));
 }
 
-/* ⛔ UN SEUL GENERATEUR DE VISAGE, DANS SON MODULE. L ancien cube dessine ici a ete RETIRE, pas
- * garde « au cas ou » : deux dessins pour le meme block donneraient deux identites a une seule
- * chose, et celui qu on ne maintient plus finit par contredire l autre. */
-const dessin = (adr) => visageDeBlock(adr);
+/* ⛔ UN SEUL GENERATEUR, ET C EST CELUI DE LA CREATION. Le block affiche sur la map est
+ * EXACTEMENT celui que le createur a vu au moment de le faire, et celui qui est grave dans les
+ * metadonnees. Un dessin d appoint « juste pour la map » aurait donne deux identites a une seule
+ * chose, et celle qu on maintient le moins finit par contredire l autre. */
+const dessin = (adr, sym) => logoSvg(paramsLogoDepuisApparence(apparenceDepuisAdresse(adr), sym));
 
 /* ── la map vivante ───────────────────────────────────────────────────────────────────────── */
 const habitants = [];
@@ -354,7 +397,8 @@ function poserBlocks(liste) {
     el.className = 'bloc' + (typeof c.vie === 'number' && c.vie > 0 ? '' : ' sansPrix');
     el.style.width = el.style.height = t + 'px';
     el.setAttribute('data-block', c.jeton);
-    el.innerHTML = dessin(c.jeton) + '<span class="etiq">' + enTexte(String(c.symbole || '?').slice(0, 10)) + '</span>';
+    el.innerHTML = dessin(c.jeton, c.symbole) + '<span class="etiq">'
+      + enTexte(String(c.symbole || '?').slice(0, 10)) + '</span>';
     map.appendChild(el);
     habitants.push({
       el, adr: c.jeton, sym: c.symbole, vie: c.vie, t,
@@ -523,6 +567,36 @@ $('#pReseau').addEventListener('click', () => {
   $('#mapEtat').textContent = 'reading ' + RESEAUX[CHAINE].nom + '…';
   charger();
 });
+
+/* ⛔ MASQUER LE PANNEAU NE LE DETRUIT PAS. La map se re-mesure apres, parce que les blocks sont
+ * positionnes en pixels : sans ce rappel, ils resteraient contraints a l ancienne largeur et la
+ * moitie du territoire gagne serait vide. */
+$('#bMasquer').addEventListener('click', () => {
+  const s = $('#scene'), b = $('#bMasquer');
+  const replie = s.classList.toggle('replie');
+  b.setAttribute('aria-pressed', replie ? 'true' : 'false');
+  b.textContent = replie ? 'Show panel' : 'Hide panel';
+  /* on laisse la grille se recalculer avant de replacer les blocks */
+  requestAnimationFrame(() => requestAnimationFrame(replacerDansLaMap));
+});
+
+/* ⛔ ET LA MEME CHOSE AU REDIMENSIONNEMENT. Un block positionne a 900 px sur une fenetre reduite a
+ * 500 px sort de l ecran et devient injoignable — il existe, il derive, et personne ne peut le
+ * toucher. */
+let minuteurTaille = null;
+window.addEventListener('resize', () => {
+  clearTimeout(minuteurTaille);
+  minuteurTaille = setTimeout(replacerDansLaMap, 160);
+});
+
+function replacerDansLaMap() {
+  const map = $('#map');
+  const L = map.clientWidth, H = map.clientHeight;
+  for (const h of habitants) {
+    h.x = Math.max(0, Math.min(Math.max(0, L - h.t), h.x));
+    h.y = Math.max(0, Math.min(Math.max(0, H - h.t), h.y));
+  }
+}
 
 $('#pReseau').textContent = RESEAUX[CHAINE].nom;
 charger();
