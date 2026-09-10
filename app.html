@@ -50,16 +50,21 @@
   --texte:hsl(var(--h) 100% 98%); --doux:hsl(var(--h) 42% 79%);
   --accent:hsl(var(--h) 92% 76%); --accent2:hsl(var(--h) 100% 87%);
   /* les nuances qui trainaient en dur, ramenees sur la meme teinte */
-  --halo:hsl(var(--h) 52% 16%); --mapFond:hsl(var(--h) 51% 17%); --mapNuit:hsl(var(--h) 36% 4%);
+  /* ⛔ `--halo` ET `--mapFond` ONT ETE RETIRES AVEC LES DEGRADES. Un token qui ne sert plus se
+   * relit comme une option encore valable, et le prochain qui le voit refait la tache lumineuse
+   * qu on vient d enlever. */
+  --mapNuit:hsl(var(--h) 36% 4%);
   --grille:hsl(var(--h) 37% 21%); --contour:hsl(var(--h) 29% 29%); --creux:hsl(var(--h) 33% 8%);
   --vif:#3ddc97; --tiede:#f0c674; --dur:#ff6b6b; --r:16px; --rs:11px;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
-/* ⛔ LE HALO EST DISCRET, PAS UN DEGRADE DE FOND D ECRAN. Sur la capture, le violet se devine ; il
- * ne domine pas. Un halo trop fort ferait remonter le fond au premier plan, alors que le sujet est
- * la map. */
-body{background:radial-gradient(120% 80% at 50% -12%,var(--halo) 0%,var(--fond) 58%) no-repeat fixed;
+/* ⛔⛔ FOND PLAT, PAS UN DEGRADE — ET C EST LA REMARQUE LA PLUS JUSTE DE LA JOURNEE. Phil a entoure
+ * le haut de la map : « la couleur vient du centre ». Un `radial-gradient` fait exactement ca — il
+ * pose une TACHE claire a un endroit, et l oeil la lit comme un objet plutot que comme un fond.
+ * Chez mainstreet le fond est PLAT ; seule la grille l habite. Un fond uniforme ne se remarque pas,
+ * et c est precisement son travail : le sujet, ici, ce sont les blocks. */
+body{background:var(--fond);
   color:var(--texte);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   -webkit-font-smoothing:antialiased;padding-bottom:84px}
 .enveloppe{max-width:560px;margin:0 auto;padding:0 14px}
@@ -97,7 +102,9 @@ body{background:radial-gradient(120% 80% at 50% -12%,var(--halo) 0%,var(--fond) 
  *   disponible en entier, il ne prend simplement plus la place du sujet. Rien n est supprime — la
  *   carte qui explique « life » reste obligatoire, elle est juste a un clic. */
 .mapEnv{position:relative;border:1px solid var(--ligne);border-radius:var(--r);overflow:hidden;
-  background:radial-gradient(90% 70% at 50% 0%,var(--mapFond) 0%,var(--mapNuit) 70%);
+  /* ⛔ MEME RAISON QUE LE FOND DE PAGE : plat. Le degrade posait un halo en haut au centre, que
+   * l oeil suivait au lieu de suivre les blocks. */
+  background:var(--mapNuit);
   height:calc(100dvh - 176px);min-height:340px}
 .scene{display:block}
 @media (min-width:900px){ .enveloppe{max-width:none;padding:0 18px} }
