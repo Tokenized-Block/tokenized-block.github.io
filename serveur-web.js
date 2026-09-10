@@ -40,7 +40,7 @@ const SERVIS = [
   'app.html', 'index.html', 'block-0.html', 'lien-x.html',
   'apparence.js', 'classement.js', 'consentement.js', 'criblage.js', 'encodeur.js',
   'index-blocks.js', 'keccak.js', 'lancement.js', 'lecteur.js', 'lien-x.js', 'marche.js',
-  'montants.js', 'motssimples.js', 'photo.js', 'pointsdevie.js', 'pool.js', 'vitalite.js',
+  'montants.js', 'motssimples.js', 'photo.js', 'pointsdevie.js', 'pool.js', 'vitalite.js', 'visage.js',
   'abi.json', 'known-bad.json', 'A-SIGNER-mainnet.json',
   'icon.png', 'splash.png', 'embed.png',
 ];
