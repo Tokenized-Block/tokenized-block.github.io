@@ -126,6 +126,10 @@ body{background:radial-gradient(130% 90% at 50% -10%,#2a1b5e 0%,var(--fond) 55%)
 /* fiche du block choisi */
 .fiche{margin:12px 0 0;border-top:1px solid var(--ligne);padding-top:12px}
 .fiche[hidden]{display:none}
+.fTete{display:flex;gap:12px;align-items:center;margin:0 0 8px}
+.fAvatar{width:56px;height:62px;flex:0 0 auto;border:1px solid var(--ligne);border-radius:12px;
+  overflow:hidden;background:#0d0d1a}
+.fAvatar svg{display:block;width:100%;height:100%}
 .fNom{font-weight:800;font-size:16px;margin:0}
 .fVie{font-weight:800;color:var(--accent2);font-size:14px;margin:2px 0 0}
 .fActions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
@@ -188,10 +192,21 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
           <button class="bMasquer" id="bMasquer" aria-expanded="false" aria-controls="cote">Info</button>
         </div>
         <div class="mapLeg">
+          <!-- ⛔⛔ LA LEGENDE PORTE LE SENS, PAS SEULEMENT LES COULEURS. Le tiroir est ferme par
+               defaut : si « life » n etait explique QUE la-dedans, la grande majorite des visiteurs
+               verrait des carres de tailles differentes sans savoir ce que la taille mesure — et
+               croirait ce qu elle veut. La phrase la plus importante — c est un PRIX, il DESCEND,
+               il est ACHETABLE — doit etre lisible sans ouvrir quoi que ce soit. Le detail chiffre
+               reste dans le tiroir, pour qui veut verifier. -->
+          <span><b style="color:var(--texte)">Size = life</b> = price × supply</span>
           <span><i style="width:10px;height:10px"></i>quiet</span>
           <span><i style="width:16px;height:16px"></i>growing</span>
           <span><i style="width:24px;height:24px"></i>big</span>
           <span style="opacity:.6">faded = no market yet</span>
+          <span style="color:var(--tiede)">⚠️ it goes down, and it is buyable —
+            <button type="button" id="lienLegende" style="appearance:none;border:0;background:none;
+              color:var(--accent2);font:inherit;font-weight:700;cursor:pointer;padding:0;
+              text-decoration:underline">what that means</button></span>
           <span id="mapEtat" style="margin-left:auto"></span>
         </div>
       </div>
@@ -204,12 +219,21 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
             the more life it has</b> — and life can shrink. The drawing never changes: it is the one
             engraved when the block was made.</p>
           <div class="fiche" id="fiche" hidden>
-            <p class="fNom" id="fNom">—</p>
-            <p class="fVie" id="fVie">—</p>
+            <!-- ⛔ LE LOGO EN AVATAR, ET C EST LE MEME QUE SUR LA MAP ET QUE DANS LES METADONNEES.
+                 Une fiche sans le dessin obligerait a faire l aller-retour avec la map pour savoir
+                 de quel block on parle — et un profil qui ne montre pas le visage de son sujet
+                 n est pas un profil. -->
+            <div class="fTete">
+              <div class="fAvatar" id="fAvatar" aria-hidden="true"></div>
+              <div>
+                <p class="fNom" id="fNom">—</p>
+                <p class="fVie" id="fVie">—</p>
+              </div>
+            </div>
             <p class="note" id="fAdr"></p>
             <div class="fActions">
-              <button class="bouton sec" id="fMessage">Start message</button>
-              <button class="bouton sec" id="fOuvrir">Open block</button>
+              <button class="bouton sec" id="fGM">Send GM 👋</button>
+              <button class="bouton sec" id="fOuvrir">Read its facts</button>
             </div>
             <p class="note" id="fNote"></p>
           </div>
@@ -337,6 +361,10 @@ import { apparenceDepuisAdresse } from './apparence.js';
 /* ⛔ LA LECTURE DE MARCHE VIT DANS UN MODULE, PAS ICI. La recopier depuis l autre ecran aurait
  * donne deux capitalisations differentes pour le meme block sur deux pages. */
 import { vieDuBlock } from './marche.js';
+/* ⛔ LES FAITS SONT LUS PAR UN MODULE TESTE, pas par une lecture improvisee ici : c est lui qui
+ * garantit que « pas lu » ne se dise jamais comme « zero », et que le marqueur B20 reste le CODE
+ * et jamais le prefixe d adresse. */
+import { faitsDuBlock, supplyLisible } from './faits.js';
 
 const $ = (s) => document.querySelector(s);
 const enTexte = (t) => { const d = document.createElement('div'); d.textContent = String(t); return d.innerHTML; };
@@ -360,6 +388,13 @@ const RESEAUX = {
           stateView: '0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71' },
 };
 let CHAINE = 8453;
+
+/* ⛔ DECLAREE ICI PARCE QUE JE VENAIS DE L UTILISER SANS QU ELLE EXISTE : le bouton GM lisait
+ * `compte`, et le clic aurait leve `ReferenceError` — une commande qui plante en silence, exactement
+ * ce que la regle 7 (zones mortes) existe pour attraper dans les modules.
+ * ⛔ ET ELLE RESTE `null` TANT QU AUCUN WALLET N EST CONNECTE. Aucune adresse n est supposee : une
+ *    app qui devine a qui elle parle finit par envoyer au mauvais destinataire. */
+let compte = null;
 
 let idRpc = 0;
 async function rpc(methode, params) {
@@ -455,6 +490,9 @@ $('#map').addEventListener('click', (e) => {
   for (const x of habitants) x.el.classList.toggle('actif', x.el === b);
   ouvrirCote();
   $('#fiche').hidden = false;
+  /* ⛔ MEME DESSIN QUE SUR LA MAP, PAR LA MEME FONCTION : deux rendus du meme block seraient deux
+   * identites pour une seule chose. */
+  $('#fAvatar').innerHTML = dessin(adr, h && h.sym);
   $('#fNom').textContent = (h && h.sym) || '?';
   $('#fVie').textContent = (h && typeof h.vie === 'number' && h.vie > 0)
     ? Math.round(h.vie * 100) / 100 + ' ETH of life'
@@ -466,14 +504,64 @@ $('#map').addEventListener('click', (e) => {
   $('#fNote').textContent = '';
 });
 
-$('#fMessage').addEventListener('click', () => {
-  $('#fNote').textContent = 'Messaging is not built. It needs somewhere the messages live and a way '
-    + 'to prove who is speaking — a signature from the block owner. Neither exists yet, and a box '
-    + 'that swallowed what you typed would be worse than no box.';
+/* ══ GM — LE GESTE QUOTIDIEN ═══════════════════════════════════════════════════════════════════
+ * ⛔⛔ UN GM EST UN VRAI TRANSFERT, PAS UN COMPTEUR. C est la difference entre un jeu et une
+ *    animation : envoyer un fragment de son block a quelqu un laisse une trace que N IMPORTE QUI
+ *    peut relire sur la chaine, des annees plus tard, sans nous. Un « GM » stocke dans le
+ *    navigateur serait effacable, invendable, invérifiable — et donc faux.
+ *
+ * ⛔ ET C EST L UTILISATEUR QUI SIGNE. Cette page ne detient aucune cle et n en detiendra jamais :
+ *    elle PREPARE la transaction, le wallet la montre, l utilisateur decide. Un bouton qui
+ *    enverrait tout seul serait la premiere promesse de ce projet donnee.
+ *
+ * ⚠️ CE QUI N EST PAS ENCORE BRANCHE, dit plutot que masque : il faut un wallet connecte et le
+ *    block dans lequel on puise. Tant que l onglet Wallet n existe pas, ce bouton PREPARE le geste
+ *    et le dit — il ne fait pas semblant de l avoir envoye. */
+$('#fGM').addEventListener('click', () => {
+  const adr = $('#fAdr').textContent.trim();
+  const n = $('#fNote');
+  if (!/^0x[0-9a-fA-F]{40}$/.test(adr)) return;
+  if (!compte) {
+    n.textContent = 'A GM is a real on-chain transfer: a fragment of a block you hold, sent to '
+      + 'someone. It needs your wallet — and your wallet signs it, never this page. '
+      + 'Connect from My block first.';
+    return;
+  }
+  n.textContent = 'Ready to prepare a GM from your block. The transaction is built here, shown by '
+    + 'your wallet, and signed by you — nothing is sent on your behalf.';
 });
-$('#fOuvrir').addEventListener('click', () => {
-  $('#fNote').textContent = 'The detailed companion page is the current app — this shell will take '
-    + 'it over rather than duplicate it.';
+/* ⛔⛔ CE BOUTON PROMETTAIT ET NE LIVRAIT PAS, et Phil l a signale : « le bouton sur le block qui
+ * donne leur info marche pas ». Il ecrivait une phrase expliquant qu il n etait pas branche. Un
+ * bouton qui repond par une excuse est pire qu un bouton absent — il apprend que les commandes de
+ * cette app ne font rien.
+ * ⇒ Il lit maintenant les VRAIS faits du block sur la chaine, et il NOMME ce qu il n a pas su lire
+ *   au lieu de laisser un blanc qui se lirait comme un zero. */
+$('#fOuvrir').addEventListener('click', async () => {
+  const adr = $('#fAdr').textContent.trim();
+  if (!/^0x[0-9a-fA-F]{40}$/.test(adr)) return;
+  const note = $('#fNote');
+  note.textContent = 'reading the chain…';
+  let f;
+  /* ⛔ 280 ms entre chaque lecture : sans ca, cinq des six appels sont refuses par le noeud public
+   * et l ecran n affiche presque rien — mesure du 2026-09-10. */
+  try { f = await faitsDuBlock({ rpc, jeton: adr, pause: 280 }); }
+  catch (e) {
+    /* ⛔ une panne de LECTURE se dit comme une panne, jamais comme un fait sur le block */
+    note.textContent = 'Could not read this block right now. That is about us, not about it.';
+    return;
+  }
+  const l = [];
+  l.push(f.nom ? f.nom : 'name not read');
+  /* ⛔ LE MARQUEUR EST LE CODE, PAS LE PREFIXE. Une adresse qui commence par 0xb200 se fait miner
+   * par n importe qui ; `code === 0xef` est interdit a tout contrat deploye par EIP-3541. */
+  l.push(f.estB20 === null ? 'native B20: not read'
+    : f.estB20 ? 'native B20 (code 0xef — unforgeable)' : '⚠️ NOT a native B20, despite the address');
+  const sup = supplyLisible(f.supply, f.decimales);
+  l.push(sup ? 'supply ' + sup + ' (' + f.decimales + ' decimals)' : 'supply not read');
+  l.push(f.mintFerme === null ? 'sealed supply: not read'
+    : f.mintFerme ? 'supply sealed — nobody can make more' : 'more can still be minted');
+  if (f.manques.length) l.push('not read: ' + f.manques.join(', '));
+  note.textContent = l.join(' · ');
 });
 
 $('#bTrouver').addEventListener('click', () => {
@@ -603,6 +691,16 @@ $('#bMasquer').addEventListener('click', () => {
 
 /* ⛔ CLIQUER UN BLOCK OUVRE LE TIROIR, sinon la fiche s ecrirait dans un panneau ferme et le clic
  * n aurait aucun effet visible — un geste sans reponse apprend a ne plus le faire. */
+/* ⛔ LE LIEN DE LA LEGENDE OUVRE LE TIROIR SUR L EXPLICATION. Sans lui, la phrase « il est
+ * achetable » resterait une affirmation sans preuve accessible — or la preuve chiffree existe et
+ * doit etre a un clic, pas a une recherche. */
+$('#lienLegende').addEventListener('click', () => {
+  ouvrirCote();
+  const c = $('#cote');
+  const cible = [...c.querySelectorAll('.titre')].find((t) => /life/i.test(t.textContent));
+  if (cible) cible.scrollIntoView({ block: 'start', behavior: 'smooth' });
+});
+
 function ouvrirCote() {
   const c = $('#cote'), b = $('#bMasquer');
   if (!c.hidden) return;

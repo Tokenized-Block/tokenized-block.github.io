@@ -55,7 +55,11 @@ export const TOPIC_CREATED = '0x' + hexDe(keccak256(enc.encode(
  *    gel. Trouve par `test-index.mjs`, qui a fait planter V8 au lieu d echouer proprement.
  *    ⇒ on refuse AVANT de boucler, en comparant a ce qui existe reellement.
  */
-function chaineA(donnees, offsetOctets) {
+/* ⛔ EXPORTE, PARCE QU UNE SECONDE COPIE SE TROMPERAIT PAREIL. Ce decodeur porte le correctif du
+ * mojibake : deux lecteurs latin-1 rendaient les noms des autres en charabia, et il a fallu
+ * corriger la FIXTURE du test avant de pouvoir prouver quoi que ce soit. Tout ecran qui lit un nom
+ * de block passe par ici. */
+export function chaineA(donnees, offsetOctets) {
   const d = offsetOctets * 2;
   if (!Number.isFinite(d) || d < 0 || d + 64 > donnees.length) {
     throw new Error('offset de chaine hors des donnees (' + offsetOctets + ')');
