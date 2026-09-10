@@ -3810,8 +3810,27 @@ async function remplirGalerie() {
     const ECHANTILLON = 40;
     const vues = (r.creations || []).slice(0, ECHANTILLON);
     if (!vues.length) {
-      /* ⛔ ZERO N EST PAS UN RESULTAT A MONTRER. On cache la carte plutot que d afficher un vide
-       *    qui dirait « personne ne s en sert » — et qui pourrait n etre qu une fenetre ratee. */
+      /* ⛔ ZERO N EST PAS UN RESULTAT A MONTRER. Un vide se lirait « personne ne s en sert », et
+       *    ce serait un mensonge sur le travail de tous ceux qui creent des blocks.
+       * ⛔⛔ MAIS SE TAIRE N EST PAS NON PLUS LA REPONSE, ET CE COMMENTAIRE LE SAVAIT DEJA : il
+       *    disait « et qui pourrait n etre qu une fenetre ratee » — puis retournait quand meme en
+       *    silence. Mesure du 2026-09-10 dans Chrome sur mainnet : zero creation lue, zero vignette,
+       *    note vide, aucune erreur — et la premiere section de la page simplement ABSENTE, sans que
+       *    rien n explique pourquoi. Le noeud public limite les `eth_getLogs` depuis un navigateur,
+       *    et « je n ai pas pu lire » etait traite comme « il n y a rien ».
+       *    C est exactement confondre l ABSENCE DE PREUVE avec le FAIT DE NE PAS AVOIR REGARDE.
+       * ⇒ `listerCreations` NOMME ses fenetres ratees. Quand il y en a, on montre la carte et on
+       *   dit la verite : la lecture a echoue ici. Ce n est pas « un faux », c est le seul fait
+       *   qu on possede — et il est bien plus utile qu une section qui s evapore. */
+      const ratees = (r.fenetresRatees || []).length;
+      if (ratees && note) {
+        note.textContent = 'Could not read ' + R.nom + ' from this browser right now — '
+          + ratees + ' window(s) of chain history refused to load, so this list is empty because we '
+          + 'could not look, not because nobody is making blocks. Try again in a moment.';
+        $('#carteGalerie').style.display = '';
+        if ($('#carteGalerieWrap')) $('#carteGalerieWrap').hidden = false;
+      }
+      console.warn('[galerie] 0 creation lue · ' + ratees + ' fenetre(s) ratee(s) sur ' + R.nom);
       return;
     }
     /* ⛔ CLIQUABLE, PARCE QU UN MUR INERTE NE SERT A RIEN. Chaque vignette ouvre CE block dans le
