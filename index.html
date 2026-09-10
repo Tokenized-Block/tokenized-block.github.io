@@ -3839,6 +3839,14 @@ async function remplirGalerie() {
         return;
       }
       if (ratees && note) {
+        /* ⛔⛔ ON VIDE LES VIGNETTES, ET C EST LA CORRECTION D UN DEFAUT QUE J AI MOI-MEME
+         * INTRODUIT une heure plus tot. Mesure dans Chrome : en revelant la carte pour AFFICHER
+         * l echec, elle montrait les douze blocks de BASE SEPOLIA sous une note parlant de BASE
+         * MAINNET. Le commentaire d origine de cette fonction avertissait mot pour mot contre ca —
+         * « elle garderait les blocks de l ancien reseau sous une note qui nommerait le nouveau, un
+         * mensonge pire que l absence de note » — et ma correction l a produit exactement.
+         * ⇒ Montrer un echec ne dispense pas d effacer ce qui n est plus vrai. */
+        boite.innerHTML = '';
         note.textContent = 'Could not read ' + R.nom + ' from this browser right now — '
           + ratees + ' window(s) of chain history refused to load, so this list is empty because we '
           + 'could not look, not because nobody is making blocks. Try again in a moment.';
