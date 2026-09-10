@@ -3823,6 +3823,21 @@ async function remplirGalerie() {
        *   dit la verite : la lecture a echoue ici. Ce n est pas « un faux », c est le seul fait
        *   qu on possede — et il est bien plus utile qu une section qui s evapore. */
       const ratees = (r.fenetresRatees || []).length;
+      /* ⛔⛔ UNE REPRISE, BORNEE A UNE SEULE, ET VOICI POURQUOI ELLE MARCHE. La fenetre de 9 000
+       * blocs se lit SANS PROBLEME sur mainnet depuis Node — mes instruments la relisent toute la
+       * journee. Ce n est donc pas la taille qui est refusee : c est que la galerie demande son
+       * `eth_getLogs` PENDANT que la page fait deux cents autres lectures sur le meme quota. Le
+       * refus est transitoire, et rien ne le rejouait.
+       * ⚠️ UNE SEULE reprise, et seulement si la premiere a echoue : une boucle de reprises sur une
+       *    limite de debit ne fait que la maintenir fermee, et transformerait un incident passager
+       *    en panne permanente que NOUS causerions. Si la seconde echoue aussi, on affiche la
+       *    verite et on s arrete. */
+      if (ratees && !remplirGalerie.reprise) {
+        remplirGalerie.reprise = true;
+        console.warn('[galerie] ' + ratees + ' fenetre(s) refusee(s), une seule reprise dans 9 s');
+        setTimeout(remplirGalerie, 9000);
+        return;
+      }
       if (ratees && note) {
         note.textContent = 'Could not read ' + R.nom + ' from this browser right now — '
           + ratees + ' window(s) of chain history refused to load, so this list is empty because we '
@@ -3970,6 +3985,10 @@ for (const id of [84532, 8453]) $('#t' + id).onclick = () => {
   if (mv) mv.innerHTML = '';
   const mbBoard = $('#marketBoard'); if (mbBoard) mbBoard.innerHTML = '';
   const settle = $('#settlePanel'); if (settle) settle.hidden = true;
+  /* ⛔ LA REPRISE SE REARME AVEC LE RESEAU. Sans cette ligne, un refus au chargement consommerait
+   * l unique reprise, et TOUS les changements de reseau suivants echoueraient sans jamais reessayer
+   * — une garde anti-boucle qui se transformerait en garde anti-fonctionnement. */
+  remplirGalerie.reprise = false;
   remplirGalerie();
   majCtaPacket(); dire('Network: ' + RESEAUX[id].nom + '.'); rafraichir();
 };
