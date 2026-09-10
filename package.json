@@ -1,0 +1,13 @@
+{
+  "name": "tokenized-block-app",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Tokenized Block — the living map. Static app served with cache headers GitHub Pages does not allow.",
+  "scripts": {
+    "start": "node serveur-web.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
