@@ -20,7 +20,25 @@ import { keccak256 } from './keccak.js';
 
 export const FACTORY = '0xb20f000000000000000000000000000000000000';
 /** ⛔ Fenetre maximale acceptee par le RPC de Base. Mesuree, pas choisie. */
-export const FENETRE_MAX = 9500;
+/* ⛔⛔ 2000, ET C EST LE NOEUD QUI LE DIT — PAS MOI. Cette constante valait 9500, mesuree a une
+ * epoque ou Base l acceptait. Mesure du 2026-09-10 depuis un navigateur, sur mainnet, avec le
+ * filtre d adresse que cette fonction emploie vraiment :
+ *     fenetre 9000 -> HTTP 413  « eth_getLogs is limited to a 2,000 range »
+ *     fenetre 4000 -> HTTP 413  idem
+ *     fenetre 2000 -> HTTP 200, 95 logs
+ * La limite s est RESSERREE depuis. Un chiffre mesure qui a cesse d etre vrai est le defaut le plus
+ * discret de ce depot : il ne se signale jamais, il fait juste echouer tout ce qui s appuie dessus.
+ *
+ * ⛔ ET C EST CE QUI CASSAIT TOUT SUR MAINNET DEPUIS DES HEURES. La galerie, la map et la lecture
+ *    des creations rendaient « aucun block » sur mainnet — jamais sur Sepolia, dont la limite est
+ *    plus large. Les instruments, eux, marchaient : ils basculent sur un noeud de SECOURS quand le
+ *    premier refuse. Le navigateur n en a pas, donc lui seul voyait la panne, et personne ne
+ *    regardait mainnet depuis un navigateur.
+ *
+ * ⚠️ CE QUE CA COUTE, dit franchement : 2 000 blocs valent environ 66 minutes de chaine a 2 s le
+ *    bloc. Une lecture de 9 000 blocs se fait donc maintenant en CINQ requetes au lieu d une. La
+ *    boucle ci-dessous pagine deja — rien d autre ne change. */
+export const FENETRE_MAX = 2000;
 
 const enc = new TextEncoder();
 const hexDe = (o) => [...o].map((b) => b.toString(16).padStart(2, '0')).join('');
