@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Blocks — your tokenized companion</title>
+<!-- ══════════════════════════════════════════════════════════════════════════════════════════════
+     COQUE NEUVE, MODULES INCHANGES — ET C EST UNE DECISION, PAS UN RACCOURCI.
+
+     ⛔ CE QUI EST LAID N EST PAS CE QUI EST PROUVE. `index.html` fait 600 Ko et se lit comme un
+        panneau d administration ; mais les modules qu il importe — pool, pointsdevie, vitalite,
+        motssimples, classement, montants, index-blocks — portent 313 assertions et 16 regles, dont
+        des mesures qui ont coute des journees : le marqueur B20 exact, l inverse de sqrtPrice teste
+        par aller-retour, la borne du carnet pinnee par la chaine, le refus de traduire « pas de
+        prix » en « ca ne vaut rien ».
+     ⇒ Repartir de zero jetterait tout cela pour refaire une enveloppe. Cette page est une NOUVELLE
+       COQUE qui importe EXACTEMENT les memes modules. Rien de prouve n est perdu, et rien de neuf
+       n est duplique — un second `sqrtPriceDepuisPrix` divergerait du premier en une semaine.
+
+     ⛔ HORS DE TOUTE HYPOTHESE D HEBERGEUR. Mesure du 2026-09-10 : `github.io` renvoie
+        `Cache-Control: max-age=600` et ne se configure pas. Dix minutes pendant lesquelles un
+        visiteur revoit l ancienne version apres chaque deploiement — c est ce que Phil a constate.
+        Aucun chemin absolu ici, aucune reference a un domaine : cette page se sert telle quelle
+        depuis n importe quel hebergeur le jour ou il y en aura un qui laisse regler ses en-tetes.
+
+     ⛔⛔ CE QUI N EXISTE PAS EST DIT COMME N EXISTANT PAS. Chaque onglet non construit porte a
+        l ecran ce qui lui manque, nomme. Une maquette qui fait semblant apprend a l utilisateur que
+        l app ment — et c est la seule chose que ce projet ne peut pas se permettre.
+     ══════════════════════════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{
+  --fond:#070c1a; --fond2:#0d1428; --carte:#111a33; --ligne:#1e2a4a;
+  --texte:#eaf0ff; --doux:#8fa3c8; --accent:#4d8cff; --accent2:#7ec8ff;
+  --vif:#3ddc97; --tiede:#f0c674; --dur:#ff6b6b;
+  --r:16px; --rs:11px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:radial-gradient(130% 90% at 50% -10%,#12266b 0%,var(--fond) 55%) no-repeat fixed;
+  color:var(--texte); font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased; padding-bottom:84px;
+}
+.enveloppe{max-width:520px;margin:0 auto;padding:0 14px}
+
+/* ── en-tete ───────────────────────────────────────────────────────────────────────────────── */
+.tete{display:flex;align-items:center;gap:10px;padding:16px 0 12px}
+.marque{font-weight:800;font-size:17px;letter-spacing:-.2px}
+.marque span{color:var(--accent2)}
+.tete .droite{margin-left:auto;display:flex;gap:8px;align-items:center}
+.puce{font-size:11px;font-weight:700;padding:5px 9px;border-radius:99px;border:1px solid var(--ligne);
+  background:var(--fond2);color:var(--doux)}
+.puce.reel{color:var(--tiede);border-color:#5a4a2a}
+
+/* ── boutons ───────────────────────────────────────────────────────────────────────────────── */
+.bouton{appearance:none;border:0;border-radius:var(--rs);padding:13px 16px;font:inherit;font-weight:700;
+  cursor:pointer;background:var(--accent);color:#04102b;width:100%;min-height:46px}
+.bouton:active{transform:translateY(1px)}
+.bouton.sec{background:var(--fond2);color:var(--texte);border:1px solid var(--ligne)}
+.bouton[disabled]{opacity:.45;cursor:not-allowed}
+
+/* ── cartes ────────────────────────────────────────────────────────────────────────────────── */
+.carte{background:linear-gradient(180deg,var(--carte),var(--fond2));border:1px solid var(--ligne);
+  border-radius:var(--r);padding:16px;margin:0 0 12px}
+.titre{font-weight:800;font-size:15px;margin:0 0 4px}
+.sous{color:var(--doux);font-size:12.5px;margin:0 0 12px;line-height:1.45}
+
+/* ── galerie de blocks vivants ─────────────────────────────────────────────────────────────── */
+.grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(146px,1fr));gap:12px}
+.tuile{background:var(--fond2);border:1px solid var(--ligne);border-radius:14px;padding:10px;
+  cursor:pointer;text-align:left;color:inherit;font:inherit;transition:transform .12s,border-color .12s}
+.tuile:hover{transform:translateY(-2px);border-color:var(--accent)}
+.tuile svg{width:100%;height:auto;border-radius:10px;display:block}
+.tNom{font-weight:800;font-size:13px;margin:8px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tPv{font-weight:800;font-size:12px;color:var(--accent2)}
+.tBarre{display:block;height:5px;border-radius:3px;background:#16223d;overflow:hidden;margin:5px 0 4px}
+.tBarre i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+/* ⛔ PAS DE PRIX N EST PAS UNE BARRE VIDE : hachuree, jamais a zero. Une barre a zero se lit
+   « ce block est mort » alors qu il n a simplement jamais ete echange. */
+.tBarre.sansPrix{background:repeating-linear-gradient(45deg,#16223d,#16223d 3px,#22315a 3px,#22315a 6px)}
+.tMeta{color:var(--doux);font-size:11px}
+
+/* ── barre de navigation basse, facon mini app ─────────────────────────────────────────────── */
+.nav{position:fixed;left:0;right:0;bottom:0;background:rgba(9,15,32,.92);backdrop-filter:blur(12px);
+  border-top:1px solid var(--ligne);padding:8px 10px calc(8px + env(safe-area-inset-bottom));z-index:20}
+.navIn{max-width:520px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.navB{appearance:none;border:0;background:transparent;color:var(--doux);font:inherit;font-size:11px;
+  font-weight:700;padding:7px 4px;border-radius:10px;cursor:pointer;display:flex;flex-direction:column;
+  align-items:center;gap:3px;min-height:48px}
+.navB b{font-size:17px;line-height:1}
+.navB[aria-selected="true"]{color:var(--texte);background:#16223d}
+
+/* ── volets ────────────────────────────────────────────────────────────────────────────────── */
+.volet{display:none}
+.volet.on{display:block}
+
+/* ── ce qui n existe pas encore ────────────────────────────────────────────────────────────── */
+.pasEncore{border:1px dashed #3a4a73;border-radius:var(--rs);padding:14px;background:#0b1striped}
+.pasEncore{background:#0b132a}
+.pasEncore h4{margin:0 0 6px;font-size:13.5px}
+.pasEncore ul{margin:8px 0 0;padding-left:18px;color:var(--doux);font-size:12.5px;line-height:1.6}
+.pasEncore li b{color:var(--texte)}
+.avert{border-left:3px solid var(--tiede);padding-left:10px;color:var(--tiede);font-size:12.5px;
+  line-height:1.5;margin:10px 0 0}
+.note{color:var(--doux);font-size:12px;line-height:1.5;margin:10px 0 0}
+.chargement{color:var(--doux);font-size:12.5px;padding:18px 0;text-align:center}
+</style>
+</head>
+<body>
+
+<div class="enveloppe">
+  <header class="tete">
+    <div class="marque">Blocks<span>.</span></div>
+    <div class="droite">
+      <span class="puce" id="pReseau">Base Sepolia</span>
+      <span class="puce" id="pCompte">not connected</span>
+    </div>
+  </header>
+
+  <!-- ══ BLOCKS VIVANTS ══════════════════════════════════════════════════════════════════════ -->
+  <section class="volet on" id="v-blocks" aria-label="Living blocks">
+    <div class="carte">
+      <p class="titre">Living blocks</p>
+      <p class="sous" id="blocksSous">Freshly made on Base. A block gets HP when someone opens a
+        market for it — and HP goes down too.</p>
+      <div class="grille" id="grille"></div>
+      <p class="chargement" id="blocksEtat">reading the chain…</p>
+      <p class="note" id="blocksNote"></p>
+    </div>
+  </section>
+
+  <!-- ══ MON BLOCK ═══════════════════════════════════════════════════════════════════════════ -->
+  <section class="volet" id="v-mien" aria-label="My block">
+    <div class="carte">
+      <p class="titre">My block</p>
+      <p class="sous">Connect a wallet to see the blocks you made, their HP, and what you can do
+        with them.</p>
+      <button class="bouton" id="bConnecter">Connect wallet</button>
+      <p class="note">Nothing is stored here. This page never holds a key — your wallet signs, and
+        it shows you what it signs.</p>
+    </div>
+  </section>
+
+  <!-- ══ PORTEFEUILLE ════════════════════════════════════════════════════════════════════════ -->
+  <section class="volet" id="v-wallet" aria-label="Wallet">
+    <div class="carte">
+      <p class="titre">Wallet</p>
+      <p class="sous">Balances, swap, deposit and withdraw — the exchange-style tab.</p>
+      <!-- ⛔⛔ LA SEULE PARTIE QUE JE REFUSE DE CONSTRUIRE EN SILENCE, ET IL FAUT QUE CE SOIT DIT
+           ICI plutot que decouvert apres. « Un block qui a un wallet qui a un petit agent de
+           trading » veut dire une cle qui n appartient pas a l utilisateur et qui detient ses
+           fonds. C est de la CUSTODIE. Cette app se vend depuis le premier jour sur « aucune cle
+           ici, ton wallet signe » — c est la propriete qu on vend, et ce serait la premiere qu on
+           donnerait. Un agent qui trade avec l argent de quelqu un d autre ajoute par-dessus une
+           licence dans a peu pres toutes les juridictions.
+           ⇒ Il existe une forme NON custodiale du meme produit, et elle est meilleure : l agent
+             PROPOSE, le wallet de l utilisateur SIGNE. Meme geste a l ecran, aucune cle detenue,
+             aucun depot a garder. C est ce que je construirai — pas l autre. -->
+      <div class="pasEncore">
+        <h4>Not built yet — and here is exactly what is missing</h4>
+        <ul>
+          <li><b>Balances</b> — reads only, no key. Straightforward, next.</li>
+          <li><b>Swap</b> — the routing and calldata already exist and are tested; this tab needs
+            the screen, not the engine.</li>
+          <li><b>Deposit / withdraw</b> — depends on the question below.</li>
+        </ul>
+        <p class="avert">⛔ <b>A wallet per block, holding funds, driven by a trading agent, is
+          custody.</b> That means a key that is not the user's, holding the user's money. This app
+          is sold on “no key here — your wallet signs”, so that would be the first promise given
+          away, and it needs a licence in most places.<br><br>
+          <b>The same product exists without custody:</b> the agent <b>proposes</b>, the user's
+          wallet <b>signs</b>. Identical on screen, no key held, no deposits to guard. That is the
+          one I will build — tell me if you meant something else.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ SOCIAL ══════════════════════════════════════════════════════════════════════════════ -->
+  <section class="volet" id="v-social" aria-label="Social">
+    <div class="carte">
+      <p class="titre">Post from your block</p>
+      <p class="sous">Your block speaks, and its trading fees pay for it.</p>
+      <div class="pasEncore">
+        <h4>Not built yet — what it depends on</h4>
+        <ul>
+          <li><b>Fees to spend</b> — measured 2026-09-09: the 0.5 % accrues to the liquidity
+            position, and only its owner can collect. Posting “paid by the block” means collecting
+            first, which is a signature by the owner. Real, and not automatic.</li>
+          <li><b>X account stats</b> — needs an X API credential this app does not have. Until it
+            does, any number shown here would be invented.</li>
+          <li><b>Farcaster</b> — the mini-app tags exist already; publishing needs
+            <b>accountAssociation</b>, a custody signature only Phil can make.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</div>
+
+<nav class="nav" aria-label="Sections">
+  <div class="navIn" role="tablist">
+    <button class="navB" role="tab" aria-selected="true"  data-volet="blocks"><b>◆</b>Blocks</button>
+    <button class="navB" role="tab" aria-selected="false" data-volet="mien"><b>★</b>My block</button>
+    <button class="navB" role="tab" aria-selected="false" data-volet="wallet"><b>▤</b>Wallet</button>
+    <button class="navB" role="tab" aria-selected="false" data-volet="social"><b>✎</b>Social</button>
+  </div>
+</nav>
+
+<script type="module">
+/* ⛔ EXACTEMENT LES MEMES MODULES QUE `index.html`. Aucune reimplementation : le jour ou l un des
+ * deux ecrans corrigerait un calcul de prix sans l autre, les deux se contrediraient a l ecran
+ * sans que rien ne plante. C est le motif du jumeau qui diverge, deja paye ici. */
+import { listerCreations } from './index-blocks.js';
+import { apparenceDepuisAdresse } from './apparence.js';
+import { pointsDeVie } from './pointsdevie.js';
+import { classer } from './classement.js';
+
+const $ = (s) => document.querySelector(s);
+const enTexte = (t) => { const d = document.createElement('div'); d.textContent = String(t); return d.innerHTML; };
+
+/* ── navigation ───────────────────────────────────────────────────────────────────────────── */
+document.querySelector('.navIn').addEventListener('click', (e) => {
+  const b = e.target.closest('.navB');
+  if (!b) return;
+  const nom = b.getAttribute('data-volet');
+  for (const x of document.querySelectorAll('.navB')) x.setAttribute('aria-selected', x === b ? 'true' : 'false');
+  for (const v of document.querySelectorAll('.volet')) v.classList.toggle('on', v.id === 'v-' + nom);
+  window.scrollTo({ top: 0 });
+});
+
+/* ── lecture de la chaine ─────────────────────────────────────────────────────────────────── */
+const RPC = 'https://sepolia.base.org';
+let idRpc = 0;
+async function rpc(methode, params) {
+  const r = await fetch(RPC, { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: ++idRpc, method: methode, params }) });
+  const j = await r.json();
+  if (j.error) throw new Error(j.error.message);
+  return j.result;
+}
+
+/* ⛔ LE DESSIN DU BLOCK VIENT DE SON ADRESSE, comme dans l autre ecran — deux rendus differents du
+ * meme block seraient deux identites pour une seule chose. */
+function vignette(c) {
+  const a = c.jeton;
+  const ap = apparenceDepuisAdresse(a);
+  const t = ap && ap.teinte !== undefined ? ap.teinte : 210;
+  const sym = String(c.symbole || '?').slice(0, 12);
+  return '<button class="tuile" data-block="' + enTexte(a) + '" title="' + enTexte(a) + '">'
+    + '<svg viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg">'
+    + '<rect width="200" height="220" fill="hsl(' + t + ' 22% 13%)"/>'
+    + '<path d="M100 34 168 72 100 110 32 72Z" fill="hsl(' + t + ' 55% 78%)"/>'
+    + '<path d="M32 72 100 110 100 188 32 150Z" fill="hsl(' + t + ' 45% 52%)"/>'
+    + '<path d="M168 72 100 110 100 188 168 150Z" fill="hsl(' + t + ' 40% 34%)"/>'
+    + '</svg>'
+    + '<p class="tNom">' + enTexte(sym) + '</p>'
+    + '<span class="tBarre sansPrix" data-vie="' + enTexte(a) + '"></span>'
+    + '<span class="tPv" data-pv="' + enTexte(a) + '">— HP</span><br>'
+    + '<span class="tMeta" data-mc="' + enTexte(a) + '">no market yet</span>'
+    + '</button>';
+}
+
+async function chargerBlocks() {
+  const etat = $('#blocksEtat'), note = $('#blocksNote'), grille = $('#grille');
+  try {
+    const r = await listerCreations({ rpc, blocs: 9000 });
+    const vues = (r.creations || []).filter((c) => /^0x[0-9a-fA-F]{40}$/.test(c.jeton || ''));
+    const ratees = (r.fenetresRatees || []).length;
+    if (!vues.length) {
+      /* ⛔ « JE N AI PAS PU LIRE » N EST PAS « IL N Y A RIEN », et les confondre a deja fait
+       * disparaitre une section entiere de l autre ecran sans un mot d explication. On NOMME la
+       * cause : c est le seul fait qu on possede, et il vaut mieux qu un vide muet. */
+      grille.innerHTML = '';
+      etat.textContent = ratees
+        ? 'Could not read the chain from this browser right now — ' + ratees + ' window(s) refused. '
+          + 'Empty because we could not look, not because nobody is making blocks.'
+        : 'No block created in the window we read.';
+      return;
+    }
+    grille.innerHTML = vues.slice(0, 12).map(vignette).join('');
+    etat.textContent = '';
+    note.textContent = vues.length + ' blocks made in the last '
+      + (r.fenetre.a - r.fenetre.de).toLocaleString('en-US') + ' chain blocks'
+      + (ratees ? ' · ' + ratees + ' window(s) unread — this list is incomplete' : '');
+  } catch (e) {
+    /* ⛔ On se tait a l ecran plutot que d inventer, mais JAMAIS aupres du developpeur : un catch
+     * entierement muet a deja cache une panne de premiere page pendant des heures. */
+    console.warn('[blocks] lecture interrompue :', e && e.message ? e.message : e);
+    $('#grille').innerHTML = '';
+    $('#blocksEtat').textContent = 'Could not read the chain right now.';
+  }
+}
+
+$('#grille').addEventListener('click', (e) => {
+  const b = e.target.closest('.tuile');
+  if (!b) return;
+  /* ⚠️ La fiche detaillee vit encore dans l autre ecran ; on ne fait pas semblant de l avoir ici. */
+  $('#blocksNote').textContent = 'Block ' + b.getAttribute('data-block').slice(0, 10)
+    + '… — the detailed companion page is not wired into this shell yet.';
+});
+
+$('#bConnecter').addEventListener('click', () => {
+  /* ⛔ ON NE DEMANDE PAS UNE CONNEXION QU ON NE SAIT PAS ENCORE EXPLOITER. Ouvrir le wallet pour
+   * ensuite ne rien montrer apprend a l utilisateur que ses clics ne comptent pas. */
+  $('#v-mien').querySelector('.note').textContent =
+    'Not wired yet: this shell reads the chain but does not yet request accounts. '
+    + 'The working connect + create flow is the current app — this page will take it over, not fake it.';
+});
+
+chargerBlocks();
+</script>
+</body>
+</html>
