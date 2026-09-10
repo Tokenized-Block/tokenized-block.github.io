@@ -67,42 +67,56 @@ body{background:radial-gradient(130% 90% at 50% -10%,#2a1b5e 0%,var(--fond) 55%)
  * ⇒ La map occupe toute la largeur et toute la hauteur restante ; le texte passe SUR LE COTE, et
  *   le panneau se masque quand on veut voir grand. Sur telephone, le panneau passe DESSOUS : deux
  *   colonnes de 200 px ne valent mieux qu une seule pour personne. */
+/* ⛔ CORRECTION DU MEME DEFAUT, EN PLUS FORT. Le panneau prenait 320 px EN PERMANENCE et Phil a
+ * tranche : « tout le concept est de voir la map, les infos couvrent trop ». Une explication qu on
+ * ne peut pas ranger cesse d etre une explication et devient un mur.
+ * ⇒ La map occupe TOUT. Le texte vit dans un tiroir POSE PAR-DESSUS, ferme par defaut : il reste
+ *   disponible en entier, il ne prend simplement plus la place du sujet. Rien n est supprime — la
+ *   carte qui explique « life » reste obligatoire, elle est juste a un clic. */
 .mapEnv{position:relative;border:1px solid var(--ligne);border-radius:var(--r);overflow:hidden;
   background:radial-gradient(90% 70% at 50% 0%,#221743 0%,#0a0a14 70%);
-  height:calc(100dvh - 210px);min-height:320px}
-.scene{display:grid;grid-template-columns:1fr;gap:12px}
-@media (min-width:900px){
-  .enveloppe{max-width:none;padding:0 18px}
-  .scene{grid-template-columns:1fr 320px;align-items:start}
-  .scene.replie{grid-template-columns:1fr 0}
-  .scene.replie .cote{display:none}
-  .mapEnv{height:calc(100dvh - 168px)}
-}
+  height:calc(100dvh - 176px);min-height:340px}
+.scene{display:block}
+@media (min-width:900px){ .enveloppe{max-width:none;padding:0 18px} }
 .mapCadre{position:relative}
-.cote{display:flex;flex-direction:column;gap:12px}
-.cote .carte{margin:0}
-.bMasquer{position:absolute;top:10px;right:10px;z-index:5;appearance:none;border:1px solid var(--ligne);
-  background:rgba(10,10,20,.72);backdrop-filter:blur(6px);color:var(--doux);font:inherit;font-size:11.5px;
-  font-weight:700;padding:7px 11px;border-radius:99px;cursor:pointer;min-height:36px}
-.bMasquer:hover{color:var(--texte);border-color:var(--accent)}
-@media (max-width:899px){.bMasquer{display:none}}
+/* ⛔ `fixed` PLUTOT QU `absolute`, et c est un choix de prudence autant que de rendu : ancrer le
+ * tiroir a la fenetre evite de restructurer le DOM autour de la map — or c est en deplacant le
+ * bouton dans `#map` que je l ai fait disparaitre il y a une heure. On ne remue pas une structure
+ * qui marche pour un effet qu on obtient sans y toucher. */
+.cote{position:fixed;top:104px;right:14px;bottom:88px;width:min(360px,calc(100vw - 28px));z-index:30;
+  display:flex;flex-direction:column;gap:10px;overflow-y:auto;
+  background:rgba(8,8,16,.9);backdrop-filter:blur(16px);border:1px solid var(--ligne);
+  border-radius:var(--r);padding:16px;box-shadow:0 18px 50px rgba(0,0,0,.5)}
+.cote[hidden]{display:none}
+.cote .carte{margin:0;background:transparent;border:0;padding:0}
+.cote .carte + .carte{border-top:1px solid var(--ligne);padding-top:12px}
+.bMasquer{position:absolute;top:10px;right:10px;z-index:7;appearance:none;border:1px solid var(--ligne);
+  background:rgba(10,10,20,.8);backdrop-filter:blur(6px);color:var(--doux);font:inherit;font-size:11.5px;
+  font-weight:700;padding:8px 13px;border-radius:99px;cursor:pointer;min-height:36px}
+.bMasquer:hover,.bMasquer[aria-expanded="true"]{color:var(--texte);border-color:var(--accent)}
 .mapEnv::before{content:"";position:absolute;inset:0;opacity:.35;pointer-events:none;
   background-image:linear-gradient(#2a2247 1px,transparent 1px),linear-gradient(90deg,#2a2247 1px,transparent 1px);
   background-size:34px 34px}
 .bloc{position:absolute;border:1px solid #3a3560;border-radius:12px;background:transparent;cursor:pointer;
   padding:0;overflow:hidden;transition:border-color .12s,box-shadow .12s;will-change:transform}
 .bloc:hover,.bloc.actif{border-color:var(--accent);box-shadow:0 0 0 2px rgba(167,139,250,.32)}
+/* ⛔⛔ LE DESSIN EST EN 200x220, PAS CARRE — ET C ETAIT LE « BUG VISUEL » SIGNALE PAR PHIL. Force
+ * dans une case carree, le cube etait rogne ou ecrase : plusieurs blocks n affichaient qu une
+ * bande de leur face du haut. Le dessin part dans le contractURI ; le deformer a l ecran, c est
+ * montrer autre chose que ce qui est grave.
+ * ⇒ La tuile garde le RATIO du dessin (220/200 = 1.1), et le SVG remplit sans deformation. */
 .bloc svg{display:block;width:100%;height:100%}
 .bloc .etiq{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(transparent,#040814cc 55%);
   color:#fff;font-size:10px;font-weight:800;padding:10px 3px 3px;text-align:center;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* ⛔ SANS MARCHE, LE BLOCK EST PALE — jamais absent, jamais « mort ». Il n a pas ete echange, ce
- *    qui n est pas la meme chose que ne rien valoir. */
-/* ⛔⛔ « PAS DE MARCHE » NE DOIT PAS EFFACER L IDENTITE. La premiere version mettait ces blocks a
- * `opacity: .52`, et comme presque aucun n a de marche, TOUTE la map etait delavee — le signal
- * honnete detruisait la seule chose qui rend la map utile, reconnaitre son block. Le trait
- * pointille dit la meme chose sans rendre le visage illisible. */
-.bloc.sansPrix{opacity:.88;border-style:dashed;border-color:#4a4470}
+ *    qui n est pas la meme chose que ne rien valoir.
+ * ⛔⛔ ET LE POINTILLE A ETE RETIRE, sur remarque de Phil : sur une map ou presque aucun block n a
+ *    de marche, VINGT bordures en pointille faisaient un bruit visuel permanent — le signal
+ *    devenait le decor. Ce qui reste dit la meme chose sans encombrer : le block est plus PALE et
+ *    plus PETIT que ceux qui ont un marche. La legende porte le mot, et la fiche donne la phrase
+ *    entiere quand on clique. Un signal qu on lit vingt fois par ecran n est plus un signal. */
+.bloc.sansPrix{opacity:.7}
 .mapBarre{display:flex;gap:8px;align-items:center;margin:0 0 10px}
 .mapBarre input{flex:1;background:var(--fond2);border:1px solid var(--ligne);border-radius:var(--rs);
   color:var(--texte);font:inherit;padding:11px 12px;min-height:44px}
@@ -171,18 +185,19 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
              pire qu absent — on le cherche. -->
         <div class="mapCadre">
           <div class="mapEnv" id="map" role="application" aria-label="Living blocks map"></div>
-          <button class="bMasquer" id="bMasquer" aria-pressed="false">Hide panel</button>
+          <button class="bMasquer" id="bMasquer" aria-expanded="false" aria-controls="cote">Info</button>
         </div>
         <div class="mapLeg">
           <span><i style="width:10px;height:10px"></i>quiet</span>
           <span><i style="width:16px;height:16px"></i>growing</span>
           <span><i style="width:24px;height:24px"></i>big</span>
-          <span style="opacity:.6">dashed = no market yet</span>
+          <span style="opacity:.6">faded = no market yet</span>
           <span id="mapEtat" style="margin-left:auto"></span>
         </div>
       </div>
 
-      <aside class="cote">
+      <!-- ⛔ FERME PAR DEFAUT. Le sujet est la map ; l explication est disponible, pas imposee. -->
+      <aside class="cote" id="cote" hidden>
         <div class="carte">
           <p class="titre">Blocks map</p>
           <p class="sous" style="margin:0">Every square is a real block on Base. <b>The bigger it is,
@@ -216,7 +231,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
           not a big pile of money.</b></td></tr>
         <tr><td>Unit</td><td>Measured in <b>ETH</b>, not dollars. We name the currency instead of
           mixing two.</td></tr>
-        <tr><td>No market yet</td><td>A pale, dashed block has never been traded. That is
+        <tr><td>No market yet</td><td>A faded, smaller block has never been traded. That is
           <b>not</b> the same as being worthless.</td></tr>
       </table>
     </div>
@@ -395,7 +410,10 @@ function poserBlocks(liste) {
     const t = tailleDe(c.vie);
     const el = document.createElement('button');
     el.className = 'bloc' + (typeof c.vie === 'number' && c.vie > 0 ? '' : ' sansPrix');
-    el.style.width = el.style.height = t + 'px';
+    /* ⛔ RATIO DU DESSIN, PAS UN CARRE : le SVG fait 200x220 et le forcer dans une case carree le
+     * rognait — c est le defaut visuel signale sur la capture du 2026-09-10. */
+    el.style.width = t + 'px';
+    el.style.height = Math.round(t * 1.1) + 'px';
     el.setAttribute('data-block', c.jeton);
     el.innerHTML = dessin(c.jeton, c.symbole) + '<span class="etiq">'
       + enTexte(String(c.symbole || '?').slice(0, 10)) + '</span>';
@@ -435,6 +453,7 @@ $('#map').addEventListener('click', (e) => {
   const adr = b.getAttribute('data-block');
   const h = habitants.find((x) => x.adr === adr);
   for (const x of habitants) x.el.classList.toggle('actif', x.el === b);
+  ouvrirCote();
   $('#fiche').hidden = false;
   $('#fNom').textContent = (h && h.sym) || '?';
   $('#fVie').textContent = (h && typeof h.vie === 'number' && h.vie > 0)
@@ -531,7 +550,8 @@ async function lireLaVie() {
       h.vie = r.vie; h.devise = r.devise; h.via = r.via;
       const t = tailleDe(r.vie);
       h.t = t;
-      h.el.style.width = h.el.style.height = t + 'px';
+      h.el.style.width = t + 'px';
+      h.el.style.height = Math.round(t * 1.1) + 'px';
       h.el.classList.remove('sansPrix');
     } else if (r.etat === 'NON_LUE') {
       /* ⛔ « PAS PU LIRE » RESTE PALE ET N EST PAS COMPTE COMME « SANS MARCHE ». Les confondre
@@ -571,14 +591,25 @@ $('#pReseau').addEventListener('click', () => {
 /* ⛔ MASQUER LE PANNEAU NE LE DETRUIT PAS. La map se re-mesure apres, parce que les blocks sont
  * positionnes en pixels : sans ce rappel, ils resteraient contraints a l ancienne largeur et la
  * moitie du territoire gagne serait vide. */
+/* ⛔ LE TIROIR NE VOLE AUCUN PIXEL A LA MAP : il se pose par-dessus. Aucun replacement de blocks
+ * n est donc necessaire a l ouverture — la map garde exactement sa taille. */
 $('#bMasquer').addEventListener('click', () => {
-  const s = $('#scene'), b = $('#bMasquer');
-  const replie = s.classList.toggle('replie');
-  b.setAttribute('aria-pressed', replie ? 'true' : 'false');
-  b.textContent = replie ? 'Show panel' : 'Hide panel';
-  /* on laisse la grille se recalculer avant de replacer les blocks */
-  requestAnimationFrame(() => requestAnimationFrame(replacerDansLaMap));
+  const c = $('#cote'), b = $('#bMasquer');
+  const ouvert = c.hidden;
+  c.hidden = !ouvert;
+  b.setAttribute('aria-expanded', ouvert ? 'true' : 'false');
+  b.textContent = ouvert ? 'Close' : 'Info';
 });
+
+/* ⛔ CLIQUER UN BLOCK OUVRE LE TIROIR, sinon la fiche s ecrirait dans un panneau ferme et le clic
+ * n aurait aucun effet visible — un geste sans reponse apprend a ne plus le faire. */
+function ouvrirCote() {
+  const c = $('#cote'), b = $('#bMasquer');
+  if (!c.hidden) return;
+  c.hidden = false;
+  b.setAttribute('aria-expanded', 'true');
+  b.textContent = 'Close';
+}
 
 /* ⛔ ET LA MEME CHOSE AU REDIMENSIONNEMENT. Un block positionne a 900 px sur une fenetre reduite a
  * 500 px sort de l ecran et devient injoignable — il existe, il derive, et personne ne peut le
