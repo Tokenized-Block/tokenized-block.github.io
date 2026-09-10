@@ -465,7 +465,22 @@ button.act.sec:hover{opacity:1;color:var(--fg)}
 /* Gallery secondary — collapsed by default, never above Create */
 #carteGalerieWrap{margin-top:8px;margin-bottom:12px}
 #carteGalerieWrap[hidden]{display:none}
-#carteGalerieWrap .galerie{grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:8px}
+/* ⛔ 72 px, C ETAIT UN TIMBRE. La galerie etait une vignette de contact reléguée en bas de page ;
+ * en tete de page elle est la PREMIERE chose qu on voit, et un block doit s y lire comme une
+ * creature, pas comme une case de tableau. 132 px laisse voir la matiere, les facettes et la
+ * barre de vie sous le nom. */
+#carteGalerieWrap .galerie{grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:12px}
+#carteGalerieWrap .vignette{padding:8px;border-radius:12px;transition:transform .12s ease,border-color .12s ease}
+#carteGalerieWrap .vignette:hover{transform:translateY(-2px);border-color:#4d8cff}
+/* ⛔ LA BARRE EST LOGARITHMIQUE, comme les PV et pour la meme raison : en lineaire, un block a
+ * 1 000 et un a 1 000 000 seraient tous deux colles a gauche face a un milliard. Une barre qui
+ * ecrase tout le monde ne raconte rien. */
+#carteGalerieWrap .vigVie{display:block;height:5px;margin:6px 0 3px;border-radius:3px;background:#16223d;overflow:hidden}
+#carteGalerieWrap .vigVie i{display:block;height:100%;background:linear-gradient(90deg,#4d8cff,#7ec8ff)}
+/* ⛔ PAS DE PRIX N EST PAS UNE BARRE VIDE. Une barre a zero se lit « ce block est mort » ; ici elle
+ * est HACHUREE, et le texte dit qu on n a pas trouve de prix LA OU on regarde. */
+#carteGalerieWrap .vigVie.sansPrix{background:repeating-linear-gradient(45deg,#16223d,#16223d 3px,#1e2f57 3px,#1e2f57 6px)}
+#carteGalerieWrap .vigPv{font-weight:800;font-size:12px;color:var(--fg)}
 
 /* Mobile / mini-app: primary path without scroll wall */
 @media (max-width:640px){
@@ -1004,6 +1019,43 @@ main[data-app="market"] > #blockHome{display:none !important}
     <span class="tabHint">P2P asks · browser listings</span>
   </button>
 </nav>
+
+<!-- ⛔⛔ LA GALERIE EN TETE, ET C EST LE CHANGEMENT QUE PHIL DEMANDAIT. Mesure du 2026-09-10 sur le
+     site en ligne : 803 px de formulaire « Create your block » — nom, symbole, DECIMALES — avant
+     quoi que ce soit de vivant, et les blocks des gens FERMES en avant-derniere position. Quelqu un
+     qui arrivait voyait un panneau d administration, jamais un compagnon. Le vivant EXISTAIT deja
+     — points de vie, capitalisation, age, classement — il etait simplement enterre sous le
+     formulaire de celui qui sait deja ce qu il vient faire.
+     ⚠️ ELLE RESTE `hidden` AU CHARGEMENT, et ce n est pas negociable : le JS ne la revele qu une
+     fois REMPLIE, et si la lecture de la chaine echoue elle se tait plutot que d inventer des
+     blocks. Remonter une section ne change pas sa regle de silence.
+     ⚠️ Elle se charge APRES la page : elle ne doit jamais retarder ce que l utilisateur vient
+     faire. -->
+<section class="card" id="carteGalerieWrap" hidden aria-label="Living blocks">
+<div id="carteGalerie" style="display:none">
+  <h2 class="secHead">Living blocks</h2>
+  <p class="expl" style="margin:2px 0 10px">Every block below is real and on Base right now. The bar
+    is its market cap — bigger block, more life. <b>It goes down too.</b> Tap one to meet it.</p>
+  <div class="galLayout">
+    <div id="galerie" class="galerie"></div>
+    <aside id="galerieFiche" hidden aria-label="Selected gallery block">
+      <div id="galerieFichePreview"></div>
+      <p class="gfSym" id="galerieFicheSym"></p>
+      <p class="gfAdr" id="galerieFicheAdr"></p>
+      <div class="gfActions">
+        <button type="button" class="act sec" id="galerieOpen">Open</button>
+        <button type="button" class="act sec" id="galerieCopyLink">Copy link</button>
+      </div>
+    </aside>
+  </div>
+  <div id="galerieNote" class="k" style="margin-top:10px"></div>
+  <div id="galerieFooter" hidden aria-label="Selected block actions">
+    <button type="button" class="act sec" id="galerieRead">Read</button>
+    <button type="button" class="act sec" id="galerieCopyAdr">Copy address</button>
+    <button type="button" class="act sec" id="galerieShare">Share</button>
+  </div>
+</div>
+</section>
 
 <!-- Honest product story — Create → Share → My blocks (no revenue claims). -->
 <aside id="storyStrip" aria-label="Create, share, find your blocks">
@@ -1687,37 +1739,8 @@ main[data-app="market"] > #blockHome{display:none !important}
   </div>
 </details>
 
-<!-- Gallery secondary: does not compete with Instant Create above the fold. -->
-<details class="card cardQuiet" id="carteGalerieWrap" hidden>
-  <summary>Blocks people made — gallery</summary>
-<!-- ⛔ LES BLOCKS DES AUTRES, AVANT TOUTE CONNEXION. Mesure du 2026-09-06 : 116 blocks crees dans
-     les 9 000 derniers blocs de chaine, 2 483 sur 200 000. Le standard est ACTIVEMENT utilise —
-     c est ce qui rend cette galerie possible. Avec trois entrees elle aurait dit « personne ne
-     s en sert » a chaque visiteur, et on ne reprend pas la premiere chose qu on montre.
-     ⚠️ Elle se charge APRES la page : elle ne doit jamais retarder ce que l utilisateur est venu
-     faire. Si elle echoue, elle se tait plutot que d inventer. -->
-<div id="carteGalerie" style="display:none">
-  <h2 class="secHead">Blocks people made</h2>
-  <div class="galLayout">
-    <div id="galerie" class="galerie"></div>
-    <aside id="galerieFiche" hidden aria-label="Selected gallery block">
-      <div id="galerieFichePreview"></div>
-      <p class="gfSym" id="galerieFicheSym"></p>
-      <p class="gfAdr" id="galerieFicheAdr"></p>
-      <div class="gfActions">
-        <button type="button" class="act sec" id="galerieOpen">Open</button>
-        <button type="button" class="act sec" id="galerieCopyLink">Copy link</button>
-      </div>
-    </aside>
-  </div>
-  <div id="galerieNote" class="k" style="margin-top:10px"></div>
-  <div id="galerieFooter" hidden aria-label="Selected block actions">
-    <button type="button" class="act sec" id="galerieRead">Read</button>
-    <button type="button" class="act sec" id="galerieCopyAdr">Copy address</button>
-    <button type="button" class="act sec" id="galerieShare">Share</button>
-  </div>
-</div>
-</details>
+<!-- ⛔ LA GALERIE VIVAIT ICI, EN AVANT-DERNIERE POSITION ET FERMEE. Elle est remontee juste sous la
+     navigation (2026-09-10) — voir le commentaire a sa nouvelle place. Rien ne reste ici. -->
 
 <!-- ⛔ CETTE SECTION EST UNE PROMESSE PUBLIQUE. Chaque phrase doit correspondre a ce que le code
      fait REELLEMENT, et rien d autre. Pas de « bientot », pas de feuille de route, pas de chiffre
@@ -3664,9 +3687,39 @@ function vignetteHtml(c, fenetre) {
   return '<button type="button" class="vignette" data-block="' + enAttribut(adr) + '"'
     + ' title="' + enAttribut(adr) + '">' + svg
     + '<figcaption>' + enTexte(sym)
+    /* ⛔ LES POINTS DE VIE SUR LA VIGNETTE, ET PAS SEULEMENT LA CAPITALISATION. « 1 325 477 ETH »
+     * ne dit rien a quelqu un qui ne connait pas la crypto ; « 109 PV » se compare d un coup d oeil
+     * a la vignette d a cote. La capitalisation reste dessous, pour qui veut le chiffre brut. */
+    + '<span class="vigVie sansPrix" data-vie-pour="' + enAttribut(adr) + '"></span>'
+    + '<span class="vigPv" data-pv-pour="' + enAttribut(adr) + '">…</span>'
     + '<span class="vigMc" data-mc-pour="' + enAttribut(adr) + '">reading…</span>'
     + (age ? '<span class="vigAge">' + enTexte(age) + '</span>' : '')
     + '</figcaption></button>';
+}
+
+/**
+ * Peint la capitalisation, les PV et la barre d une vignette.
+ * ⛔⛔ UN SEUL ENDROIT, ET C EST DELIBERE. Deux sites remplissaient deja la capitalisation — le
+ *    premier passage et le redessin apres classement. En y ajoutant les PV a la main des deux
+ *    cotes, le correctif suivant en aurait rate un : c est le motif du jumeau qui diverge, deja
+ *    paye ici. Les deux appellent maintenant la meme fonction.
+ * ⛔ ET « PAS DE PRIX » N EST PAS ZERO. Barre hachuree, PV en tiret : deux etats opposes, deux
+ *    dessins. Une barre a zero se lirait « ce block est mort » alors qu il n a jamais ete echange.
+ */
+function peindreVignette(adr, cap, devise) {
+  const mc = document.querySelector('[data-mc-pour="' + CSS.escape(adr) + '"]');
+  const pv = document.querySelector('[data-pv-pour="' + CSS.escape(adr) + '"]');
+  const vie = document.querySelector('[data-vie-pour="' + CSS.escape(adr) + '"]');
+  const ok = typeof cap === 'number' && Number.isFinite(cap) && cap > 0;
+  if (mc) mc.textContent = ok ? (Math.round(cap * 100) / 100) + ' ' + (devise || '') : 'no price found';
+  if (pv) pv.textContent = ok ? pointsDeVie(cap) + ' HP' : '— HP';
+  if (vie) {
+    vie.classList.toggle('sansPrix', !ok);
+    /* 0 % a 1 et 100 % a 1e12 : trois decades de 1 000, donc k / M / B tombent a 25 / 50 / 75 %. */
+    vie.innerHTML = ok
+      ? '<i style="width:' + Math.max(2, Math.min(100, (Math.log10(cap) / 12) * 100)).toFixed(1) + '%"></i>'
+      : '';
+  }
 }
 
 /* ⛔ LA CAPITALISATION DE CHAQUE VIGNETTE, ET LE CLASSEMENT QUI EN DECOULE. C est ce qui transforme
@@ -3694,8 +3747,7 @@ async function remplirCapitalisationsGalerie(vues, fenetre) {
       } else pourquoi = (p && p.note) || 'no pool found among the keys read';
     } catch (e) { pourquoi = (e && e.message) || 'read failed'; }
     blocks.push({ adr: c.jeton, symbole: c.symbole, capitalisation: cap, devise: dev, pourquoi });
-    const el = document.querySelector('[data-mc-pour="' + CSS.escape(c.jeton) + '"]');
-    if (el) el.textContent = cap === null ? 'no price' : (Math.round(cap * 100) / 100) + ' ' + (dev || '');
+    peindreVignette(c.jeton, cap, dev);
   }
   /* ⛔ LE CLASSEMENT PORTE SA POPULATION ET SA BORNE — sinon un echantillon se lit comme un
    * palmares de tout ce qui existe. */
@@ -3715,11 +3767,7 @@ async function remplirCapitalisationsGalerie(vues, fenetre) {
     if (ordre.length) {
       boiteG.innerHTML = ordre.map((c) => vignetteHtml(c, fenetre)).join('');
       /* les capitalisations deja lues sont reinjectees : on ne relit pas la chaine pour un tri */
-      for (const b of blocks) {
-        const el = document.querySelector('[data-mc-pour="' + CSS.escape(b.adr) + '"]');
-        if (el) el.textContent = b.capitalisation === null
-          ? 'no price' : (Math.round(b.capitalisation * 100) / 100) + ' ' + (b.devise || '');
-      }
+      for (const b of blocks) peindreVignette(b.adr, b.capitalisation, b.devise);
     }
   }
 
