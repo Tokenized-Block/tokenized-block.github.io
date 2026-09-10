@@ -1034,8 +1034,18 @@ main[data-app="market"] > #blockHome{display:none !important}
 <section class="card" id="carteGalerieWrap" hidden aria-label="Living blocks">
 <div id="carteGalerie" style="display:none">
   <h2 class="secHead">Living blocks</h2>
-  <p class="expl" style="margin:2px 0 10px">Every block below is real and on Base right now. The bar
-    is its market cap — bigger block, more life. <b>It goes down too.</b> Tap one to meet it.</p>
+  <!-- ⛔⛔ L ACCROCHE DIT CE QUE L ECRAN MONTRE VRAIMENT. Ma premiere version promettait « la barre
+       est sa capitalisation — plus gros block, plus de vie », et la mesure du 2026-09-10 sur
+       mainnet a rendu DOUZE TIRETS : la galerie montre les creations les plus RECENTES, et un
+       block frais n a presque jamais de pool. Sur les 8 blocks les plus actifs mesures la veille,
+       UN SEUL en avait une. Une accroche qui promet de la vie au-dessus de douze « no price found »
+       apprend au visiteur que l app raconte n importe quoi — et c est la seule chose qu on ne peut
+       pas se permettre ici. On dit donc ce qui est vrai : ils viennent de naitre, et les PV
+       arrivent quand quelqu un les echange. -->
+  <p class="expl" style="margin:2px 0 10px">These blocks were <b>just made on Base</b>, newest first.
+    Most have never been traded yet — that is why their life bar is empty rather than low.
+    A block gets HP when someone opens a market for it, and <b>it goes down too</b>.
+    Tap one to meet it.</p>
   <div class="galLayout">
     <div id="galerie" class="galerie"></div>
     <aside id="galerieFiche" hidden aria-label="Selected gallery block">
