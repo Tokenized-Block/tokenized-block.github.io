@@ -3822,6 +3822,21 @@ async function remplirGalerie() {
      * ⇒ Tout cela vit dans `vignetteHtml`, UNE SEULE FOIS : la galerie est dessinee deux fois (par
      *   date, puis par capitalisation quand les prix arrivent) et deux copies divergeraient. */
     boite.innerHTML = vues.slice(0, 12).map((c) => vignetteHtml(c, r.fenetre)).join('');
+    /* ⛔⛔ ON REVELE ICI, ET PAS A LA FIN DU `try` — C EST UN CORRECTIF, PAS UN DETAIL DE STYLE.
+     * Mesure du 2026-09-10 dans Chrome, sur mainnet : douze vignettes DESSINEES dans le DOM et
+     * `carteGalerieWrap.hidden === true`. Le passage sur un autre reseau cache la carte, la
+     * reconstruction redessine les vignettes, puis quelque chose leve entre ce point et l ancienne
+     * ligne de revelation — le `catch` silencieux avale l erreur et la carte reste cachee POUR
+     * TOUJOURS. Resultat : sur le seul reseau qui compte, la premiere section de la page
+     * n apparaissait jamais, et rien nulle part ne le disait.
+     * ⇒ A cet instant precis on a ce qu il faut pour montrer quelque chose de VRAI : des creations
+     *   lues sur la chaine et rendues. Tout ce qui suit — la note, les capitalisations, le
+     *   classement — est de l ENRICHISSEMENT. Un enrichissement qui echoue ne doit pas effacer une
+     *   lecture qui a reussi.
+     * ⚠️ La regle « ne rien montrer plutot qu un faux » est INTACTE : si la lecture des creations
+     *    echoue, on n arrive jamais jusqu ici et la carte reste cachee, comme avant. */
+    $('#carteGalerie').style.display = '';
+    if ($('#carteGalerieWrap')) $('#carteGalerieWrap').hidden = false;
     /* ⛔ LES CAPITALISATIONS ARRIVENT APRES, ET LA GALERIE NE LES ATTEND PAS. Douze blocks x quatre
      * cles de pool = jusqu a 48 lectures : les attendre laisserait la carte vide plusieurs secondes
      * sur ce que l utilisateur est venu voir. Chaque vignette affiche « reading… » puis se remplit.
@@ -3874,7 +3889,15 @@ async function remplirGalerie() {
     const gw = $('#carteGalerieWrap'); if (gw) gw.hidden = false;
   } catch (e) {
     /* ⛔ ON NE MONTRE RIEN PLUTOT QU UN FAUX. Une galerie vide « par erreur » se lirait comme un
-     *    fait sur le produit. */
+     *    fait sur le produit — cette regle ne bouge pas.
+     * ⛔⛔ MAIS SE TAIRE AUPRES DE L UTILISATEUR N EST PAS SE TAIRE AUPRES DU DEVELOPPEUR, et
+     *    confondre les deux a coute une journee. Ce `catch` etait ENTIEREMENT muet : le 2026-09-10,
+     *    la galerie restait cachee sur mainnet apres un changement de reseau, avec douze vignettes
+     *    deja dans le DOM, et AUCUNE trace nulle part — ni console, ni ecran. La panne n a ete
+     *    trouvee qu en interrogeant `hidden` a la main dans un navigateur.
+     * ⇒ On journalise la cause. C est invisible pour qui visite, et ca rend la prochaine panne
+     *   trouvable en une seconde au lieu d une heure. */
+    console.warn('[galerie] lecture interrompue, carte laissee cachee :', e && e.message ? e.message : e);
   }
 }
 /* ⚠️ Apres le premier rendu, jamais avant. */
