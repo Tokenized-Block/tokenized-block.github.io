@@ -856,6 +856,11 @@ async function lireLaVie() {
   const souffler = () => new Promise((r) => setTimeout(r, 260));
   for (const h of habitants) {
     await souffler();
+    /* ⛔ LE PROFIL OUVERT PASSE D ABORD. Mesure en prod le 2026-09-11 : les faits de Block 0 ont mis
+     * 25 a 40 s a s afficher, parce que cette boucle et le profil se partageaient le meme noeud
+     * public (64 requetes). Celui que l utilisateur REGARDE doit gagner.
+     * ⚠️ PLAFOND DE 60 s : un profil bloque ne doit jamais affamer la map pour toujours. */
+    for (let attente = 0; profilEnLecture && attente < 230; attente++) await souffler();
     let r;
     try { r = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: h.adr }); }
     catch (e) { nonLus++; continue; }
@@ -1015,6 +1020,7 @@ $('#pReseau').addEventListener('click', () => {
   void majWallet();
   /* ⛔ LE PROFIL OUVERT PARLAIT DE L AUTRE CHAINE : on le ferme et on invalide sa lecture en cours. */
   jetonProfil++;
+  profilEnLecture = false;
   $('#profil').hidden = true;
 });
 
@@ -1332,6 +1338,8 @@ if (window.ethereum && typeof window.ethereum.on === 'function') {
  * ⚠️ CE QUE LE PROFIL NE MONTRE PAS ENCORE : le createur, les detenteurs, l historique des achats.
  *    Il faut un index des evenements — c est le chantier du fil Social. */
 let jetonProfil = 0;
+/* vrai tant qu un profil se lit : la boucle des vies de la map lui cede le noeud */
+let profilEnLecture = false;
 
 function allerA(nom) {
   const b = document.querySelector('.navB[data-volet="' + nom + '"]');
@@ -1342,6 +1350,14 @@ async function ouvrirProfil(adr, sym) {
   if (!ADRESSE.test(String(adr || ''))) return;
   const moi = ++jetonProfil;
   const perime = () => moi !== jetonProfil;
+  /* ⛔ LE DRAPEAU EST RENDU PAR CELUI QUI L A PRIS, ET SEULEMENT S IL EST TOUJOURS LE DERNIER : un
+   * profil perime qui rendrait la main liberait la map pendant que le suivant lit encore. */
+  profilEnLecture = true;
+  try { await lireProfil(adr, sym, perime); }
+  finally { if (!perime()) profilEnLecture = false; }
+}
+
+async function lireProfil(adr, sym, perime) {
   allerA('mien');
   const p = $('#profil');
   p.hidden = false;
@@ -1414,7 +1430,7 @@ $('#fProfil').addEventListener('click', () => {
   const h = habitants.find((x) => x.adr === adr);
   void ouvrirProfil(adr, h ? h.sym : null);
 });
-$('#pFermer').addEventListener('click', () => { jetonProfil++; $('#profil').hidden = true; });
+$('#pFermer').addEventListener('click', () => { jetonProfil++; profilEnLecture = false; $('#profil').hidden = true; });
 
 /* ⛔ LE LIEN PORTE LA CHAINE. Un lien `?block=` seul, ouvert par quelqu un sur l autre reseau,
  * afficherait un profil vide et credible — « ce block n existe pas » alors qu il existe ailleurs. */
