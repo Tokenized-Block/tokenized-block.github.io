@@ -235,6 +235,39 @@ body{background:var(--fond);
 table.regles{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
 table.regles td{padding:6px 0;border-top:1px solid var(--ligne);vertical-align:top}
 table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
+
+/* ══ WALLET ════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ LA FORME DES WALLETS DE L ECOSYSTEME BASE, recopiee sans rien inventer : le solde en tete,
+ *    trois actions, puis la liste des actifs. C est un ecran que les gens savent deja lire ; un
+ *    agencement « original » leur ferait chercher le bouton Send. Aucune couleur nouvelle : tout
+ *    sort des jetons deja mesures (regle 17). */
+.wAdr{display:flex;gap:8px;align-items:center;color:var(--doux)}
+.wSolde{font-size:30px;font-weight:800;letter-spacing:-.6px;margin:10px 0 2px;font-variant-numeric:tabular-nums}
+.wActions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0 0}
+.wAct{display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 6px}
+.wAct b{font-size:17px;line-height:1}
+.bouton[disabled]{opacity:.45;cursor:not-allowed}
+.wListe{list-style:none;margin:6px 0 0;padding:0}
+.wLigne{display:flex;align-items:center;gap:11px;padding:10px 0;border-top:1px solid var(--ligne)}
+.wIc{width:36px;height:40px;flex:0 0 auto;border-radius:10px;overflow:hidden;background:var(--creux);
+  display:grid;place-items:center;font-weight:800;color:var(--accent2)}
+.wIc svg{display:block;width:100%;height:100%}
+.wNm{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.wNm span{color:var(--doux);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wQt{font-weight:800;text-align:right;font-variant-numeric:tabular-nums}
+.wIllisible{color:var(--tiede);font-weight:700;font-size:12px}
+.wAdrPleine{word-break:break-all;background:var(--creux);border:1px solid var(--ligne);border-radius:var(--rs);
+  padding:12px;margin:0 0 10px;color:var(--texte)}
+.champ{display:block;margin:10px 0 0;font-size:12px;font-weight:700;color:var(--doux)}
+.champ input,.champ select{display:block;width:100%;box-sizing:border-box;margin-top:5px;background:var(--fond2);
+  border:1px solid var(--ligne);border-radius:var(--rs);color:var(--texte);font:inherit;font-weight:400;
+  padding:11px 12px;min-height:44px}
+.champ input:focus,.champ select:focus{outline:none;border-color:var(--accent)}
+.wConsent{display:flex;gap:8px;align-items:flex-start;margin:12px 0 0;font-size:12.5px;color:var(--tiede);line-height:1.45}
+.wConsent[hidden]{display:none}
+.wOk{color:var(--vif)}
+.wKo{color:var(--dur)}
+.note a{color:var(--accent2)}
 </style>
 </head>
 <body>
@@ -348,15 +381,61 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
   <section class="volet" id="v-wallet" aria-label="Wallet">
     <div class="carte">
       <p class="titre">Wallet</p>
-      <p class="sous">Balances, send, swap, deposit and withdraw.</p>
+      <div id="wDeconnecte">
+        <p class="sous">Your own wallet, read from the chain. This page holds no key: every send opens
+          your wallet, and it shows you what it signs.</p>
+        <button class="bouton" id="bConnecterW" type="button">Connect wallet</button>
+        <p class="note" id="wNoteConnexion"></p>
+      </div>
+      <div id="wConnecte" hidden>
+        <div class="wAdr"><span class="mono" id="wAdr"></span>
+          <button class="puce" id="bCopier" type="button" style="cursor:pointer">Copy</button></div>
+        <p class="wSolde" id="wSoldeEth">…</p>
+        <p class="note mono" id="wReseau" style="margin:0"></p>
+        <div class="wActions">
+          <button class="bouton sec wAct" id="bSend" type="button"><b>↑</b>Send</button>
+          <button class="bouton sec wAct" id="bReceive" type="button"><b>↓</b>Receive</button>
+          <button class="bouton sec wAct" id="bSwap" type="button" disabled><b>⇄</b>Swap</button>
+        </div>
+        <!-- ⛔ DEPOT = RECEVOIR, RETRAIT = ENVOYER. Il n y a pas de compte chez nous a alimenter ou a
+             vider : les fonds ne quittent jamais le wallet de l utilisateur. Le dire evite qu on
+             cherche un bouton « Deposit » qui supposerait une garde. -->
+        <p class="note">Deposit = Receive, withdraw = Send: your funds never leave your wallet, so
+          there is nothing held here to top up or empty. Swap is next — its routing is measured
+          against the deployed router, the screen is not built yet.</p>
+      </div>
+    </div>
+
+    <div class="carte" id="wReceive" hidden>
+      <p class="titre">Receive</p>
+      <p class="sous">Send to this address on <b id="wRecReseau"></b> only. The same address on
+        another network is a different place.</p>
+      <p class="mono wAdrPleine" id="wRecAdr"></p>
+      <button class="bouton sec" id="bCopier2" type="button">Copy</button>
+    </div>
+
+    <div class="carte" id="wSendCarte" hidden>
+      <p class="titre">Send</p>
+      <label class="champ">Asset<select id="sActif"></select></label>
+      <label class="champ">To<input id="sDest" placeholder="0x… the whole address" autocomplete="off"
+        spellcheck="false"></label>
+      <label class="champ">Amount<input id="sMontant" inputmode="decimal" placeholder="0.0"
+        autocomplete="off"></label>
+      <label class="wConsent" id="sConsentRow"><input type="checkbox" id="sConsent"> This is real money
+        on Base mainnet, and a send cannot be undone.</label>
+      <p class="note" id="sRecap"></p>
+      <button class="bouton" id="bEnvoyer" type="button" disabled style="margin-top:10px">Review in my wallet</button>
+      <p class="note" id="sEtat"></p>
+    </div>
+
+    <div class="carte" id="wActifsCarte" hidden>
+      <p class="titre">Assets</p>
+      <ul class="wListe" id="wActifs"></ul>
+      <p class="note" id="wActifsNote"></p>
+    </div>
+
+    <div class="carte">
       <div class="pasEncore">
-        <h4>Being built — in this order</h4>
-        <ul>
-          <li><b>Balances</b> — reads only, no key needed.</li>
-          <li><b>Send</b> — the transfer path exists and is tested; this needs the screen.</li>
-          <li><b>Swap</b> — routing and calldata already measured against the deployed router.</li>
-          <li><b>Deposit / withdraw</b> — see the question below.</li>
-        </ul>
         <!-- ⛔⛔ DIT AVANT, PAS DECOUVERT APRES. Un wallet par block, detenant des fonds, pilote par
              un agent, veut dire une cle qui n est pas celle de l utilisateur. C est de la custodie —
              la premiere promesse de cette app est « aucune cle ici, ton wallet signe ». -->
@@ -447,6 +526,12 @@ import { vieDuBlock } from './marche.js';
  * garantit que « pas lu » ne se dise jamais comme « zero », et que le marqueur B20 reste le CODE
  * et jamais le prefixe d adresse. */
 import { faitsDuBlock, supplyLisible } from './faits.js';
+/* ⛔⛔ ENVOYER PASSE PAR UN MODULE TESTE, JAMAIS PAR UN `eth_sendTransaction` ECRIT ICI. `envoi.js`
+ * verifie chaine ET compte, estime, fixe une limite de gas explicite et relit le recu ; la regle 8
+ * surveille qu aucun envoi ne s en passe. Le wallet de l utilisateur signe — cette page, jamais. */
+import { encodeTransfer, envoyerDepuisWallet } from './envoi.js';
+import { montantHumain, formaterUnites } from './montants.js';
+import { selecteur } from './pool.js';
 
 const $ = (s) => document.querySelector(s);
 const enTexte = (t) => { const d = document.createElement('div'); d.textContent = String(t); return d.innerHTML; };
@@ -465,9 +550,11 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
  * sur des blocks qui en ont un, et une affirmation fausse sur le jeton de quelqu un d autre. */
 const RESEAUX = {
   84532: { nom: 'Base Sepolia', rpc: 'https://sepolia.base.org',
-           stateView: '0x571291b572ed32ce6751a2Cb2486EbEe8DEfB9B4' },
+           stateView: '0x571291b572ed32ce6751a2Cb2486EbEe8DEfB9B4',
+           explorateur: 'https://sepolia.basescan.org' },
   8453: { nom: 'Base mainnet', rpc: 'https://mainnet.base.org',
-          stateView: '0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71' },
+          stateView: '0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71',
+          explorateur: 'https://basescan.org' },
 };
 let CHAINE = 8453;
 
@@ -751,13 +838,16 @@ async function lireLaVie() {
  *    seulement que le wallet a bien voulu la donner.
  */
 async function connecter() {
-  const n = $('#mienNote');
+  /* ⛔ UNE SEULE CONNEXION, DEUX ONGLETS. My block et Wallet ont chacun leur bouton, mais c est la
+   * meme fonction et le meme `compte` : deux connexions separees finiraient par designer deux
+   * adresses differentes dans la meme page. Le message s ecrit dans les deux. */
+  const dire = (t) => { for (const x of [$('#mienNote'), $('#wNoteConnexion')]) x.textContent = t; };
   const eth = window.ethereum;
   if (!eth) {
     /* ⛔ ON NOMME LA CAUSE. « Ca ne marche pas » envoie chercher un defaut chez soi ; « aucun
      * wallet dans ce navigateur » dit quoi faire. */
-    n.textContent = 'No wallet found in this browser. This page needs one to know which blocks are '
-      + 'yours — it never asks for a key, only for permission to read an address.';
+    dire('No wallet found in this browser. This page needs one to know which blocks are '
+      + 'yours — it never asks for a key, only for permission to read an address.');
     return;
   }
   try {
@@ -766,22 +856,44 @@ async function connecter() {
   } catch (e) {
     /* ⛔ UN REFUS N EST PAS UNE PANNE. L utilisateur a le droit de dire non, et l ecran ne doit pas
      * le gronder ni reessayer tout seul. */
-    n.textContent = 'You declined, and that is fine — nothing happened.';
+    dire('You declined, and that is fine — nothing happened.');
     return;
   }
-  if (!compte) { n.textContent = 'The wallet returned no address.'; return; }
+  if (!compte) { dire('The wallet returned no address.'); return; }
 
   let chaineWallet = null;
   try { chaineWallet = parseInt(await eth.request({ method: 'eth_chainId' }), 16); } catch { /* dit juste dessous */ }
 
   $('#pCompte').textContent = compte.slice(0, 6) + '…' + compte.slice(-4);
   const surLaBonne = chaineWallet === CHAINE;
-  n.textContent = 'Connected. This page holds no key: your wallet signs, and it shows you what it '
+  dire('Connected. This page holds no key: your wallet signs, and it shows you what it '
     + 'signs.' + (chaineWallet === null ? ' ⚠️ Could not read your wallet network.'
       : surLaBonne ? '' : ' ⚠️ Your wallet is on chain ' + chaineWallet + ' while this page reads '
-        + RESEAUX[CHAINE].nom + ' — the list below would be empty for the wrong reason.');
+        + RESEAUX[CHAINE].nom + ' — the list below would be empty for the wrong reason, and a send '
+        + 'would be refused before your wallet opens.'));
 
   void listerMesBlocks();
+  void majWallet();
+}
+
+/* ⛔ UNE SEULE LECTURE POUR DEUX ONGLETS. My block et Wallet ont besoin des memes creations ; les
+ * lire deux fois doublait les requetes sur un noeud public qui limite deja le debit.
+ * ⛔ LA CLE PORTE LE COMPTE ET LA CHAINE : un cache qui survivrait a un changement de reseau rendrait
+ *    les blocks de Sepolia sous le nom de mainnet.
+ * ⛔ UN ECHEC N EST PAS GARDE. Sinon une panne passagere du noeud deviendrait « tu n as rien » pour
+ *    toute la session. */
+let lectureCreations = null;
+function mesCreations() {
+  const cle = CHAINE + ':' + String(compte).toLowerCase();
+  if (lectureCreations && lectureCreations.cle === cle) return lectureCreations.promesse;
+  const promesse = (async () => {
+    const r = await listerCreations({ rpc, blocs: 9000 });
+    const { gardees, nonResolues } = await creationsDe({ rpc, creations: r.creations || [], adresse: compte });
+    return { r, gardees, nonResolues };
+  })();
+  lectureCreations = { cle, promesse };
+  promesse.catch(() => { if (lectureCreations && lectureCreations.promesse === promesse) lectureCreations = null; });
+  return promesse;
 }
 
 /**
@@ -796,12 +908,13 @@ async function listerMesBlocks() {
   if (!compte) return;
   boite.innerHTML = '<p class="note">reading the chain…</p>';
   try {
-    const r = await listerCreations({ rpc, blocs: 9000 });
-    const { gardees, nonResolues } = await creationsDe({ rpc, creations: r.creations || [], adresse: compte });
+    const { r, gardees, nonResolues } = await mesCreations();
     if (!gardees.length) {
       boite.innerHTML = '<p class="note">No block of yours in the window we read ('
         + ((r.creations || []).length) + ' creations over '
         + (r.fenetre.a - r.fenetre.de).toLocaleString('en-US') + ' chain blocks)'
+        + ((r.fenetresRatees || []).length ? ' · ⚠️ ' + r.fenetresRatees.length + ' window(s) refused by '
+          + 'the node — not read, not empty' : '')
         + (nonResolues.length ? ' · ⚠️ ' + nonResolues.length + ' creation(s) we could not attribute '
           + '— unknown, not « not yours »' : '') + '.</p>';
       return;
@@ -834,6 +947,11 @@ $('#pReseau').addEventListener('click', () => {
   $('#mapNote').textContent = '';
   $('#mapEtat').textContent = 'reading ' + RESEAUX[CHAINE].nom + '…';
   charger();
+  /* ⛔ LE WALLET SUIT LE RESEAU. Des soldes mainnet affiches sous l etiquette Sepolia seraient la
+   * meme faute que la map, sur de l argent. L etat d un envoi precedent est efface : il parlait
+   * d une autre chaine. */
+  $('#sEtat').textContent = '';
+  void majWallet();
 });
 
 /* ⛔ MASQUER LE PANNEAU NE LE DETRUIT PAS. La map se re-mesure apres, parce que les blocks sont
@@ -885,6 +1003,261 @@ function replacerDansLaMap() {
     h.x = Math.max(0, Math.min(Math.max(0, L - h.t), h.x));
     h.y = Math.max(0, Math.min(Math.max(0, H - h.t), h.y));
   }
+}
+
+/* ══ WALLET ══════════════════════════════════════════════════════════════════════════════════
+ * ⛔⛔ AUCUNE CLE ICI. Lire = des `eth_call` publics ; envoyer = ouvrir le wallet de l utilisateur
+ *    via `envoi.js`. Ce que l ecran prepare, le wallet l AFFICHE avant que quiconque signe.
+ * ⚠️ CE QUE CET ECRAN NE LISTE PAS : les blocks ACHETES sans avoir ete crees. Les trouver demande
+ *    un index des transferts que cette page n a pas ; il le dit au lieu de les taire. */
+
+/* ⛔ RECOPIE DE `DEVISES` DANS index.html (ligne 5906), JAMAIS DE MEMOIRE. Sur Sepolia aucun USDC
+ * n est liste : une adresse devinee afficherait le solde d un autre contrat sous le nom USDC. */
+const JETONS_CONNUS = {
+  8453: [{ adr: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', nom: 'USDC', ic: '$' }],
+  84532: [],
+};
+const ADRESSE = /^0x[0-9a-fA-F]{40}$/;
+const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
+const court = (a) => a.slice(0, 6) + '…' + a.slice(-4);
+/* ⛔ ABREGER SE VOIT. Un solde coupe sans marque se lirait comme exact ; le « … » dit qu il y a
+ * plus, et le survol porte la valeur entiere. */
+function abrege(txt, n = 6) {
+  const [e, f = ''] = txt.split('.');
+  return f.length > n ? e + '.' + f.slice(0, n) + '…' : txt;
+}
+
+let actifs = [];
+let jetonLecture = 0;
+let envoiEnCours = false;
+
+/**
+ * Lire un jeton : decimals PUIS balanceOf, avec une pause entre les deux.
+ * ⛔ LES DECIMALES SONT LUES, JAMAIS SUPPOSEES. « 18 par defaut » ferait envoyer 10^12 fois trop d un
+ *    jeton a 6 decimales. Une reponse vide ou hors bornes rend le jeton ILLISIBLE — jamais « 0 ».
+ * ⚠️ La pause n est pas decorative : le noeud public refusait 5 lectures sur 6 enchainees (mesure
+ *    sur la fiche du block, meme page).
+ */
+async function lireJeton(jeton, qui) {
+  const d = await rpc('eth_call', [{ to: jeton, data: '0x' + selecteur('decimals()') }, 'latest']);
+  if (!d || d === '0x') throw new Error('no decimals');
+  const decimales = Number(BigInt(d));
+  if (!Number.isInteger(decimales) || decimales > 36) throw new Error('decimals out of range');
+  await dormir(260);
+  const b = await rpc('eth_call', [{ to: jeton, data: '0x' + selecteur('balanceOf(address)')
+    + qui.slice(2).toLowerCase().padStart(64, '0') }, 'latest']);
+  if (!b || b === '0x') throw new Error('no balance');
+  return { decimales, solde: BigInt(b) };
+}
+
+/**
+ * Relire tout le wallet pour le compte et la chaine courants.
+ * ⛔ UN JETON DE LECTURE PAR APPEL. Changer de reseau pendant une lecture lancait deux lectures en
+ *    parallele, et la plus lente ecrivait en dernier : des soldes Sepolia sous l etiquette mainnet.
+ *    Seule la lecture la plus recente a le droit d ecrire.
+ */
+async function majWallet() {
+  const moi = ++jetonLecture;
+  const perime = () => moi !== jetonLecture;
+  $('#wDeconnecte').hidden = !!compte;
+  $('#wConnecte').hidden = !compte;
+  $('#wActifsCarte').hidden = !compte;
+  actifs = [];
+  if (!compte) { $('#wReceive').hidden = true; $('#wSendCarte').hidden = true; remplirChoixActif(); return; }
+
+  const R = RESEAUX[CHAINE];
+  $('#wAdr').textContent = court(compte);
+  $('#wReseau').textContent = R.nom + ' · chain ' + CHAINE;
+  $('#wRecAdr').textContent = compte;
+  $('#wRecReseau').textContent = R.nom + ' (chain ' + CHAINE + ')';
+  $('#sConsentRow').hidden = CHAINE !== 8453;
+  $('#wSoldeEth').textContent = '…';
+  $('#wSoldeEth').title = '';
+  $('#wActifs').innerHTML = '<li class="note">reading the chain…</li>';
+  $('#wActifsNote').textContent = '';
+
+  const eth = { id: 'ETH', nom: 'ETH', sous: 'native · pays network fees', adr: null, decimales: 18, ic: 'Ξ' };
+  try { eth.solde = BigInt(await rpc('eth_getBalance', [compte, 'latest'])); eth.etat = 'LU'; }
+  catch (e) { eth.etat = 'NON_LU'; }
+  if (perime()) return;
+  actifs.push(eth);
+  $('#wSoldeEth').textContent = eth.etat === 'LU' ? abrege(formaterUnites(eth.solde, 18)) + ' ETH' : 'ETH unreadable';
+  if (eth.etat === 'LU') $('#wSoldeEth').title = formaterUnites(eth.solde, 18) + ' ETH';
+  peindreActifs();
+
+  for (const j of JETONS_CONNUS[CHAINE] || []) {
+    await dormir(260);
+    const a = { id: j.adr, nom: j.nom, sous: court(j.adr), adr: j.adr, ic: j.ic };
+    try { Object.assign(a, await lireJeton(j.adr, compte)); a.etat = 'LU'; } catch { a.etat = 'NON_LU'; }
+    if (perime()) return;
+    actifs.push(a);
+    peindreActifs();
+  }
+
+  let note = '';
+  try {
+    const { r, gardees, nonResolues } = await mesCreations();
+    if (perime()) return;
+    /* ⛔ UNE FENETRE REFUSEE PAR LE NOEUD N EST PAS UNE FENETRE VIDE. `listerCreations` les rend a
+     * part ; les taire ferait lire « aucun block » la ou on n a simplement pas pu regarder. */
+    const ratees = (r.fenetresRatees || []).length;
+    if (ratees) note += '⚠️ ' + ratees + ' chain window(s) refused by the node — not read, not empty. ';
+    for (const c of gardees.slice(0, 12)) {
+      await dormir(260);
+      const a = { id: c.jeton, nom: String(c.symbole || '?').slice(0, 12),
+        sous: 'block you created · ' + court(c.jeton), adr: c.jeton, bloc: true };
+      try { Object.assign(a, await lireJeton(c.jeton, compte)); a.etat = 'LU'; } catch { a.etat = 'NON_LU'; }
+      if (perime()) return;
+      actifs.push(a);
+      peindreActifs();
+    }
+    note += gardees.length ? '' : 'No block created by this address in the window we read. ';
+    if (gardees.length > 12) note += 'Showing 12 of the ' + gardees.length + ' blocks you created. ';
+    if (nonResolues.length) note += '⚠️ ' + nonResolues.length + ' creation(s) unattributed — unknown, not « not yours ». ';
+  } catch (e) {
+    console.warn('[wallet] blocks non lus :', e && e.message ? e.message : e);
+    note = 'Could not read your blocks right now — that is about the network, not your wallet. ';
+  }
+  if (perime()) return;
+  $('#wActifsNote').textContent = note + 'Blocks you bought but did not create are not listed yet: '
+    + 'finding them needs a transfer index this page does not have.';
+}
+
+function peindreActifs() {
+  $('#wActifs').innerHTML = actifs.map((a) => '<li class="wLigne"><div class="wIc">'
+    + (a.bloc ? dessin(a.adr, a.nom) : enTexte(a.ic || '•')) + '</div>'
+    + '<div class="wNm"><b>' + enTexte(a.nom) + '</b><span class="mono">' + enTexte(a.sous) + '</span></div>'
+    + '<div class="wQt">' + (a.etat === 'LU'
+      ? '<span title="' + enTexte(formaterUnites(a.solde, a.decimales)) + '">'
+        + enTexte(abrege(formaterUnites(a.solde, a.decimales))) + '</span>'
+      /* ⛔ ILLISIBLE N EST PAS ZERO. Afficher 0 pour un solde qu on n a pas pu lire ferait croire a
+       * quelqu un qu il a perdu ses fonds — a cause de notre noeud. */
+      : '<span class="wIllisible">unreadable</span>') + '</div></li>').join('');
+  remplirChoixActif();
+}
+
+/* ⛔ SEULS LES SOLDES LUS SONT ENVOYABLES. Un actif illisible n apparait pas dans le choix : on ne
+ * prepare pas un envoi contre un solde qu on ne connait pas. */
+function remplirChoixActif() {
+  const s = $('#sActif'), avant = s.value;
+  const lus = actifs.filter((a) => a.etat === 'LU');
+  s.innerHTML = lus.map((a) => '<option value="' + enTexte(a.id) + '">' + enTexte(a.nom) + ' — '
+    + enTexte(abrege(formaterUnites(a.solde, a.decimales))) + '</option>').join('');
+  if (lus.some((a) => a.id === avant)) s.value = avant;
+  majRecap();
+}
+
+/**
+ * Valider la saisie et construire la transaction — sans rien envoyer.
+ * ⛔ REFUSE, NE REPARE PAS. Une adresse incomplete n est pas completee, un montant a trop de
+ *    decimales n est pas arrondi : une saisie « reparee » en silence est une saisie qu on n a pas
+ *    faite. `ko` vide = rien a dire encore (champ vide), `ko` rempli = la raison du refus.
+ */
+function preparerEnvoi() {
+  const a = actifs.find((x) => x.id === $('#sActif').value && x.etat === 'LU');
+  if (!a) return { ko: actifs.length ? 'Pick an asset whose balance we could read.' : '' };
+  const dest = $('#sDest').value.trim();
+  if (!dest) return { ko: '' };
+  if (!ADRESSE.test(dest)) return { ko: 'Not an address. Paste it whole — this page never completes or corrects one.' };
+  /* ⛔ LE PIEGE LE PLUS CHER DES WALLETS : coller l adresse du JETON comme destinataire. Les jetons
+   * envoyes a leur propre contrat sont en general perdus pour tout le monde. */
+  if (a.adr && dest.toLowerCase() === a.adr.toLowerCase()) {
+    return { ko: 'That is the ' + a.nom + ' contract itself. Tokens sent there are usually lost.' };
+  }
+  const m = montantHumain($('#sMontant').value, a.decimales);
+  if (m.etat === 'VIDE') return { ko: '' };
+  if (m.etat !== 'OK') return { ko: m.pourquoi };
+  if (m.valeur === 0n) return { ko: 'Zero is not a send.' };
+  if (m.valeur > a.solde) return { ko: 'More than your balance (' + formaterUnites(a.solde, a.decimales) + ' ' + a.nom + ').' };
+  const tx = a.adr ? { to: a.adr, data: encodeTransfer(dest, m.valeur), value: '0x0' }
+    : { to: dest, data: '0x', value: '0x' + m.valeur.toString(16) };
+  return { a, dest, valeur: m.valeur, tx };
+}
+
+function majRecap() {
+  const p = preparerEnvoi();
+  const r = $('#sRecap');
+  if (p.ko !== undefined) {
+    r.textContent = p.ko;
+    r.className = 'note' + (p.ko ? ' wKo' : '');
+    $('#bEnvoyer').disabled = true;
+    return p;
+  }
+  r.className = 'note';
+  r.textContent = 'You send ' + formaterUnites(p.valeur, p.a.decimales) + ' ' + p.a.nom + ' to '
+    + court(p.dest) + ' on ' + RESEAUX[CHAINE].nom + '. Your wallet shows the same before you sign — '
+    + 'check the whole address there.' + (p.a.adr ? ' The network fee is paid in ETH.' : ' The network fee comes on top.');
+  /* ⛔ SUR MAINNET, LE CONSENTEMENT EST UN GESTE, PAS UN DEFAUT. La case n est jamais pre-cochee. */
+  $('#bEnvoyer').disabled = envoiEnCours || (CHAINE === 8453 && !$('#sConsent').checked);
+  return p;
+}
+
+async function envoyer() {
+  if (envoiEnCours) return;
+  const p = majRecap();
+  if (p.ko !== undefined || (CHAINE === 8453 && !$('#sConsent').checked)) return;
+  const e = $('#sEtat');
+  envoiEnCours = true;
+  $('#bEnvoyer').disabled = true;
+  e.className = 'note';
+  e.textContent = 'Opening your wallet — check what it shows before you sign.';
+  let r;
+  try {
+    r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte, ...p.tx });
+  } catch (err) {
+    r = { etat: 'ECHEC_ENVOI', pourquoi: 'Unexpected error — check your wallet before retrying. '
+      + String((err && err.message) || err) };
+  } finally {
+    envoiEnCours = false;
+  }
+  const mots = {
+    CONFIRME: 'Sent and confirmed on chain.',
+    ENVOYE: 'Sent.',
+    EN_ATTENTE: 'Sent, not confirmed yet — do not send it again.',
+    ANNULE_SUR_CHAINE: 'Reverted on chain' + (r.horsGaz ? ' (it ran out of gas)' : '') + ': the fee was paid, nothing moved.',
+  };
+  e.className = 'note' + (r.etat === 'CONFIRME' ? ' wOk' : r.etat === 'EN_ATTENTE' || r.etat === 'ENVOYE' ? '' : ' wKo');
+  e.innerHTML = enTexte(mots[r.etat] || r.pourquoi || r.etat) + (r.hash
+    ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(r.hash) + '" target="_blank" rel="noopener">See it on the explorer</a>'
+    : '');
+  if (r.hash) { $('#sMontant').value = ''; void majWallet(); } else majRecap();
+}
+
+function basculer(sel) {
+  const autre = sel === '#wSendCarte' ? '#wReceive' : '#wSendCarte';
+  $(autre).hidden = true;
+  $(sel).hidden = !$(sel).hidden;
+}
+async function copier(ev) {
+  const b = ev.currentTarget;
+  if (!compte) return;
+  /* ⛔ UN ECHEC DE COPIE SE DIT. Croire avoir copie et coller l ancien presse-papiers, c est envoyer
+   * a une autre adresse. */
+  try { await navigator.clipboard.writeText(compte); b.textContent = 'Copied'; }
+  catch { b.textContent = 'Copy failed — select it by hand'; }
+  setTimeout(() => { b.textContent = 'Copy'; }, 1800);
+}
+
+$('#bConnecterW').addEventListener('click', connecter);
+$('#bCopier').addEventListener('click', copier);
+$('#bCopier2').addEventListener('click', copier);
+$('#bSend').addEventListener('click', () => basculer('#wSendCarte'));
+$('#bReceive').addEventListener('click', () => basculer('#wReceive'));
+for (const id of ['#sDest', '#sMontant']) $(id).addEventListener('input', majRecap);
+for (const id of ['#sActif', '#sConsent']) $(id).addEventListener('change', majRecap);
+$('#bEnvoyer').addEventListener('click', envoyer);
+
+/* ⛔ CHANGER DE COMPTE DANS LE WALLET CHANGE L ECRAN. Sinon la page afficherait les soldes de
+ * l ancien compte — la garde d `envoi.js` refuserait l envoi, mais l ecran aurait deja menti. */
+if (window.ethereum && typeof window.ethereum.on === 'function') {
+  window.ethereum.on('accountsChanged', (accs) => {
+    if (!compte) return;
+    compte = (accs && accs[0]) || null;
+    $('#pCompte').textContent = compte ? court(compte) : 'not connected';
+    $('#sEtat').textContent = '';
+    if (compte) void listerMesBlocks();
+    void majWallet();
+  });
 }
 
 $('#pReseau').textContent = RESEAUX[CHAINE].nom;
