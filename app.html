@@ -434,54 +434,33 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <p class="note" id="wActifsNote"></p>
     </div>
 
-    <div class="carte">
-      <div class="pasEncore">
-        <!-- ⛔⛔ DIT AVANT, PAS DECOUVERT APRES. Un wallet par block, detenant des fonds, pilote par
-             un agent, veut dire une cle qui n est pas celle de l utilisateur. C est de la custodie —
-             la premiere promesse de cette app est « aucune cle ici, ton wallet signe ». -->
-        <p class="avert">⛔ <b>A wallet per block holding funds, driven by a trading agent, is
-          custody</b> — a key that is not the user's, holding their money. This app is sold on “no
-          key here, your wallet signs”, so that is the first promise we would give away, and it
-          needs a licence in most places.<br><br>
-          <b>Same product, no custody:</b> the agent <b>proposes</b>, the user's wallet <b>signs</b>.
-          Identical on screen, nothing held, nothing to guard. That is the one I will build.</p>
-      </div>
-    </div>
+    <!-- ⛔⛔ DECISION GARDEE ICI, RETIREE DE L ECRAN (Phil, 2026-09-11 : « le user ne doit pas voir
+         ca »). C etait une note de conception, pas une information pour l utilisateur.
+         La decision elle-meme TIENT : un wallet par block, detenant des fonds, pilote par un agent
+         de trading, veut dire une cle qui n est pas celle de l utilisateur — de la custodie, et une
+         licence dans la plupart des pays. Meme produit sans custodie : l agent PROPOSE, le wallet de
+         l utilisateur SIGNE. Rien de detenu, rien a garder. C est celui-la qui se construit. -->
   </section>
 
   <!-- ══ SOCIAL / COLLATERAL ═════════════════════════════════════════════════════════════════ -->
   <section class="volet" id="v-social" aria-label="Social and collateral">
+    <!-- ⛔⛔ NOTES DE CONCEPTION RETIREES DE L ECRAN, meme regle que le Wallet (Phil, 2026-09-11 :
+         « le user ne doit pas voir ca »). Elles nommaient Phil et listaient nos dependances — rien
+         qu un utilisateur puisse faire. Gardees ici, intactes :
+         · PAIRER = LA DEVISE DE COTATION. Mesure 2026-09-09 sur trois launches OpenLaunch : frais
+           choisi au launch (0 / 1 / 3 %), tickSpacing 200, sans hooks ; la paire est la devise
+           contre laquelle la pool s ouvre (ETH, GITLAWB, COINc, AAPLc). Pairer contre une action =
+           meme geste que contre ETH, autre adresse. MANQUE : un registre des adresses d actions
+           tokenisees reelles — inventer un ticker mettrait de l argent dans un jeton non verifie.
+         · POSTER DEPUIS SON BLOCK : les 0,5 % s accumulent sur la position ; seul son proprietaire
+           collecte, et collecter est une SIGNATURE. Stats X = credential X API absent (tout chiffre
+           serait invente). Farcaster = accountAssociation, signature de custodie que seul Phil peut
+           faire. -->
     <div class="carte">
-      <p class="titre">Pair your block</p>
-      <p class="sous">Back a block with a stock or another token at creation — what OpenLaunch does
-        with tokenized equities.</p>
-      <div class="pasEncore">
-        <h4>Measured on their chain, not read off their page</h4>
-        <ul>
-          <li><b>The pairing is the quote currency</b> — measured 2026-09-09 on three of their
-            launches: the fee is <b>chosen at launch</b> (0 %, 1 %, 3 %), tickSpacing 200, no hooks,
-            and the pair is whatever currency the pool is opened against — ETH, GITLAWB, COINc,
-            AAPLc.</li>
-          <li><b>So pairing against a stock is the same gesture as pairing against ETH</b>, with a
-            different currency address. The mechanism we already have covers it.</li>
-          <li><b>What is missing</b> — a registry of which tokenized-stock addresses are real.
-            Inventing a ticker here would put someone's money into a token nobody vetted.</li>
-        </ul>
-      </div>
-    </div>
-    <div class="carte">
-      <p class="titre">Post from your block</p>
-      <div class="pasEncore">
-        <h4>What it depends on</h4>
-        <ul>
-          <li><b>Fees to spend</b> — the 0.5 % accrues to the liquidity position; only its owner can
-            collect, and collecting is a <b>signature</b>, not an automatic flow.</li>
-          <li><b>X stats</b> — needs an X API credential this app does not have. Any number shown
-            before that would be invented.</li>
-          <li><b>Farcaster</b> — the mini-app tags exist; publishing needs <b>accountAssociation</b>,
-            a custody signature only Phil can make.</li>
-        </ul>
-      </div>
+      <p class="titre">Social</p>
+      <p class="sous">See which blocks people buy, and at what price — read from the chain, so every
+        post is a real purchase.</p>
+      <p class="note">Coming next.</p>
     </div>
   </section>
 
