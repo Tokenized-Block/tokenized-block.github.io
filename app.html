@@ -211,6 +211,32 @@ body{background:var(--fond);
 .fNom{font-weight:800;font-size:16px;margin:0}
 .fVie{font-weight:800;color:var(--accent2);font-size:14px;margin:2px 0 0}
 .fActions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.fActions .plein{grid-column:1/-1}
+
+/* ══ PROFIL D UN BLOCK ═══════════════════════════════════════════════════════════════════════
+ * ⛔ LA FORME D UN PROFIL, PAS D UNE FICHE TECHNIQUE : le visage en grand, le nom, puis quelques
+ *    chiffres en tuiles et les gestes. C est ce qu on attend d une page de profil sur n importe
+ *    quelle app ; un tableau de faits se lit comme un rapport, pas comme quelqu un. */
+.pTete{display:flex;gap:14px;align-items:center}
+.pAvatar{width:92px;height:101px;flex:0 0 auto;border:1px solid var(--ligne);border-radius:16px;
+  overflow:hidden;background:var(--creux)}
+.pAvatar svg{display:block;width:100%;height:100%}
+.pSym{font-weight:800;font-size:22px;letter-spacing:-.3px;margin:0;overflow-wrap:anywhere}
+.pNomLong{color:var(--doux);font-size:13px;margin:2px 0 0}
+.pAdr{color:var(--doux);margin:6px 0 0;word-break:break-all}
+.pFermer{margin-left:auto;align-self:flex-start;cursor:pointer}
+.pStats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0 0}
+.pStat{background:var(--fond2);border:1px solid var(--ligne);border-radius:var(--rs);padding:10px 12px;
+  display:flex;flex-direction:column;gap:3px;min-width:0}
+.pStat span{color:var(--doux);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+.pStat b{font-size:14px;overflow-wrap:anywhere}
+.pLarge{grid-column:1/-1}
+.pActions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 0}
+.pActions .bouton:first-child{grid-column:1/-1}
+a.bouton{display:flex;align-items:center;justify-content:center;text-decoration:none;box-sizing:border-box}
+/* les tuiles de My block deviennent des boutons : elles ouvrent le profil */
+button.mienTuile{appearance:none;cursor:pointer;color:inherit;font:inherit;width:100%}
+button.mienTuile:hover{border-color:var(--accent)}
 
 .nav{position:fixed;left:0;right:0;bottom:0;background:rgba(7,11,24,.93);backdrop-filter:blur(12px);
   border-top:1px solid var(--ligne);padding:8px 10px calc(8px + env(safe-area-inset-bottom));z-index:20}
@@ -348,6 +374,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
             <div class="fActions">
               <button class="bouton sec" id="fGM">Send GM 👋</button>
               <button class="bouton sec" id="fOuvrir">Read its facts</button>
+              <button class="bouton plein" id="fProfil">Open profile</button>
             </div>
             <p class="note" id="fNote"></p>
           </div>
@@ -466,6 +493,35 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
   <!-- ══ MY BLOCK — EN DERNIER, comme demande ═══════════════════════════════════════════════ -->
   <section class="volet" id="v-mien" aria-label="My block">
+    <!-- ⛔ LE PROFIL NE DEMANDE PAS DE WALLET. Il se lit depuis la chaine pour n importe quel block,
+         et s ouvre par un lien (`?block=…&chain=…`) : un profil qu on ne peut pas partager n est pas
+         un profil. Seule la tuile « You hold » a besoin d une adresse connectee. -->
+    <div class="carte" id="profil" hidden>
+      <div class="pTete">
+        <div class="pAvatar" id="pAvatar"></div>
+        <div style="min-width:0">
+          <p class="pSym" id="pSym"></p>
+          <p class="pNomLong" id="pNomLong"></p>
+          <p class="mono pAdr" id="pAdr"></p>
+        </div>
+        <button class="puce pFermer" id="pFermer" type="button" aria-label="Close profile">✕</button>
+      </div>
+      <div class="pStats">
+        <div class="pStat"><span>Life</span><b id="pVie"></b></div>
+        <div class="pStat"><span>Supply</span><b id="pSupply"></b></div>
+        <div class="pStat"><span>Minting</span><b id="pScelle"></b></div>
+        <div class="pStat"><span>Native B20</span><b id="pB20"></b></div>
+        <div class="pStat pLarge"><span>You hold</span><b id="pSolde"></b></div>
+      </div>
+      <div class="pActions">
+        <button class="bouton" id="pEnvoyer" type="button">Send from this block</button>
+        <button class="bouton sec" id="pPartager" type="button">Share profile</button>
+        <button class="bouton sec" id="pMap" type="button">Show on map</button>
+        <a class="bouton sec" id="pExplorer" target="_blank" rel="noopener" style="grid-column:1/-1">Open in explorer ↗</a>
+      </div>
+      <p class="note" id="pNote"></p>
+    </div>
+
     <div class="carte">
       <p class="titre">My block</p>
       <p class="sous">Everything about you: the blocks you made, their life, and what you can do.</p>
@@ -545,12 +601,35 @@ let CHAINE = 8453;
 let compte = null;
 
 let idRpc = 0;
+/* ⛔⛔ UN 429 SE RETENTE, IL NE SE CONCLUT PAS. Mesure du 2026-09-11 sur le profil de Block 0 :
+ * 10 lectures sur 10 refusees en HTTP 429 pendant que la map lisait ses vies — et le profil
+ * affichait « not read » partout, alors que la meme lecture, au calme, rend le cap (1e27). La
+ * limite de debit du noeud public se lisait a l ecran comme un fait sur le block.
+ * ⇒ Trois nouvelles tentatives, attente doublee a chaque fois (0,7 s, 1,4 s, 2,8 s). Au-dela, on
+ *   echoue ET l appelant dit « not read » : on n attend pas indefiniment pour masquer une panne.
+ * ⚠️ SUR DES LECTURES SEULEMENT. Tout ce qui passe ici est une lecture publique (`eth_call`,
+ *    `eth_getLogs`, `eth_estimateGas`, recus) : la rejouer ne change rien sur la chaine. Aucun
+ *    envoi ne passe par cette fonction — les envois passent par le wallet, via `envoi.js`. */
+const ESSAIS_429 = 3;
 async function rpc(methode, params) {
-  const r = await fetch(RESEAUX[CHAINE].rpc, { method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: ++idRpc, method: methode, params }) });
-  const j = await r.json();
-  if (j.error) throw new Error(j.error.message);
-  return j.result;
+  for (let essai = 0; ; essai++) {
+    const r = await fetch(RESEAUX[CHAINE].rpc, { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: ++idRpc, method: methode, params }) });
+    const limite = r.status === 429;
+    let j = null;
+    if (!limite) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      j = await r.json();
+    }
+    const refusDebit = limite || (j && j.error && /rate limit|too many requests/i.test(String(j.error.message)));
+    if (refusDebit && essai < ESSAIS_429) {
+      await new Promise((ok) => setTimeout(ok, 700 * 2 ** essai));
+      continue;
+    }
+    if (limite) throw new Error('HTTP 429 after ' + (ESSAIS_429 + 1) + ' tries');
+    if (j.error) throw new Error(j.error.message);
+    return j.result;
+  }
 }
 
 /**
@@ -898,9 +977,12 @@ async function listerMesBlocks() {
           + '— unknown, not « not yours »' : '') + '.</p>';
       return;
     }
+    /* ⛔ CHAQUE TUILE OUVRE LE PROFIL. Une grille de visages qu on ne peut pas toucher se lit comme
+     * une decoration ; le profil est la ou le block devient quelqu un. */
     boite.innerHTML = '<div class="grilleMien">' + gardees.slice(0, 12).map((c) =>
-      '<div class="mienTuile"><div class="mienArt">' + dessin(c.jeton, c.symbole) + '</div>'
-      + '<b>' + enTexte(String(c.symbole || '?').slice(0, 12)) + '</b></div>').join('') + '</div>'
+      '<button type="button" class="mienTuile" data-block="' + enTexte(c.jeton) + '" data-sym="'
+      + enTexte(String(c.symbole || '').slice(0, 32)) + '"><div class="mienArt">' + dessin(c.jeton, c.symbole) + '</div>'
+      + '<b>' + enTexte(String(c.symbole || '?').slice(0, 12)) + '</b></button>').join('') + '</div>'
       + '<p class="note">' + gardees.length + ' block(s) you created, in the window we read'
       + (nonResolues.length ? ' · ⚠️ ' + nonResolues.length + ' creation(s) unattributed — unknown, '
         + 'not « not yours »' : '') + '.</p>';
@@ -931,6 +1013,9 @@ $('#pReseau').addEventListener('click', () => {
    * d une autre chaine. */
   $('#sEtat').textContent = '';
   void majWallet();
+  /* ⛔ LE PROFIL OUVERT PARLAIT DE L AUTRE CHAINE : on le ferme et on invalide sa lecture en cours. */
+  jetonProfil++;
+  $('#profil').hidden = true;
 });
 
 /* ⛔ MASQUER LE PANNEAU NE LE DETRUIT PAS. La map se re-mesure apres, parce que les blocks sont
@@ -1239,8 +1324,142 @@ if (window.ethereum && typeof window.ethereum.on === 'function') {
   });
 }
 
+/* ══ PROFIL D UN BLOCK ═══════════════════════════════════════════════════════════════════════
+ * ⛔⛔ TOUT CE QUI S AFFICHE EST LU, ET CE QUI N A PAS PU L ETRE LE DIT. Une tuile vide se lirait
+ *    comme un zero ; « not read » dit que c est nous qui n avons pas vu, pas le block qui n a rien.
+ * ⛔ UN JETON PAR OUVERTURE, meme discipline que le Wallet : ouvrir un deuxieme profil pendant que
+ *    le premier se lit ne doit pas laisser les chiffres de l un s ecrire sous le visage de l autre.
+ * ⚠️ CE QUE LE PROFIL NE MONTRE PAS ENCORE : le createur, les detenteurs, l historique des achats.
+ *    Il faut un index des evenements — c est le chantier du fil Social. */
+let jetonProfil = 0;
+
+function allerA(nom) {
+  const b = document.querySelector('.navB[data-volet="' + nom + '"]');
+  if (b) b.click();
+}
+
+async function ouvrirProfil(adr, sym) {
+  if (!ADRESSE.test(String(adr || ''))) return;
+  const moi = ++jetonProfil;
+  const perime = () => moi !== jetonProfil;
+  allerA('mien');
+  const p = $('#profil');
+  p.hidden = false;
+  p.dataset.block = adr;
+  $('#pAvatar').innerHTML = dessin(adr, sym);
+  $('#pSym').textContent = sym || '…';
+  $('#pNomLong').textContent = '';
+  $('#pAdr').textContent = adr;
+  $('#pExplorer').href = RESEAUX[CHAINE].explorateur + '/token/' + adr;
+  for (const id of ['#pVie', '#pSupply', '#pScelle', '#pB20', '#pSolde']) $(id).textContent = '…';
+  $('#pNote').textContent = 'reading the chain…';
+  p.scrollIntoView({ block: 'start', behavior: 'smooth' });
+
+  let f = null;
+  try { f = await faitsDuBlock({ rpc, jeton: adr, pause: 280 }); } catch { /* dit juste dessous */ }
+  if (perime()) return;
+  if (f) {
+    /* le dessin depend du symbole : on ne le refait que s il manquait a l ouverture */
+    if (f.symbole && !sym) { $('#pAvatar').innerHTML = dessin(adr, f.symbole); }
+    if (f.symbole) $('#pSym').textContent = f.symbole;
+    else if (!sym) $('#pSym').textContent = 'symbol not read';
+    $('#pNomLong').textContent = f.nom || '';
+    /* ⛔ LE MARQUEUR EST LE CODE, PAS LE PREFIXE D ADRESSE (EIP-3541 : `0xef` est infalsifiable). */
+    $('#pB20').textContent = f.estB20 === null ? 'not read' : f.estB20 ? 'yes · code 0xef' : '⚠️ no';
+    $('#pSupply').textContent = supplyLisible(f.supply, f.decimales) || 'not read';
+    $('#pScelle').textContent = f.mintFerme === null ? 'not read' : f.mintFerme ? 'sealed — nobody can make more' : 'still open';
+  } else {
+    for (const id of ['#pSupply', '#pScelle', '#pB20']) $(id).textContent = 'not read';
+  }
+
+  await dormir(260);
+  if (perime()) return;
+  let v = null;
+  try { v = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: adr }); } catch { /* dit juste dessous */ }
+  if (perime()) return;
+  /* ⛔ TROIS ETATS, JAMAIS DEUX. « Pas de marche » est un fait sur le block ; « illisible » est un
+   * fait sur notre lecture. Les fondre ferait dire au profil de quelqu un qu il ne vaut rien. */
+  $('#pVie').textContent = !v || v.etat === 'NON_LUE' || v.etat === 'REFUSEE' ? 'unreadable right now'
+    : v.etat === 'NON_TROUVEE' ? 'no market yet'
+      : (Math.round(v.vie * 100) / 100).toLocaleString('en-US') + ' ' + (v.devise || '');
+
+  if (!compte) {
+    $('#pSolde').textContent = 'connect your wallet to see';
+  } else {
+    await dormir(260);
+    if (perime()) return;
+    let b = null;
+    try { b = await lireJeton(adr, compte); } catch { /* dit juste dessous */ }
+    if (perime()) return;
+    if (!b) $('#pSolde').textContent = 'not read';
+    else {
+      let part = '';
+      /* ⛔ LA PART EN ENTIERS, PAS EN FLOTTANTS : 1e27 depasse la precision d un nombre JS. */
+      if (f && typeof f.supply === 'bigint' && f.supply > 0n && f.decimales === b.decimales) {
+        const pm = b.solde * 1000000n / f.supply;
+        part = ' · ' + (Number(pm) / 10000).toLocaleString('en-US', { maximumFractionDigits: 4 }) + ' % of supply';
+      }
+      $('#pSolde').textContent = formaterUnites(b.solde, b.decimales) + part;
+    }
+  }
+  $('#pNote').textContent = f && f.manques.length ? 'not read: ' + f.manques.join(', ') : '';
+}
+
+$('#mesBlocks').addEventListener('click', (e) => {
+  const t = e.target.closest('.mienTuile[data-block]');
+  if (t) void ouvrirProfil(t.getAttribute('data-block'), t.getAttribute('data-sym') || null);
+});
+$('#fProfil').addEventListener('click', () => {
+  const adr = $('#fAdr').textContent.trim();
+  const h = habitants.find((x) => x.adr === adr);
+  void ouvrirProfil(adr, h ? h.sym : null);
+});
+$('#pFermer').addEventListener('click', () => { jetonProfil++; $('#profil').hidden = true; });
+
+/* ⛔ LE LIEN PORTE LA CHAINE. Un lien `?block=` seul, ouvert par quelqu un sur l autre reseau,
+ * afficherait un profil vide et credible — « ce block n existe pas » alors qu il existe ailleurs. */
+$('#pPartager').addEventListener('click', async () => {
+  const adr = $('#profil').dataset.block;
+  const lien = location.origin + location.pathname + '?block=' + adr + '&chain=' + CHAINE;
+  try { await navigator.clipboard.writeText(lien); $('#pNote').textContent = 'Profile link copied.'; }
+  catch { $('#pNote').textContent = 'Copy failed — here is the link: ' + lien; }
+});
+$('#pMap').addEventListener('click', () => {
+  const adr = $('#profil').dataset.block;
+  allerA('map');
+  const h = habitants.find((x) => x.adr.toLowerCase() === String(adr).toLowerCase());
+  if (h) h.el.click();
+  else $('#mapNote').textContent = 'This block is not on the map right now — the map shows one window '
+    + 'of recent chain history, not every block that exists.';
+});
+/* ⛔ ENVOYER DEPUIS CE BLOCK = LE FORMULAIRE DU WALLET, PRE-REMPLI. Pas un second chemin d envoi :
+ * un seul formulaire, une seule garde (`envoi.js`), une seule regle 8 a surveiller. */
+$('#pEnvoyer').addEventListener('click', () => {
+  const adr = $('#profil').dataset.block;
+  if (!compte) { $('#pNote').textContent = 'Connect your wallet first — it signs, this page never does.'; return; }
+  const a = actifs.find((x) => x.etat === 'LU' && String(x.id).toLowerCase() === String(adr).toLowerCase());
+  if (!a) {
+    $('#pNote').textContent = 'This block is not in your wallet list yet: either you hold none, or it '
+      + 'was not read. Only blocks you created are listed for now.';
+    return;
+  }
+  allerA('wallet');
+  $('#wReceive').hidden = true;
+  $('#wSendCarte').hidden = false;
+  $('#sActif').value = a.id;
+  majRecap();
+  $('#sDest').focus();
+});
+
+/* ⛔ UN LIEN MAL FORME NE S OUVRE PAS ET NE SE CORRIGE PAS. Une chaine inconnue garde le reseau par
+ * defaut ; une adresse invalide n ouvre rien. */
+const paramsLien = new URLSearchParams(location.search);
+const chaineLien = Number(paramsLien.get('chain'));
+if (RESEAUX[chaineLien]) CHAINE = chaineLien;
 $('#pReseau').textContent = RESEAUX[CHAINE].nom;
 charger();
+const blockLien = paramsLien.get('block');
+if (blockLien && ADRESSE.test(blockLien)) void ouvrirProfil(blockLien, null);
 </script>
 </body>
 </html>
