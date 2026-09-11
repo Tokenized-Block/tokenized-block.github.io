@@ -37,24 +37,42 @@
    *    deux violets a un degre d ecart se lisent comme une erreur qu on ne sait pas nommer. C est
    *    ce qui separe une interface qui a l air soignee d une qui a l air bricolee.
    *
-   * ⇒ TOUT DERIVE DE `--h`. Une seule teinte, 255, celle de l accent mainstreet (#a78bfa). Les
-   *   nuances ne changent que la SATURATION et la CLARTE. Il devient impossible d en desaccorder
-   *   une sans desaccorder toutes les autres — donc impossible de deriver a nouveau.
+   * ⇒ UNE SEULE FAMILLE, MESUREE. Les six couleurs de base sont les valeurs EXACTES de la vitrine
+   *   MainStreet (voir juste dessous) ; les nuances qui n y existent pas derivent de `--h` en ne
+   *   changeant que la SATURATION et la CLARTE. La regle 17 refuse toute teinte hors 252–266 —
+   *   donc les neuf violets desaccordes ne peuvent pas revenir.
    *
-   * ⚠️ La teinte 255 vient d une CAPTURE, pas de la source : le depot `philpof102-svg/mainstreet`
-   *    ne contient aucun hex violet, la vitrine est deployee ailleurs. Corriger la valeur exacte
-   *    est desormais UNE ligne — c est tout l interet de n avoir qu un seul point. */
+   * ⛔ CE COMMENTAIRE DISAIT « la teinte 255 vient d une CAPTURE » et « tout derive de `--h` ». Les
+   *    deux sont devenus faux le 2026-09-11 : la page a ete mesuree, et son fond est a 263, pas 255.
+   *    Un commentaire que le code juste en dessous dement coute plus cher qu une absence de
+   *    commentaire — c est lui qu on croit. */
+  /* ⛔⛔ MESURE SUR LA VRAIE PAGE, PLUS SUR UNE CAPTURE (2026-09-11). La vitrine MainStreet est la
+   * page d accueil du serveur MCP lui-meme — `avisradar-production.up.railway.app/mainstreet.html` —
+   * et `curl` s y faisait refuser en 403 ; un vrai navigateur passe. Valeurs CALCULEES par
+   * `getComputedStyle` sur les elements affiches :
+   *     bouton / mot « Trust »  #a78bfa  teinte 255   (mon approximation etait exacte)
+   *     fond de page            #0f0a17  teinte 263   (la mienne etait a 255 : 8 degres a cote)
+   *     texte                   #f3effb  teinte 260
+   *     texte des paragraphes   #b9a9dd  teinte 258
+   *     bordures                #2f2545  teinte 259
+   *     bouton secondaire       #1a1228  teinte 262
+   * ⇒ MainStreet n utilise PAS une teinte unique : c est une FAMILLE serree, 255 a 263. En forcant
+   *   tout sur 255, j avais decale le fond par rapport a l original que je pretendais copier. */
   --h:255;
-  --fond:hsl(var(--h) 38% 5%); --fond2:hsl(var(--h) 32% 9%);
-  --carte:hsl(var(--h) 37% 12%); --ligne:hsl(var(--h) 32% 19%);
-  --texte:hsl(var(--h) 100% 98%); --doux:hsl(var(--h) 42% 79%);
-  --accent:hsl(var(--h) 92% 76%); --accent2:hsl(var(--h) 100% 87%);
+  --fond:#0f0a17; --fond2:#1a1228;
+  --carte:hsl(var(--h) 37% 12%); --ligne:#2f2545;
+  --texte:#f3effb; --doux:#b9a9dd;
+  --accent:#a78bfa; --accent2:hsl(var(--h) 100% 87%);
   /* les nuances qui trainaient en dur, ramenees sur la meme teinte */
   /* ⛔ `--halo` ET `--mapFond` ONT ETE RETIRES AVEC LES DEGRADES. Un token qui ne sert plus se
    * relit comme une option encore valable, et le prochain qui le voit refait la tache lumineuse
    * qu on vient d enlever. */
-  --mapNuit:hsl(var(--h) 36% 4%);
-  --grille:hsl(var(--h) 37% 21%); --contour:hsl(var(--h) 29% 29%); --creux:hsl(var(--h) 33% 8%);
+  /* ⛔ LA MAP A LE MEME FOND QUE LA PAGE, comme chez MainStreet : un seul noir, et seule la grille
+   * l habite. Deux noirs voisins se lisent comme un cadre qu on n a pas voulu dessiner. */
+  --mapNuit:var(--fond);
+  /* ⛔ LA GRILLE EST L ACCENT A 10 %, mesure : `rgba(167, 139, 250, 0.1)` sur la vraie page. Ce n est
+   * pas une couleur de plus, c est LA couleur, estompee — et c est pour ca qu elle ne detonne jamais. */
+  --grille:rgb(167 139 250 / .1); --contour:hsl(var(--h) 29% 29%); --creux:hsl(var(--h) 33% 8%);
   --vif:#3ddc97; --tiede:#f0c674; --dur:#ff6b6b; --r:16px; --rs:11px;
 }
 *{box-sizing:border-box}
@@ -139,7 +157,9 @@ body{background:var(--fond);
   background:rgba(10,10,20,.8);backdrop-filter:blur(6px);color:var(--doux);font:inherit;font-size:11.5px;
   font-weight:700;padding:8px 13px;border-radius:99px;cursor:pointer;min-height:36px}
 .bMasquer:hover,.bMasquer[aria-expanded="true"]{color:var(--texte);border-color:var(--accent)}
-.mapEnv::before{content:"";position:absolute;inset:0;opacity:.35;pointer-events:none;
+/* ⛔ OPACITE A 1 : l estompage est DEJA dans la couleur (accent a 10 %, mesure). Garder `.35`
+ * par-dessus la ramenait a 3,5 % — une grille qu on ne voit plus, donc un fond redevenu vide. */
+.mapEnv::before{content:"";position:absolute;inset:0;opacity:1;pointer-events:none;
   background-image:linear-gradient(var(--grille) 1px,transparent 1px),linear-gradient(90deg,var(--grille) 1px,transparent 1px);
   background-size:34px 34px}
 /* ⛔ LES ETIQUETTES TECHNIQUES EN MONOSPACE, comme chez mainstreet — c est la partie de leur DA qui
