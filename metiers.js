@@ -1,0 +1,165 @@
+// metiers.js — le metier du cerveau d un block : il OBSERVE et PROPOSE, il n execute JAMAIS.
+// ================================================================================================
+// ⛔⛔ LA LIGNE QUI NE BOUGE PAS. Phil veut des cerveaux qui « tradent un peu, gerent un peu le
+//    wallet, momentum sell and buy ». Un agent qui PASSE les ordres detient une cle : c est de la
+//    custodie, et c est la premiere promesse de cette app donnee. Donc ici : le metier LIT la chaine
+//    et REDIGE une proposition ; le wallet de l utilisateur la signe, ou ne la signe pas.
+//    Chaque proposition porte `signeParUtilisateur: true` — et un test refuse qu il en existe une
+//    seule sans ce drapeau. C est volontairement penible a contourner.
+//
+// ⛔ AUCUN METIER N OUVRE UNE GARDE. Comme les paliers de `pointsdevie.js` : un metier change ce que
+//    le block DIT, jamais ce que l app VERIFIE. Sinon un block « Momentum » finirait par sauter le
+//    controle de chaine que les autres subissent.
+//
+// ⛔⛔ UNE TENDANCE DEMANDE TROIS LECTURES. Avec deux points on trace la droite qu on veut ; avec un
+//    seul on invente. `momentum` rend PAS_ASSEZ tant qu il n a pas trois mesures — dire « ca monte »
+//    sur une lecture unique est exactement la faute qui a coute le « 6 % » de ce depot.
+//
+// ⚠️ CE QUE CE MODULE NE FAIT PAS : il ne lit pas le reseau lui-meme, il ne connait pas le prix du
+//    BTC, et il ne sait rien d autre que ce qu on lui donne. Un metier « trade BTC » demanderait un
+//    oracle nomme et verifie ; tant qu il n existe pas, ce metier n existe pas ici.
+import { keccak256Hex } from './keccak.js';
+
+const enc = new TextEncoder();
+
+/**
+ * Les metiers. `fait` = ce qu il lit. `propose` = ce qu il peut soumettre A SIGNER. `jamais` = la
+ * borne dite a l ecran, parce qu une borne qu on ne lit pas ne rassure personne.
+ */
+export const METIERS = [
+  { cle: 'GARDIEN', titre: 'Keeper',
+    fait: 'watches its own market cap and says when it moves',
+    propose: null,
+    jamais: 'never moves anything — it only reports' },
+  { cle: 'MOMENTUM', titre: 'Momentum',
+    fait: 'compares its last three readings and calls the trend',
+    propose: 'a buy or a sell, prepared for you to sign',
+    jamais: 'never sends an order by itself' },
+  { cle: 'ECLAIREUR', titre: 'Scout',
+    fait: 'ranks the blocks it can see, and says how shallow they are',
+    propose: null,
+    jamais: 'never claims a rank over blocks it could not read' },
+  { cle: 'HERAUT', titre: 'Herald',
+    fait: 'writes a post about its block using measured numbers only',
+    propose: 'a draft you send yourself',
+    jamais: 'never posts anywhere on its own' },
+  { cle: 'COMPTABLE', titre: 'Bookkeeper',
+    fait: 'reads what the block holds and what its position has earned',
+    propose: 'a fee collection, prepared for you to sign',
+    jamais: 'never collects, and never holds a key' },
+];
+
+export const ETATS_TENDANCE = ['HAUSSE', 'BAISSE', 'PLAT', 'PAS_ASSEZ'];
+/** En dessous de ce mouvement relatif, on dit PLAT : le bruit n est pas une tendance. */
+export const SEUIL_PLAT = 0.02;
+/** ⛔ Trois lectures MINIMUM. Deux points font toujours une droite. */
+export const LECTURES_MIN = 3;
+
+/**
+ * Le metier d un block, derive de son adresse.
+ * ⛔ DETERMINISTE ET SANS STOCKAGE : le meme block a le meme metier chez tout le monde, pour
+ *    toujours. Un metier tire au hasard a l ouverture ferait d un block deux personnages.
+ * ⚠️ A la creation, ce choix pourra etre FAIT par l utilisateur et voyager avec le block ; tant que
+ *    rien ne le grave, il est derive — ce qui est honnete tant qu on le dit a l ecran.
+ */
+export function metierDe(adresse) {
+  if (!/^0x[0-9a-fA-F]{40}$/.test(String(adresse || ''))) throw new Error('metierDe needs an address');
+  const h = keccak256Hex(enc.encode('metier:' + String(adresse).toLowerCase()));
+  return METIERS[parseInt(h.slice(2, 10), 16) % METIERS.length];
+}
+
+/**
+ * La tendance, a partir de lectures HORODATEES de la capitalisation.
+ * @param {Array<{at:number, vie:number}>} lectures
+ * ⛔ LES LECTURES NON MESUREES SONT JETEES, PAS REMPLACEES PAR ZERO. Un trou dans la serie est un
+ *    trou : le combler par zero fabriquerait un effondrement qui n a jamais eu lieu.
+ */
+export function momentum(lectures) {
+  const bonnes = (Array.isArray(lectures) ? lectures : [])
+    .filter((l) => l && typeof l.vie === 'number' && Number.isFinite(l.vie) && l.vie > 0)
+    .sort((a, b) => (a.at || 0) - (b.at || 0));
+  if (bonnes.length < LECTURES_MIN) {
+    return { etat: 'PAS_ASSEZ', variation: null, lectures: bonnes.length,
+      pourquoi: 'a trend needs ' + LECTURES_MIN + ' readings — ' + bonnes.length + ' so far. Two points always make a line.' };
+  }
+  const premiere = bonnes[0].vie, derniere = bonnes[bonnes.length - 1].vie;
+  const variation = (derniere - premiere) / premiere;
+  const etat = Math.abs(variation) < SEUIL_PLAT ? 'PLAT' : variation > 0 ? 'HAUSSE' : 'BAISSE';
+  return { etat, variation, lectures: bonnes.length, pourquoi: null };
+}
+
+/**
+ * Le rapport du metier : des lignes a lire, et des propositions A SIGNER.
+ * ⛔ TOUTE PROPOSITION PORTE `signeParUtilisateur: true`. Un test parcourt tous les rapports
+ *    possibles et echoue s il en trouve une sans. C est la garde qui empeche ce module de devenir,
+ *    un jour, un executeur.
+ */
+export function rapport({ metier, symbole = null, vie = null, devise = null, tendance = null,
+  rang = null, population = null, solde = null } = {}) {
+  /* ⛔ LE METIER EST RETROUVE DANS LA LISTE, PAS CRU SUR PAROLE. Ma premiere version gardait tout
+   * objet portant un `cle` : un metier inconnu traversait, et `jamais` s affichait « undefined » —
+   * la borne qui rassure devenait un bug a l ecran. */
+  const m = METIERS.find((x) => metier && x.cle === metier.cle) || METIERS[0];
+  const nom = symbole || 'this block';
+  const lignes = [];
+  const propositions = [];
+  const aVie = typeof vie === 'number' && Number.isFinite(vie) && vie > 0;
+
+  /* ⛔ SANS MARCHE, CHAQUE METIER LE DIT AU LIEU DE MEUBLER. Un rapport qui parle quand meme
+   * apprend a ne plus le lire. */
+  if (!aVie) {
+    lignes.push(nom + ' has no readable market cap right now — never traded, or we could not read it.');
+  } else {
+    lignes.push('Market cap read: ' + vie + (devise ? ' ' + devise : '') + '.');
+  }
+
+  if (m.cle === 'MOMENTUM') {
+    if (!tendance || tendance.etat === 'PAS_ASSEZ') {
+      lignes.push(tendance && tendance.pourquoi ? tendance.pourquoi
+        : 'Not enough readings yet to call a trend.');
+    } else {
+      lignes.push('Trend over ' + tendance.lectures + ' readings: ' + tendance.etat.toLowerCase()
+        + ' (' + Math.round(tendance.variation * 1000) / 10 + ' %).');
+      /* ⛔ LA PROPOSITION EST UNE PHRASE, PAS UN ORDRE : ni montant, ni slippage, ni envoi. */
+      propositions.push({
+        quoi: tendance.etat === 'BAISSE' ? 'SELL' : 'BUY',
+        pourquoi: 'the last ' + tendance.lectures + ' readings moved '
+          + Math.round(tendance.variation * 1000) / 10 + ' %',
+        signeParUtilisateur: true,
+        avertissement: 'A market cap is buyable: measured 2026-09-09, 0.01 ETH moved a displayed cap '
+          + 'by 2 346 ETH. Size is not money in the pool.',
+      });
+    }
+  }
+
+  if (m.cle === 'ECLAIREUR') {
+    lignes.push(rang && population
+      ? 'Rank ' + rang + ' of ' + population + ' blocks we could read — not of every block that exists.'
+      : 'No rank: not enough blocks were read to compare.');
+  }
+
+  if (m.cle === 'COMPTABLE') {
+    lignes.push(solde === null ? 'Your balance of this block was not read.'
+      : 'You hold ' + solde + ' of it.');
+    propositions.push({
+      quoi: 'COLLECT_FEES',
+      pourquoi: 'the 0.5 % launch fee accrues to the liquidity position, and only its owner can collect',
+      signeParUtilisateur: true,
+      avertissement: 'Collecting is a signature in your wallet, and only the position owner can do it.',
+    });
+  }
+
+  if (m.cle === 'HERAUT') {
+    lignes.push(aVie
+      ? 'Draft: "' + nom + ' is at ' + vie + (devise ? ' ' + devise : '') + ' of life right now."'
+      : 'Draft: "' + nom + ' has never been traded yet."');
+    propositions.push({
+      quoi: 'POST_DRAFT',
+      pourquoi: 'a post is written here and sent by you, never by this page',
+      signeParUtilisateur: true,
+      avertissement: 'Only measured numbers go in a draft — nothing is invented to make it sound better.',
+    });
+  }
+
+  return { metier: m, lignes, propositions, jamais: m.jamais };
+}

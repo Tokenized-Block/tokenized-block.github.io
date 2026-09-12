@@ -247,6 +247,20 @@ body{background:var(--fond);
   font-variant-numeric:tabular-nums}
 .pcStats b{color:var(--texte)}
 .pcBascule{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:var(--doux);cursor:pointer}
+.pmLignes{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:5px;
+  font-size:12px;color:var(--doux);line-height:1.45}
+.pmProp{border:1px solid var(--ligne);border-radius:var(--rs);padding:9px 11px;margin:8px 0 0;background:var(--fond2)}
+.pmProp b{color:var(--accent2)}
+.pmProp .aSigner{display:inline-block;font-size:10px;font-weight:800;text-transform:uppercase;
+  letter-spacing:.4px;color:var(--tiede);border:1px solid var(--tiede);border-radius:99px;padding:2px 7px;margin-left:6px}
+/* ══ CLASSEMENT — l ego du plus gros, avec sa borne collee dessus ══ */
+.rangs{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.rangL{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--ligne)}
+.rangN{font-weight:800;font-size:13px;color:var(--accent2);min-width:28px}
+.rangArt{width:30px;height:33px;flex:0 0 auto;border-radius:8px;overflow:hidden;background:var(--creux)}
+.rangArt svg{display:block;width:100%;height:100%}
+.rangNom{flex:1;min-width:0;font-weight:800;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rangVie{font-weight:800;font-size:12.5px;font-variant-numeric:tabular-nums}
 .pActions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 0}
 .pActions .bouton:first-child{grid-column:1/-1}
 a.bouton{display:flex;align-items:center;justify-content:center;text-decoration:none;box-sizing:border-box}
@@ -502,6 +516,17 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
     <!-- ⛔ LE PROFIL NE DEMANDE PAS DE WALLET. Il se lit depuis la chaine pour n importe quel block,
          et s ouvre par un lien (`?block=…&chain=…`) : un profil qu on ne peut pas partager n est pas
          un profil. Seule la tuile « You hold » a besoin d une adresse connectee. -->
+    <!-- ⛔ LE CLASSEMENT EST UN ECHANTILLON, ET IL LE DIT. « Le plus gros » ne vaut que parmi ce que
+         cette page a SU LIRE ; la borne rendue par `classement.js` est affichee sous la liste. -->
+    <div class="carte" id="carteRang">
+      <p class="titre">Biggest blocks</p>
+      <p class="sous">Ranked by the market cap we could read. Feeding a block — buying it — is what
+        makes it grow.</p>
+      <ol class="rangs" id="rangs"></ol>
+      <p class="note" id="rangNote"></p>
+      <p class="note" id="rangBorne"></p>
+    </div>
+
     <div class="carte" id="profil" hidden>
       <div class="pTete">
         <div class="pAvatar" id="pAvatar"></div>
@@ -539,6 +564,15 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
           <span>↻ <b id="pcTick">—</b> ticks</span>
         </div>
         <p class="note mono" id="pcEmpreinte"></p>
+      </div>
+      <!-- ⛔ LE METIER DU BLOCK. Il OBSERVE et PROPOSE ; ce qui coute quelque chose se signe dans le
+           wallet de l utilisateur, jamais ici. La ligne « never » est affichee avec le metier. -->
+      <div class="pJeu" id="pMetier">
+        <div class="pJeuTete"><span class="pBadge" id="pmTitre">—</span><span class="pPV" id="pmTendance"></span></div>
+        <p class="pProchain" id="pmFait"></p>
+        <ul class="pmLignes" id="pmLignes"></ul>
+        <div id="pmPropositions"></div>
+        <p class="note" id="pmJamais"></p>
       </div>
       <div class="pStats">
         <div class="pStat"><span>Market cap · life</span><b id="pVie"></b></div>
@@ -609,6 +643,13 @@ import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
  * vivre le block : sa facon de bouger sur la map et son humeur, derivees de son adresse et de ce qui
  * lui arrive VRAIMENT sur la chaine. Aucun ordre, aucune signature, aucune cle. */
 import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase } from './cerveau.js';
+/* ⛔ LE METIER DU CERVEAU : il lit et il PROPOSE. Le module refuse par construction toute
+ * proposition qui ne porte pas « signe par l utilisateur » — un test parcourt tous les rapports
+ * possibles pour le verifier. Aucun ordre ne part d ici. */
+import { metierDe, momentum, rapport } from './metiers.js';
+/* ⛔ LE CLASSEMENT PORTE SA POPULATION ET SA BORNE : « 3e » sans « sur combien, lu comment » est un
+ * palmares invente. Le module rend la phrase, l ecran l affiche. */
+import { classer, rangDe } from './classement.js';
 
 const $ = (s) => document.querySelector(s);
 const enTexte = (t) => { const d = document.createElement('div'); d.textContent = String(t); return d.innerHTML; };
@@ -623,6 +664,8 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   /* ⛔ EN REVENANT SUR LA MAP, ON REMESURE. Les blocks ont pu naitre pendant que l onglet etait cache,
    * donc dans une aire par defaut qui n est pas celle de l ecran. */
   if (nom === 'map') setTimeout(replacerDansLaMap, 50);
+  /* le classement se refait a l ouverture de l onglet : les vies ont pu arriver entre-temps */
+  if (nom === 'mien') peindreClassement();
 });
 
 /* ⛔ UNE SEULE TABLE POUR LE RESEAU : RPC, StateView et nom voyagent ENSEMBLE. Les separer
@@ -1005,6 +1048,9 @@ async function lireLaVie() {
       h.pourquoi = r.pourquoi;
     }
   }
+  /* ⛔ LE CLASSEMENT SE PEINT QUAND LES VIES SONT LA, pas au chargement : sinon il dirait « aucun
+   * classe » sur une lecture qui n avait pas encore commence. */
+  peindreClassement();
   const n = $('#mapNote');
   n.textContent = (n.textContent || '') + ' · life read on ' + lus + '/' + habitants.length
     + ' — ' + avecMarche + ' with a market'
@@ -1465,7 +1511,60 @@ let jetonProfil = 0;
 /* vrai tant qu un profil se lit : la boucle des vies de la map lui cede le noeud */
 let profilEnLecture = false;
 /* ce que le profil ouvert a lu — « Show on map » pose le block avec, sans relire */
-let symProfil = null, vieProfil = null, etatVieProfil = undefined;
+let symProfil = null, vieProfil = null, etatVieProfil = undefined, deviseProfil = null, soldeProfil = null;
+
+/* ⛔ LE CLASSEMENT SE CALCULE SUR CE QU ON A LU, ET RIEN D AUTRE. Les blocks sans vie lue partent en
+ * NON MESURES — jamais au fond de la liste, ou ils se liraient comme « les moins bons ». */
+function classementCourant() {
+  return classer(habitants.map((h) => ({
+    adr: h.adr, symbole: h.sym,
+    capitalisation: typeof h.vie === 'number' ? h.vie : null,
+    devise: h.devise || null,
+    pourquoi: h.pourquoi || null,
+  })));
+}
+
+function peindreClassement() {
+  const cl = classementCourant();
+  $('#rangs').innerHTML = cl.classes.slice(0, 10).map((b) => '<li class="rangL">'
+    + '<span class="rangN">' + b.rang + '</span>'
+    + '<div class="rangArt">' + dessin(b.adr, b.symbole) + '</div>'
+    + '<span class="rangNom">' + enTexte(b.symbole || '?') + '</span>'
+    + '<span class="rangVie">' + (Math.round(b.capitalisation * 100) / 100).toLocaleString('en-US')
+    + ' ' + enTexte(b.devise || '') + '</span></li>').join('');
+  /* ⛔ « AUCUN CLASSE » SE DIT COMME UN FAIT SUR NOTRE LECTURE, pas sur les blocks. */
+  /* ⛔ TROIS PHRASES, PAS DEUX. « Aucun classé sur 0 lu » se lisait comme un verdict alors que la map
+   * n avait simplement pas fini de lire — un fait sur nous, presenté comme un fait sur les blocks. */
+  $('#rangNote').textContent = cl.population === 0
+    ? 'The map has not finished reading the chain yet.'
+    : cl.classes.length
+      ? cl.classes.length + ' ranked of ' + cl.population + ' read · ' + cl.nonMesures.length
+        + ' with no readable market — unranked, which is not last.'
+      : 'None of the ' + cl.population + ' blocks we read has a readable market yet. Unranked is not last.';
+  $('#rangBorne').textContent = cl.borne;
+}
+
+/* ⛔ LE METIER PARLE APRES LA LECTURE, pas avant : sinon il commenterait des chiffres qu il n a pas. */
+function peindreMetier(adr) {
+  let m;
+  try { m = metierDe(adr); } catch (e) { return; }
+  const tendance = momentum(lecturesDe(adr));
+  const r = rangDe(classementCourant(), adr);
+  const rap = rapport({ metier: m, symbole: symProfil, vie: vieProfil, devise: deviseProfil,
+    tendance, rang: r ? r.rang : null, population: r ? r.sur : null, solde: soldeProfil });
+  $('#pmTitre').textContent = m.titre;
+  $('#pmFait').textContent = 'Its job: ' + m.fait + '.';
+  $('#pmTendance').textContent = tendance.etat === 'PAS_ASSEZ'
+    ? tendance.lectures + '/3 readings' : tendance.etat.toLowerCase();
+  $('#pmLignes').innerHTML = rap.lignes.map((l) => '<li>' + enTexte(l) + '</li>').join('');
+  /* ⛔ CHAQUE PROPOSITION PORTE « YOU SIGN » A L ECRAN, pas seulement dans l objet. Une garde qu on
+   * ne voit pas ne rassure personne, et c est celle-la qu on vend. */
+  $('#pmPropositions').innerHTML = rap.propositions.map((p) => '<div class="pmProp">'
+    + '<b>' + enTexte(String(p.quoi).replace(/_/g, ' ')) + '</b><span class="aSigner">you sign</span>'
+    + '<div class="note" style="margin-top:4px">' + enTexte(p.pourquoi) + '</div>'
+    + '<div class="note">⚠️ ' + enTexte(p.avertissement) + '</div></div>').join('');
+  $('#pmJamais').textContent = 'This job ' + m.jamais + '.';
+}
 
 /* ══ LE CERVEAU DU BLOCK OUVERT ══════════════════════════════════════════════════════════════
  * ⛔ IL BAT MEME SI LE BLOCK N EST PAS SUR LA MAP : on peut ouvrir le profil d un block par un lien,
@@ -1474,6 +1573,34 @@ let symProfil = null, vieProfil = null, etatVieProfil = undefined;
  *    avoir « retire le cerveau » d un block qui appartient a quelqu un d autre. */
 let profilCerveau = null;
 const CLE_CERVEAU = 'tblock.cerveau';
+const CLE_VIES = 'tblock.vies.';
+/** ⛔ VINGT LECTURES MAXIMUM PAR BLOCK : un journal qui grossit sans fin remplit le stockage du
+ * navigateur de quelqu un d autre. */
+const LECTURES_GARDEES = 20;
+
+/**
+ * Le journal des capitalisations lues, par block, dans CE navigateur.
+ * ⛔⛔ C EST CE QUI REND LE MOMENTUM HONNETE : une tendance demande trois lectures, et on ne les a
+ *    qu en revenant. Tant qu il n y en a pas trois, le metier dit « pas assez », il n invente pas.
+ * ⚠️ Local a ce navigateur : ce n est pas un historique partage, et l ecran ne le presente jamais
+ *    comme tel.
+ */
+function noterVie(adr, vie) {
+  if (typeof vie !== 'number' || !Number.isFinite(vie) || vie <= 0) return;
+  try {
+    const cle = CLE_VIES + String(adr).toLowerCase();
+    const journal = lecturesDe(adr);
+    journal.push({ at: Date.now(), vie });
+    localStorage.setItem(cle, JSON.stringify(journal.slice(-LECTURES_GARDEES)));
+  } catch (e) { /* stockage refuse : le metier dira simplement « pas assez » */ }
+}
+function lecturesDe(adr) {
+  try {
+    const brut = localStorage.getItem(CLE_VIES + String(adr).toLowerCase());
+    const j = brut ? JSON.parse(brut) : [];
+    return Array.isArray(j) ? j : [];
+  } catch (e) { return []; }
+}
 function cerveauVoulu() {
   try { return localStorage.getItem(CLE_CERVEAU) !== 'off'; } catch (e) { return true; }
 }
@@ -1582,9 +1709,21 @@ async function lireProfil(adr, sym, perime) {
   $('#pProchain').textContent = '';
   $('#pNotePalier').textContent = '';
   $('#pPuces').innerHTML = '';
+  deviseProfil = null;
+  soldeProfil = null;
+  $('#pmTitre').textContent = '…';
+  $('#pmFait').textContent = '';
+  $('#pmTendance').textContent = '';
+  $('#pmLignes').innerHTML = '';
+  $('#pmPropositions').innerHTML = '';
+  $('#pmJamais').textContent = '';
   $('#pcActif').checked = cerveauVoulu();
   try { profilCerveau = { etat: cerveauInitial(adr), vu: null }; } catch (e) { profilCerveau = null; }
   peindreCerveau();
+  /* ⛔ LE METIER S AFFICHE TOUT DE SUITE : il ne depend QUE de l adresse. L attacher a la fin des
+   * lectures laissait « … » pendant vingt secondes — une identite connue, cachee par une attente
+   * qui ne la concerne pas. Les chiffres, eux, arriveront quand ils arriveront. */
+  peindreMetier(adr);
   p.scrollIntoView({ block: 'start', behavior: 'smooth' });
 
   let f = null;
@@ -1615,8 +1754,13 @@ async function lireProfil(adr, sym, perime) {
     : v.etat === 'NON_TROUVEE' ? 'no market yet'
       : (Math.round(v.vie * 100) / 100).toLocaleString('en-US') + ' ' + (v.devise || '');
   vieProfil = v && v.etat === 'LUE' ? v.vie : null;
+  deviseProfil = v && v.etat === 'LUE' ? v.devise : null;
   etatVieProfil = v ? (v.etat === 'REFUSEE' ? 'NON_LUE' : v.etat) : 'NON_LUE';
-  peindreJeu(vieProfil, v ? v.devise : null, etatVieProfil);
+  peindreJeu(vieProfil, deviseProfil, etatVieProfil);
+  /* ⛔ LA LECTURE EST NOTEE AVANT D ETRE COMMENTEE : c est elle qui, au fil des visites, rendra la
+   * tendance mesurable. Une capitalisation non lue n est jamais notee. */
+  noterVie(adr, vieProfil);
+  peindreMetier(adr);
 
   if (!compte) {
     $('#pSolde').textContent = 'connect your wallet to see';
@@ -1635,6 +1779,9 @@ async function lireProfil(adr, sym, perime) {
         part = ' · ' + (Number(pm) / 10000).toLocaleString('en-US', { maximumFractionDigits: 4 }) + ' % of supply';
       }
       $('#pSolde').textContent = formaterUnites(b.solde, b.decimales) + part;
+      /* le comptable parle de ce solde : il doit etre lu AVANT qu il ne le commente */
+      soldeProfil = formaterUnites(b.solde, b.decimales);
+      peindreMetier(adr);
     }
   }
   $('#pNote').textContent = f && f.manques.length ? 'not read: ' + f.manques.join(', ') : '';
