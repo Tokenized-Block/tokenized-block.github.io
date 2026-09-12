@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Blocks — the living map</title>
+<title>TokenizedBlock — the living map</title>
 <!-- ══════════════════════════════════════════════════════════════════════════════════════════════
      COQUE NEUVE, MODULES INCHANGES. `index.html` fait 600 Ko et se lit comme un panneau
      d administration ; les modules qu il importe portent 313 assertions et 16 regles. On refait
@@ -231,6 +231,22 @@ body{background:var(--fond);
 .pStat span{color:var(--doux);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
 .pStat b{font-size:14px;overflow-wrap:anywhere}
 .pLarge{grid-column:1/-1}
+.pJeu{margin:14px 0 0;background:var(--creux);border:1px solid var(--ligne);border-radius:var(--rs);padding:12px}
+.pJeuTete{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pBadge{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--accent2);
+  border:1px solid var(--accent);border-radius:99px;padding:4px 10px}
+.pPV{color:var(--doux);font-size:12px;font-weight:700}
+.pPV b{color:var(--texte);font-size:20px;font-variant-numeric:tabular-nums}
+.pBarre{height:10px;border-radius:99px;background:var(--fond2);border:1px solid var(--ligne);overflow:hidden;margin:10px 0 6px}
+.pBarre i{display:block;height:100%;width:0;background:var(--accent);border-radius:99px;transition:width .6s}
+.pProchain{font-size:12px;color:var(--doux);margin:0;line-height:1.45}
+.pPuces{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0 0}
+.pPuce{font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:99px;border:1px solid var(--ligne);color:var(--doux)}
+.pPuce.on{background:var(--accent);color:hsl(var(--h) 60% 10%);border-color:var(--accent)}
+.pcStats{display:flex;flex-wrap:wrap;gap:10px 14px;font-size:11.5px;color:var(--doux);margin:10px 0 0;
+  font-variant-numeric:tabular-nums}
+.pcStats b{color:var(--texte)}
+.pcBascule{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:var(--doux);cursor:pointer}
 .pActions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 0}
 .pActions .bouton:first-child{grid-column:1/-1}
 a.bouton{display:flex;align-items:center;justify-content:center;text-decoration:none;box-sizing:border-box}
@@ -300,7 +316,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
 <div class="enveloppe">
   <header class="tete">
-    <div class="marque">Blocks<span>.</span></div>
+    <div class="marque">Tokenized<span>Block</span></div>
     <div class="droite">
       <!-- ⛔ LE RESEAU EST UN BOUTON, PAS UNE CONSTANTE. Fige sur Sepolia, la map affichait
            « 0 avec marche » sur 22 blocks — une lecture EXACTE et parfaitement inutile, puisque
@@ -343,10 +359,9 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
           <span><i style="width:16px;height:16px"></i>growing</span>
           <span><i style="width:24px;height:24px"></i>big</span>
           <span style="opacity:.6">faded = no market yet</span>
-          <span style="color:var(--tiede)">⚠️ it goes down, and it is buyable —
-            <button type="button" id="lienLegende" style="appearance:none;border:0;background:none;
-              color:var(--accent2);font:inherit;font-weight:700;cursor:pointer;padding:0;
-              text-decoration:underline">what that means</button></span>
+          <!-- ⛔ LE LIEN VERS LA CARTE EXPLICATIVE EST RETIRE AVEC ELLE (Phil, 2026-09-11 : « trop
+               envahissant »). Il ne reste que l essentiel, en quatre mots. -->
+          <span style="color:var(--tiede)">⚠️ life can go down</span>
           <span id="mapEtat" style="margin-left:auto"></span>
         </div>
       </div>
@@ -381,25 +396,16 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
           <p class="note" id="mapNote"></p>
         </div>
 
-    <!-- ⛔⛔ LA CARTE QUI RACHETE LE MOT « LIFE ». Renommer une capitalisation en « vie » est
-         acceptable tant que l app dit ce que c est. Sans cette carte, « life » serait un joli mot
-         pose sur une grandeur que personne ne comprend — et un mot qui rassure sur une chose qu on
-         n explique pas est exactement le tour que ce depot refuse partout ailleurs. -->
-    <div class="carte">
-      <p class="titre">What “life” actually is</p>
-      <table class="regles">
-        <tr><td>Life =</td><td><b>price × supply</b>, both re-readable on chain. Nobody paints it.</td></tr>
-        <tr><td>It goes down</td><td>If the price falls, life falls with it. A big block can become
-          a small one overnight. Nobody refunds that.</td></tr>
-        <tr><td>⚠️ It is buyable</td><td>Measured 2026-09-09: <b>0.01 ETH moved a displayed market cap
-          by 2 346 ETH</b> — a lever of ×234 645, because supply is enormous. <b>A big number here is
-          not a big pile of money.</b></td></tr>
-        <tr><td>Unit</td><td>Measured in <b>ETH</b>, not dollars. We name the currency instead of
-          mixing two.</td></tr>
-        <tr><td>No market yet</td><td>A faded, smaller block has never been traded. That is
-          <b>not</b> the same as being worthless.</td></tr>
-      </table>
-    </div>
+    <!-- ⛔⛔ CARTE « WHAT LIFE ACTUALLY IS » RETIREE DE L ECRAN (Phil, 2026-09-11 : « trop
+         envahissant »). Ce qu elle disait reste vrai et reste ici pour qui maintient :
+         · life = prix x supply, relisibles on chain ; personne ne la peint.
+         · elle descend avec le prix ; personne ne rembourse.
+         · ACHETABLE : mesure 2026-09-09, 0,01 ETH a deplace une capitalisation affichee de 2 346 ETH
+           (levier x234 645, la supply est enorme) — un grand nombre n est pas une grosse somme.
+         · unite : ETH, jamais melangee au dollar.
+         · pas de marche (pale) ≠ sans valeur.
+         La legende garde « life can go down » ; le profil dit « a tier is a state, not a reward you
+         keep ». Si une page d explication revient, ce sera une page a part, pas un mur sur la map. -->
       </aside>
     </div>
   </section>
@@ -506,8 +512,36 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         </div>
         <button class="puce pFermer" id="pFermer" type="button" aria-label="Close profile">✕</button>
       </div>
+      <!-- ⛔ LE COMPAGNON : PV, palier, barre. Tout est derive de la capitalisation lue (pointsdevie.js) ;
+           la barre descend quand le prix descend. -->
+      <div class="pJeu">
+        <div class="pJeuTete"><span class="pBadge" id="pPalier"></span><span class="pPV"><b id="pPV"></b> HP</span></div>
+        <div class="pBarre"><i id="pBarre"></i></div>
+        <p class="pProchain" id="pProchain"></p>
+        <div class="pPuces" id="pPuces"></div>
+        <p class="note" id="pNotePalier" style="margin-top:8px"></p>
+      </div>
+      <!-- ⛔ LE CERVEAU EST UNE CASE A COCHER. Phil : « le mode cerveau de mouche est a cocher pour
+           ajouter ou non ». A la creation, ce choix partira avec le block ; tant que l onglet Create
+           n existe pas, c est un choix de LECTEUR, garde dans ce navigateur — et l ecran le dit
+           plutot que de laisser croire que c est grave sur la chaine. -->
+      <div class="pJeu" id="pCerveau">
+        <div class="pJeuTete">
+          <span class="pBadge" id="pcPhase">—</span>
+          <label class="pcBascule"><input type="checkbox" id="pcActif" checked> Fly brain</label>
+        </div>
+        <p class="pProchain" id="pcPhrase"></p>
+        <div class="pcStats">
+          <span>≋ <b id="pcG">—</b> Hz left wing</span>
+          <span>≋ <b id="pcD">—</b> Hz right wing</span>
+          <span>⚡ <b id="pcSpikes">—</b> spikes</span>
+          <span>◉ <b id="pcActifs">—</b> firing</span>
+          <span>↻ <b id="pcTick">—</b> ticks</span>
+        </div>
+        <p class="note mono" id="pcEmpreinte"></p>
+      </div>
       <div class="pStats">
-        <div class="pStat"><span>Life</span><b id="pVie"></b></div>
+        <div class="pStat"><span>Market cap · life</span><b id="pVie"></b></div>
         <div class="pStat"><span>Supply</span><b id="pSupply"></b></div>
         <div class="pStat"><span>Minting</span><b id="pScelle"></b></div>
         <div class="pStat"><span>Native B20</span><b id="pB20"></b></div>
@@ -567,6 +601,14 @@ import { faitsDuBlock, supplyLisible } from './faits.js';
 import { encodeTransfer, envoyerDepuisWallet } from './envoi.js';
 import { montantHumain, formaterUnites } from './montants.js';
 import { selecteur } from './pool.js';
+/* ⛔ PV ET PALIERS : LE MODULE TESTE, pas une echelle recopiee ici. Deux baremes pour la meme vie
+ * donneraient deux niveaux au meme block selon l ecran. */
+import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
+/* ⛔⛔ LE CERVEAU DE MOUCHE — ET IL NE TRADE PAS. Chez degen-fly (mesure du 2026-09-12) un connectome
+ * de 166 700 neurones pilote un wallet qui SIGNE, avec des bornes affichees. Ici le cerveau fait
+ * vivre le block : sa facon de bouger sur la map et son humeur, derivees de son adresse et de ce qui
+ * lui arrive VRAIMENT sur la chaine. Aucun ordre, aucune signature, aucune cle. */
+import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase } from './cerveau.js';
 
 const $ = (s) => document.querySelector(s);
 const enTexte = (t) => { const d = document.createElement('div'); d.textContent = String(t); return d.innerHTML; };
@@ -578,6 +620,9 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   for (const x of document.querySelectorAll('.navB')) x.setAttribute('aria-selected', x === b ? 'true' : 'false');
   for (const v of document.querySelectorAll('.volet')) v.classList.toggle('on', v.id === 'v-' + nom);
   window.scrollTo({ top: 0 });
+  /* ⛔ EN REVENANT SUR LA MAP, ON REMESURE. Les blocks ont pu naitre pendant que l onglet etait cache,
+   * donc dans une aire par defaut qui n est pas celle de l ecran. */
+  if (nom === 'map') setTimeout(replacerDansLaMap, 50);
 });
 
 /* ⛔ UNE SEULE TABLE POUR LE RESEAU : RPC, StateView et nom voyagent ENSEMBLE. Les separer
@@ -663,34 +708,96 @@ const dessin = (adr, sym) => logoSvg(paramsLogoDepuisApparence(apparenceDepuisAd
 const habitants = [];
 let anim = null;
 
+/**
+ * Poser UN block sur la map.
+ * ⛔ SEPAREE DE `poserBlocks` POUR POUVOIR AJOUTER SANS TOUT REDESSINER. « Show on map » et « Find »
+ *    repondaient « pas sur la map » quand le block n etait pas dans la fenetre lue — Phil : « show
+ *    on map marche pas ». Un bouton qui repond par une excuse ne sert a rien : maintenant il POSE le
+ *    block. Tout redessiner aurait remis a zero les vies deja lues et la boucle qui les lit.
+ */
+function creerHabitant(c) {
+  const map = $('#map');
+  /* ⛔⛔ UNE TAILLE INCONNUE N EST PAS UNE TAILLE DE ZERO. Mesure du 2026-09-12 : quand la page n est
+   * pas visible, `clientWidth` rend 0 — et les 22 blocks naissaient tous a l abscisse 0, empiles en
+   * colonne contre le bord. On se rabat sur une aire par defaut ; `replacerDansLaMap` les remettra
+   * dans les vrais bords des que la map en a. */
+  const L = map.clientWidth || 640, H = map.clientHeight || 420;
+  const t = tailleDe(c.vie);
+  const el = document.createElement('button');
+  el.className = 'bloc' + (typeof c.vie === 'number' && c.vie > 0 ? '' : ' sansPrix');
+  /* ⛔ RATIO DU DESSIN, PAS UN CARRE : le SVG fait 200x220 et le forcer dans une case carree le
+   * rognait — c est le defaut visuel signale sur la capture du 2026-09-10. */
+  el.style.width = t + 'px';
+  el.style.height = Math.round(t * 1.1) + 'px';
+  el.setAttribute('data-block', c.jeton);
+  el.innerHTML = dessin(c.jeton, c.symbole) + '<span class="etiq">'
+    + enTexte(String(c.symbole || '?').slice(0, 10)) + '</span>';
+  map.appendChild(el);
+  /* ⛔ CHAQUE BLOCK NAIT AVEC SON CERVEAU, derive de son adresse : deux blocks ne bougeront jamais
+   * pareil, et le meme block bougera pareil chez tout le monde. Une adresse illisible n a pas de
+   * cerveau plutot qu un cerveau au hasard. */
+  let cerveau = null;
+  try { cerveau = cerveauInitial(c.jeton); } catch (e) { cerveau = null; }
+  const h = {
+    el, adr: c.jeton, sym: c.symbole, vie: c.vie, etatVie: c.etatVie, t, cerveau, vu: null, phase: null,
+    x: Math.random() * Math.max(1, L - t), y: Math.random() * Math.max(1, H - t),
+    /* ⚠️ DERIVE LENTE, PAS UNE COURSE. Des blocks qui filent seraient impossibles a viser au
+     * doigt sur un telephone — un jeu qu on ne peut pas toucher n est pas un jeu. */
+    vx: (Math.random() - .5) * .22, vy: (Math.random() - .5) * .22,
+  };
+  /* ⛔ LA POSITION EST POSEE TOUT DE SUITE, PAS A LA PREMIERE IMAGE D ANIMATION. `requestAnimationFrame`
+   * ne tourne PAS dans un onglet invisible : sans ca, un block cree hors ecran restait a 0,0 et la map
+   * s ouvrait avec tout le monde dans le coin. La derive, elle, peut attendre l animation. */
+  el.style.transform = 'translate(' + h.x.toFixed(1) + 'px,' + h.y.toFixed(1) + 'px)';
+  habitants.push(h);
+  return h;
+}
+
 function poserBlocks(liste) {
   const map = $('#map');
   map.innerHTML = '';
   habitants.length = 0;
-  const L = map.clientWidth, H = map.clientHeight;
-  for (const c of liste) {
-    const t = tailleDe(c.vie);
-    const el = document.createElement('button');
-    el.className = 'bloc' + (typeof c.vie === 'number' && c.vie > 0 ? '' : ' sansPrix');
-    /* ⛔ RATIO DU DESSIN, PAS UN CARRE : le SVG fait 200x220 et le forcer dans une case carree le
-     * rognait — c est le defaut visuel signale sur la capture du 2026-09-10. */
-    el.style.width = t + 'px';
-    el.style.height = Math.round(t * 1.1) + 'px';
-    el.setAttribute('data-block', c.jeton);
-    el.innerHTML = dessin(c.jeton, c.symbole) + '<span class="etiq">'
-      + enTexte(String(c.symbole || '?').slice(0, 10)) + '</span>';
-    map.appendChild(el);
-    habitants.push({
-      el, adr: c.jeton, sym: c.symbole, vie: c.vie, t,
-      x: Math.random() * Math.max(1, L - t), y: Math.random() * Math.max(1, H - t),
-      /* ⚠️ DERIVE LENTE, PAS UNE COURSE. Des blocks qui filent seraient impossibles a viser au
-       * doigt sur un telephone — un jeu qu on ne peut pas toucher n est pas un jeu. */
-      vx: (Math.random() - .5) * .22, vy: (Math.random() - .5) * .22,
-    });
+  for (const c of liste) creerHabitant(c);
+  animer();
+}
+
+/* ══ LE BATTEMENT DES CERVEAUX ═══════════════════════════════════════════════════════════════
+ * ⛔ 600 ms, PAS 60 IMAGES PAR SECONDE. Vingt-deux blocks x 128 neurones a chaque image brulerait
+ *    une batterie de telephone pour un mouvement que personne ne distingue. A 600 ms, la derive
+ *    change assez souvent pour qu on voie les blocks CHANGER D AVIS.
+ * ⛔ ET C EST LE CERVEAU QUI PILOTE LA DERIVE : la vitesse vient de son activite, le virage de la
+ *    difference entre ses deux ailes. Avant, les blocks flottaient au hasard — joli, mais vide. */
+const BATTEMENT_MS = 600;
+let battement = null;
+function battre() {
+  for (const h of habitants) {
+    if (!h.cerveau) continue;
+    const r = cerveauPas(h.cerveau, { vie: h.vie, vieAvant: h.vieAvant, gm: 0 });
+    h.cerveau = r.etat;
+    h.vu = r.vu;
+    h.phase = r.vu.phase;
+    const vitesse = 0.05 + r.vu.vitesse * 0.45;
+    const angle = Math.atan2(h.vy, h.vx) + r.vu.virage * 0.7;
+    h.vx = Math.cos(angle) * vitesse;
+    h.vy = Math.sin(angle) * vitesse;
   }
+  battreProfil();
+}
+function demarrerBattement() {
+  if (battement) clearInterval(battement);
+  battement = setInterval(battre, BATTEMENT_MS);
+}
+
+function animer() {
+  const map = $('#map');
   if (anim) cancelAnimationFrame(anim);
   const pas = () => {
     const L2 = map.clientWidth, H2 = map.clientHeight;
+    /* ⛔⛔ MAP CACHEE ⇒ ON FIGE, ON NE REPLACE PAS. Mesure du 2026-09-12 : l onglet My block affiche,
+     * `#map` mesure 0 px, et le rebond ci-dessous ramenait CHAQUE block a 0,0 — au retour sur la map,
+     * les 22 blocks etaient empiles dans le coin haut-gauche. Une taille inconnue n est pas une
+     * taille de zero : on ne bouge rien tant qu on ne sait pas ou sont les bords. */
+    if (L2 <= 0 || H2 <= 0) { anim = requestAnimationFrame(pas); return; }
     for (const h of habitants) {
       h.x += h.vx; h.y += h.vy;
       if (h.x <= 0 || h.x >= L2 - h.t) { h.vx *= -1; h.x = Math.max(0, Math.min(L2 - h.t, h.x)); }
@@ -705,6 +812,10 @@ function poserBlocks(liste) {
 /* ⛔ L ANIMATION S ARRETE QUAND L ONGLET EST CACHE. Une boucle `requestAnimationFrame` laissee a
  * tourner en arriere-plan vide une batterie de telephone sans rien afficher a personne. */
 document.addEventListener('visibilitychange', () => {
+  /* ⛔ LES CERVEAUX S ARRETENT AVEC L ANIMATION. Vingt-deux reseaux qui battent dans un onglet cache
+   * videraient une batterie sans que personne ne regarde. */
+  if (document.hidden) { if (battement) { clearInterval(battement); battement = null; } }
+  else if (!battement) demarrerBattement();
   if (document.hidden && anim) { cancelAnimationFrame(anim); anim = null; }
   else if (!document.hidden && !anim && habitants.length) poserBlocks(habitants.map((h) => ({ jeton: h.adr, symbole: h.sym, vie: h.vie })));
 });
@@ -721,14 +832,20 @@ $('#map').addEventListener('click', (e) => {
    * identites pour une seule chose. */
   $('#fAvatar').innerHTML = dessin(adr, h && h.sym);
   $('#fNom').textContent = (h && h.sym) || '?';
+  /* ⛔ TROIS ETATS ICI AUSSI. La fiche disait « no market yet » pour tout block sans vie connue —
+   * y compris ceux dont la lecture n avait pas encore eu lieu ou avait ete refusee. Un fait sur le
+   * block affiche a la place d un fait sur notre lecture. */
   $('#fVie').textContent = (h && typeof h.vie === 'number' && h.vie > 0)
     ? Math.round(h.vie * 100) / 100 + ' ETH of life'
-    : 'no market yet — never traded, which is not the same as worthless';
+    : h && h.etatVie === 'NON_TROUVEE' ? 'no market yet — never traded, which is not the same as worthless'
+      : h && h.etatVie === 'NON_LUE' ? 'life unreadable right now — not the same as none'
+        : 'life not read yet';
   $('#fAdr').textContent = adr;
   /* ⛔ LE BOUTON EXISTE, LE SERVICE NON, ET ON LE DIT PLUTOT QUE DE FAIRE SEMBLANT. Un « chat »
    * entre deux blocks demande un endroit ou les messages vivent et un moyen de prouver qui parle.
    * Aucun des deux n existe ici. Un champ de saisie qui avale ce qu on ecrit serait pire que rien. */
-  $('#fNote').textContent = '';
+  /* ⛔ LA FICHE DIT L HUMEUR DU BLOCK, pas une excuse. Elle vient du cerveau, qui vient des faits. */
+  $('#fNote').textContent = h && h.phase ? phraseDePhase(h.phase, h.sym) : '';
 });
 
 /* ══ GM — LE GESTE QUOTIDIEN ═══════════════════════════════════════════════════════════════════
@@ -794,8 +911,11 @@ $('#fOuvrir').addEventListener('click', async () => {
 $('#bTrouver').addEventListener('click', () => {
   const q = String($('#trouver').value || '').trim().toLowerCase();
   if (!q) return;
-  const h = habitants.find((x) => String(x.sym || '').toLowerCase().includes(q)
+  let h = habitants.find((x) => String(x.sym || '').toLowerCase().includes(q)
     || String(x.adr).toLowerCase() === q);
+  /* ⛔ UNE ADRESSE COMPLETE ABSENTE DE LA MAP Y EST POSEE, au lieu d un « pas ici ». La vie sera lue
+   * par sa fiche et son profil ; tant qu elle ne l est pas, le block est pale et dit « not read yet ». */
+  if (!h && ADRESSE.test(q)) h = creerHabitant({ jeton: String($('#trouver').value).trim(), symbole: null, vie: null });
   if (!h) {
     $('#mapNote').textContent = 'Not among the blocks on this map. This map shows what we read in '
       + 'one window of chain history — not every block that exists.';
@@ -863,8 +983,12 @@ async function lireLaVie() {
     for (let attente = 0; profilEnLecture && attente < 230; attente++) await souffler();
     let r;
     try { r = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: h.adr }); }
-    catch (e) { nonLus++; continue; }
+    catch (e) { nonLus++; h.etatVie = 'NON_LUE'; continue; }
     lus++;
+    h.etatVie = r.etat;
+    /* ⛔ LA VIE PRECEDENTE EST GARDEE AVANT D ETRE ECRASEE : sans elle, le cerveau ne saurait jamais
+     * si la vie MONTE ou DESCEND, et ne serait jamais ni excite ni inquiet. */
+    if (typeof h.vie === 'number') h.vieAvant = h.vie;
     if (r.etat === 'LUE') {
       avecMarche++;
       h.vie = r.vie; h.devise = r.devise; h.via = r.via;
@@ -1042,12 +1166,9 @@ $('#bMasquer').addEventListener('click', () => {
 /* ⛔ LE LIEN DE LA LEGENDE OUVRE LE TIROIR SUR L EXPLICATION. Sans lui, la phrase « il est
  * achetable » resterait une affirmation sans preuve accessible — or la preuve chiffree existe et
  * doit etre a un clic, pas a une recherche. */
-$('#lienLegende').addEventListener('click', () => {
-  ouvrirCote();
-  const c = $('#cote');
-  const cible = [...c.querySelectorAll('.titre')].find((t) => /life/i.test(t.textContent));
-  if (cible) cible.scrollIntoView({ block: 'start', behavior: 'smooth' });
-});
+/* ⛔ LE LIEN DE LA LEGENDE A ETE RETIRE AVEC LA CARTE QU IL OUVRAIT. Son gestionnaire part avec lui :
+ * `$('#lienLegende')` rendrait null, et `null.addEventListener` arreterait TOUT le module — la map,
+ * le wallet, le profil — sur une ligne morte. */
 
 function ouvrirCote() {
   const c = $('#cote'), b = $('#bMasquer');
@@ -1069,9 +1190,12 @@ window.addEventListener('resize', () => {
 function replacerDansLaMap() {
   const map = $('#map');
   const L = map.clientWidth, H = map.clientHeight;
+  /* ⛔ ON NE REPLACE RIEN SUR UNE MAP SANS TAILLE : ce serait ramener tout le monde a 0,0. */
+  if (L <= 0 || H <= 0) return;
   for (const h of habitants) {
     h.x = Math.max(0, Math.min(Math.max(0, L - h.t), h.x));
     h.y = Math.max(0, Math.min(Math.max(0, H - h.t), h.y));
+    h.el.style.transform = 'translate(' + h.x.toFixed(1) + 'px,' + h.y.toFixed(1) + 'px)';
   }
 }
 
@@ -1340,6 +1464,88 @@ if (window.ethereum && typeof window.ethereum.on === 'function') {
 let jetonProfil = 0;
 /* vrai tant qu un profil se lit : la boucle des vies de la map lui cede le noeud */
 let profilEnLecture = false;
+/* ce que le profil ouvert a lu — « Show on map » pose le block avec, sans relire */
+let symProfil = null, vieProfil = null, etatVieProfil = undefined;
+
+/* ══ LE CERVEAU DU BLOCK OUVERT ══════════════════════════════════════════════════════════════
+ * ⛔ IL BAT MEME SI LE BLOCK N EST PAS SUR LA MAP : on peut ouvrir le profil d un block par un lien,
+ *    sans que la map l ait jamais vu.
+ * ⛔ LA CASE EST UN CHOIX DE LECTEUR, ET ELLE NE TOUCHE PAS LA CHAINE. Le dire evite qu on croie
+ *    avoir « retire le cerveau » d un block qui appartient a quelqu un d autre. */
+let profilCerveau = null;
+const CLE_CERVEAU = 'tblock.cerveau';
+function cerveauVoulu() {
+  try { return localStorage.getItem(CLE_CERVEAU) !== 'off'; } catch (e) { return true; }
+}
+function battreProfil() {
+  if ($('#profil').hidden || !profilCerveau || !$('#pcActif').checked) return;
+  const r = cerveauPas(profilCerveau.etat, { vie: vieProfil, gm: 0 });
+  profilCerveau.etat = r.etat;
+  profilCerveau.vu = r.vu;
+  peindreCerveau();
+}
+function peindreCerveau() {
+  const vides = ['#pcG', '#pcD', '#pcSpikes', '#pcActifs', '#pcTick'];
+  if (!$('#pcActif').checked) {
+    $('#pcPhase').textContent = 'brain off';
+    $('#pcPhrase').textContent = 'Fly brain off, for you only. Nothing changes on chain — the block is '
+      + 'the same, you just stop watching it think.';
+    for (const id of vides) $(id).textContent = '—';
+    $('#pcEmpreinte').textContent = '';
+    return;
+  }
+  const v = profilCerveau && profilCerveau.vu;
+  if (!v) { $('#pcPhase').textContent = 'waking…'; $('#pcPhrase').textContent = ''; return; }
+  $('#pcPhase').textContent = v.phase.toLowerCase();
+  $('#pcPhrase').textContent = phraseDePhase(v.phase, symProfil || 'This block');
+  $('#pcG').textContent = v.gauche_hz.toFixed(1);
+  $('#pcD').textContent = v.droite_hz.toFixed(1);
+  $('#pcSpikes').textContent = v.spikes;
+  $('#pcActifs').textContent = v.actifs;
+  $('#pcTick').textContent = v.tick;
+  /* ⛔ L EMPREINTE DE L ENTREE EST AFFICHEE, comme les sha256 de degen-fly : c est ce qui separe une
+   * simulation qu on peut rejouer d une animation qui fait joli. */
+  $('#pcEmpreinte').textContent = 'input ' + v.entree.slice(0, 18) + '… · 128 neurons seeded by this '
+    + 'block address · simulation, nothing on chain';
+}
+
+/**
+ * La partie « jeu » du profil : PV, palier, barre vers le palier suivant.
+ * ⛔⛔ RIEN N EST INVENTE ICI : PV et paliers viennent de `pointsdevie.js` (teste), et les PV sont la
+ *    racine cubique de la MEME capitalisation que la map (`vieDuBlock`). La barre ne se remplit que
+ *    si le prix monte, et se vide s il baisse — c est un etat, pas une recompense.
+ * ⛔ SANS MARCHE, AUCUN PALIER : ni verrouille ni debloque (regle du module). Ne pas afficher
+ *    « Seed » pour un block jamais echange — ce serait lui donner un marche qu il n a pas.
+ * ⚠️ La barre avance en RACINE CUBIQUE, comme les PV : en lineaire, un block serait colle a zero
+ *    pendant 99 % du chemin vers le palier suivant.
+ */
+function peindreJeu(mc, devise, etat) {
+  const pv = pointsDeVie(mc);
+  const e = etatPaliers(mc);
+  const i = e.palier ? PALIERS.indexOf(e.palier) : -1;
+  $('#pPV').textContent = pv === null ? '—' : pv.toLocaleString('en-US');
+  if (!e.palier) {
+    $('#pPalier').textContent = etat === 'NON_TROUVEE' ? 'No market yet' : 'Life not read';
+    $('#pBarre').style.width = '0';
+    $('#pProchain').textContent = etat === 'NON_TROUVEE'
+      ? 'Its life starts with its first trade. Nothing is locked, nothing is unlocked.'
+      : 'Unreadable right now — that is about the network, not about this block.';
+    $('#pNotePalier').textContent = '';
+  } else {
+    $('#pPalier').textContent = 'Tier ' + (i + 1) + '/' + PALIERS.length + ' · ' + e.palier.titre;
+    const suivant = e.prochain;
+    const pct = suivant
+      ? (Math.cbrt(mc) - Math.cbrt(e.palier.mc)) / (Math.cbrt(suivant.mc) - Math.cbrt(e.palier.mc)) : 1;
+    $('#pBarre').style.width = Math.max(2, Math.min(100, Math.round(pct * 100))) + '%';
+    $('#pProchain').textContent = suivant
+      ? 'Next: ' + suivant.titre + ' at ' + suivant.mc.toLocaleString('en-US') + ' ' + (devise || '')
+        + ' of life — opens ' + suivant.ouvre + '.'
+      : 'Top tier. ' + e.palier.ouvre;
+    $('#pNotePalier').textContent = 'A tier is a state, not a reward you keep: it follows the price, down as well as up.';
+  }
+  $('#pPuces').innerHTML = PALIERS.map((p, k) => '<span class="pPuce' + (k <= i ? ' on' : '')
+    + '" title="' + enTexte(p.ouvre) + '">' + enTexte(p.titre) + '</span>').join('');
+}
 
 function allerA(nom) {
   const b = document.querySelector('.navB[data-volet="' + nom + '"]');
@@ -1369,6 +1575,16 @@ async function lireProfil(adr, sym, perime) {
   $('#pExplorer').href = RESEAUX[CHAINE].explorateur + '/token/' + adr;
   for (const id of ['#pVie', '#pSupply', '#pScelle', '#pB20', '#pSolde']) $(id).textContent = '…';
   $('#pNote').textContent = 'reading the chain…';
+  symProfil = sym || null; vieProfil = null; etatVieProfil = undefined;
+  $('#pPV').textContent = '…';
+  $('#pPalier').textContent = 'reading…';
+  $('#pBarre').style.width = '0';
+  $('#pProchain').textContent = '';
+  $('#pNotePalier').textContent = '';
+  $('#pPuces').innerHTML = '';
+  $('#pcActif').checked = cerveauVoulu();
+  try { profilCerveau = { etat: cerveauInitial(adr), vu: null }; } catch (e) { profilCerveau = null; }
+  peindreCerveau();
   p.scrollIntoView({ block: 'start', behavior: 'smooth' });
 
   let f = null;
@@ -1377,7 +1593,7 @@ async function lireProfil(adr, sym, perime) {
   if (f) {
     /* le dessin depend du symbole : on ne le refait que s il manquait a l ouverture */
     if (f.symbole && !sym) { $('#pAvatar').innerHTML = dessin(adr, f.symbole); }
-    if (f.symbole) $('#pSym').textContent = f.symbole;
+    if (f.symbole) { $('#pSym').textContent = f.symbole; symProfil = f.symbole; }
     else if (!sym) $('#pSym').textContent = 'symbol not read';
     $('#pNomLong').textContent = f.nom || '';
     /* ⛔ LE MARQUEUR EST LE CODE, PAS LE PREFIXE D ADRESSE (EIP-3541 : `0xef` est infalsifiable). */
@@ -1398,6 +1614,9 @@ async function lireProfil(adr, sym, perime) {
   $('#pVie').textContent = !v || v.etat === 'NON_LUE' || v.etat === 'REFUSEE' ? 'unreadable right now'
     : v.etat === 'NON_TROUVEE' ? 'no market yet'
       : (Math.round(v.vie * 100) / 100).toLocaleString('en-US') + ' ' + (v.devise || '');
+  vieProfil = v && v.etat === 'LUE' ? v.vie : null;
+  etatVieProfil = v ? (v.etat === 'REFUSEE' ? 'NON_LUE' : v.etat) : 'NON_LUE';
+  peindreJeu(vieProfil, v ? v.devise : null, etatVieProfil);
 
   if (!compte) {
     $('#pSolde').textContent = 'connect your wallet to see';
@@ -1431,6 +1650,12 @@ $('#fProfil').addEventListener('click', () => {
   void ouvrirProfil(adr, h ? h.sym : null);
 });
 $('#pFermer').addEventListener('click', () => { jetonProfil++; profilEnLecture = false; $('#profil').hidden = true; });
+$('#pcActif').addEventListener('change', () => {
+  /* ⛔ UN NAVIGATEUR QUI REFUSE LE STOCKAGE NE DOIT PAS CASSER LA CASE : le choix vaut alors pour
+   * cette visite seulement, ce qui est mieux que la page qui plante. */
+  try { localStorage.setItem(CLE_CERVEAU, $('#pcActif').checked ? 'on' : 'off'); } catch (e) { /* sans memoire */ }
+  peindreCerveau();
+});
 
 /* ⛔ LE LIEN PORTE LA CHAINE. Un lien `?block=` seul, ouvert par quelqu un sur l autre reseau,
  * afficherait un profil vide et credible — « ce block n existe pas » alors qu il existe ailleurs. */
@@ -1440,13 +1665,20 @@ $('#pPartager').addEventListener('click', async () => {
   try { await navigator.clipboard.writeText(lien); $('#pNote').textContent = 'Profile link copied.'; }
   catch { $('#pNote').textContent = 'Copy failed — here is the link: ' + lien; }
 });
+/* ⛔⛔ « SHOW ON MAP » MONTRE, IL NE S EXCUSE PLUS. Phil (2026-09-11) : « show on map marche pas » —
+ * il repondait « not on the map right now » pour tout block hors de la fenetre lue. Maintenant le
+ * block est POSE sur la map avec la vie que le profil a lue, puis sa fiche s ouvre.
+ * ⚠️ L onglet map est affiche AVANT de poser : cache, la map mesure 0 px et le block naitrait coince
+ *    dans le coin. */
 $('#pMap').addEventListener('click', () => {
   const adr = $('#profil').dataset.block;
   allerA('map');
-  const h = habitants.find((x) => x.adr.toLowerCase() === String(adr).toLowerCase());
-  if (h) h.el.click();
-  else $('#mapNote').textContent = 'This block is not on the map right now — the map shows one window '
-    + 'of recent chain history, not every block that exists.';
+  let h = habitants.find((x) => x.adr.toLowerCase() === String(adr).toLowerCase());
+  if (!h) {
+    h = creerHabitant({ jeton: adr, symbole: symProfil, vie: vieProfil, etatVie: etatVieProfil });
+    if (!anim) animer();
+  }
+  h.el.click();
 });
 /* ⛔ ENVOYER DEPUIS CE BLOCK = LE FORMULAIRE DU WALLET, PRE-REMPLI. Pas un second chemin d envoi :
  * un seul formulaire, une seule garde (`envoi.js`), une seule regle 8 a surveiller. */
@@ -1474,6 +1706,7 @@ const chaineLien = Number(paramsLien.get('chain'));
 if (RESEAUX[chaineLien]) CHAINE = chaineLien;
 $('#pReseau').textContent = RESEAUX[CHAINE].nom;
 charger();
+demarrerBattement();
 const blockLien = paramsLien.get('block');
 if (blockLien && ADRESSE.test(blockLien)) void ouvrirProfil(blockLien, null);
 </script>
